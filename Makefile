@@ -2,14 +2,16 @@
 
 BIN			= bin/
 IMAGE		= $(BIN)boot.img
-KERNEL_SYS	= $(BIN)kernel.sys
 IPLS		= $(BIN)fdboot.bin $(BIN)fdipl.bin
-TARGETS		= $(IPLS)
+KERNEL_LD	= sys/target/i586-unknown-linux-gnu/release/kernel
+KERNEL_SYS	= $(BIN)kernel.sys
+TARGETS		= $(IPLS) $(KERNEL_SYS)
 
 all: $(BIN) $(TARGETS)
 
 clean:
 	-rm -rf $(TARGETS)
+	-rm -rf sys/target
 
 $(BIN):
 	mkdir -p $@
@@ -23,8 +25,14 @@ $(BIN)fdipl.bin: boot/fdipl.asm
 $(IMAGE): $(BIN) $(BIN)fdboot.bin
 	mformat -C -i $@ -f 1440 -B $(BIN)fdboot.bin
 
-$(BIN)kernel.sys: boot/stage2.asm
+$(BIN)osldr.bin: boot/osldr.asm
 	nasm -f bin -I boot $< -o $@
+
+$(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs
+	(cd sys; cargo build -Zbuild-std --release)
+
+$(KERNEL_SYS): $(BIN)osldr.bin $(KERNEL_LD)
+	cat $^ > $@
 
 install: $(IMAGE) $(KERNEL_SYS)
 	mcopy -D o -i $(IMAGE) $(KERNEL_SYS) ::

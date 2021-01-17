@@ -1,0 +1,175 @@
+;; MEG-OS ToE Loader
+;; Copyright (c) 2021 MEG-OS project
+
+%define IPL_SIGN            0x1eaf
+
+%define KERNEL_CS           0x10
+%define KERNEL_DS           0x18
+
+%define ORG_BASE            0x0800
+
+%define ELF_MAGIC           0x464C457F ; \x7FELF
+%define ELF_ENTRY           0x18
+%define ELF_PHOFF           0x1C
+%define ELF_PHENTSIZE       0x2A
+%define ELF_PHNUM           0x2C
+
+%define ELF_PT_LOAD         0x01
+%define ELF_P_TYPE          0x00
+%define ELF_P_OFFSET        0x04
+%define ELF_P_VADDR         0x08
+%define ELF_P_FILESZ        0x10
+%define ELF_P_MEMSZ         0x14
+
+
+%define OSZ_ARCH_PC         1   ; IBM PC/AT Compatible
+%define OSZ_ARCH_NEC98      0   ; NEC PC-98 Series Computer
+%define OSZ_ARCH_FMT        2   ; Fujitsu FM TOWNS
+
+[BITS 16]
+[ORG ORG_BASE]
+
+_HEAD:
+    jmp _crt0
+
+forever:
+    hlt
+    jmp forever
+
+_crt0:
+    xor ax, IPL_SIGN
+    jnz forever
+
+    mov es, ax
+    mov ss, ax
+    mov sp, ORG_BASE
+    push cx
+    push ax
+    popf
+    push cs
+    pop ds
+
+    xor si, si
+    mov di, ORG_BASE
+    mov cx,  (_END - _HEAD)/2
+    rep movsw
+    push ds
+
+    jmp 0:_next
+
+_puts:
+.loop:
+    lodsb
+    or al, al
+    jz .end
+    mov ah, 0x0E
+    int 0x10
+    jmp .loop
+.end:
+    ret
+
+
+_next:
+    push cs
+    pop ds
+
+    pop es
+    pop cx
+    mov [_boot_arch], cx
+    push es
+
+    cmp dword [es: _END - _HEAD], ELF_MAGIC
+    jz .elf_ok
+    mov si, bad_kernel_mes
+    call _puts
+    jmp forever
+.elf_ok:
+
+    mov ax, 0x0101
+    mov dx, 0xFC04
+    out dx, ax
+
+    lgdt [_GDT]
+
+    mov eax, cr0
+    or eax, byte 1
+    mov cr0, eax
+    db 0xEB, 0x00 ; just in case
+
+    pop cx
+    mov ax, KERNEL_DS
+    jmp KERNEL_CS:_next32
+
+[BITS 32]
+
+_next32:
+    mov ss, ax
+    movzx esp, sp
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    movzx ebp, cx
+    shl ebp, 4
+    add ebp, _END - _HEAD
+
+    mov ebx, [ebp + ELF_PHOFF]
+    add ebx, ebp
+    movzx edx, word [ebp + ELF_PHNUM]
+.loop:
+    cmp dword [ebx], ELF_PT_LOAD
+    jnz .no_load
+
+    mov ecx, [ebx + ELF_P_MEMSZ]
+    jecxz .no_load
+    mov edi, [ebx + ELF_P_VADDR]
+    xor al, al
+    rep stosb
+
+    mov ecx, [ebx + ELF_P_FILESZ]
+    jecxz .load_next
+    mov esi, [ebx + ELF_P_OFFSET]
+    add esi, ebp
+    mov edi, [ebx + ELF_P_VADDR]
+    rep movsb
+.load_next:
+
+.no_load:
+    movzx eax, word [ebp + ELF_PHENTSIZE]
+    add ebx, eax
+    dec edx
+    jnz .loop
+
+    mov eax, _boot_info
+    push eax
+    call dword [ebp + ELF_ENTRY]
+    ud2
+
+cpu_err_mes:
+    db "CPU NOT SUPPORTED", 13, 10, 0
+
+no_mem_mes:
+    db "NOT ENOUGH MEMORY", 13, 10, 0
+
+bad_kernel_mes:
+    db "BAD KERNEL SIGNATURE FOUND", 13, 10, 0
+
+_boot_info:
+_vram_base      dd 0x000A0000
+_screen_width   dw 640
+_screen_height  dw 480
+_screen_stride  dw 640
+_boot_arch      db 0
+_boot_drive     db 0
+
+    ;;　GDT
+    alignb 16
+_GDT:
+    dw (_end_GDT - _GDT - 1), _GDT, 0x0000, 0x0000 ;; 00 NULL
+    dw 0, 0, 0, 0   ;; 08 RESERVED
+    dw 0xFFFF, 0x0000, 0x9A00, 0x00CF   ;; 10 32bit KERNEL TEXT FLAT
+    dw 0xFFFF, 0x0000, 0x9200, 0x00CF   ;; 18 32bit KERNEL DATA FLAT
+_end_GDT:
+
+_END:
