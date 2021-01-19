@@ -1,5 +1,7 @@
 // Coordinate Types
 
+use core::ops::*;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Point {
@@ -76,6 +78,84 @@ impl Point {
                 && coords.bottom > self.y
         } else {
             false
+        }
+    }
+}
+
+impl Add<Self> for Point {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        Point {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
+impl Add<Size> for Point {
+    type Output = Self;
+    fn add(self, rhs: Size) -> Self {
+        Point {
+            x: self.x + rhs.width,
+            y: self.y + rhs.height,
+        }
+    }
+}
+
+impl Add<isize> for Point {
+    type Output = Self;
+    fn add(self, rhs: isize) -> Self {
+        Point {
+            x: self.x + rhs,
+            y: self.y + rhs,
+        }
+    }
+}
+
+impl AddAssign for Point {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
+impl Sub<Self> for Point {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
+        Point {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
+}
+
+impl Sub<Size> for Point {
+    type Output = Self;
+    fn sub(self, rhs: Size) -> Self {
+        Point {
+            x: self.x - rhs.width,
+            y: self.y - rhs.height,
+        }
+    }
+}
+
+impl Sub<isize> for Point {
+    type Output = Self;
+    fn sub(self, rhs: isize) -> Self {
+        Point {
+            x: self.x - rhs,
+            y: self.y - rhs,
+        }
+    }
+}
+
+impl SubAssign for Point {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = Self {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
         }
     }
 }

@@ -222,6 +222,197 @@ impl OsMutBitmap8<'_> {
             }
         }
     }
+
+    pub fn draw_hline(&mut self, point: Point, width: isize, color: IndexedColor) {
+        let mut dx = point.x;
+        let dy = point.y;
+        let mut w = width;
+
+        if dy < 0 || dy >= (self.height as isize) {
+            return;
+        }
+        if dx < 0 {
+            w += dx;
+            dx = 0;
+        }
+        let r = dx + w;
+        if r >= (self.width as isize) {
+            w = (self.width as isize) - dx;
+        }
+        if w <= 0 {
+            return;
+        }
+
+        let cursor = dx as usize + dy as usize * self.stride;
+        Self::memset_colors(self.slice, cursor, w as usize, color);
+    }
+
+    pub fn draw_vline(&mut self, point: Point, height: isize, color: IndexedColor) {
+        let dx = point.x;
+        let mut dy = point.y;
+        let mut h = height;
+
+        if dx < 0 || dx >= (self.width as isize) {
+            return;
+        }
+        if dy < 0 {
+            h += dy;
+            dy = 0;
+        }
+        let b = dy + h;
+        if b >= (self.width as isize) {
+            h = (self.width as isize) - dy;
+        }
+        if h <= 0 {
+            return;
+        }
+
+        let stride = self.stride;
+        let mut cursor = dx as usize + dy as usize * stride;
+        for _ in 0..h {
+            self.slice[cursor] = color;
+            cursor += stride;
+        }
+    }
+
+    pub fn draw_rect(&mut self, rect: Rect, color: IndexedColor) {
+        let coords = Coordinates::from_rect(rect).unwrap();
+        let width = rect.width();
+        let height = rect.height();
+        self.draw_hline(coords.left_top(), width, color);
+        self.draw_hline(coords.left_bottom() - Point::new(0, 1), width, color);
+        if height > 2 {
+            self.draw_vline(coords.left_top() + Point::new(0, 1), height - 2, color);
+            self.draw_vline(coords.right_top() + Point::new(-1, 1), height - 2, color);
+        }
+    }
+
+    pub fn draw_circle(&mut self, origin: Point, radius: isize, color: IndexedColor) {
+        let rect = Rect {
+            origin: origin - radius,
+            size: Size::new(radius * 2, radius * 2),
+        };
+        self.draw_round_rect(rect, radius, color);
+    }
+
+    pub fn fill_circle(&mut self, origin: Point, radius: isize, color: IndexedColor) {
+        let rect = Rect {
+            origin: origin - radius,
+            size: Size::new(radius * 2, radius * 2),
+        };
+        self.fill_round_rect(rect, radius, color);
+    }
+
+    pub fn fill_round_rect(&mut self, rect: Rect, radius: isize, color: IndexedColor) {
+        let width = rect.size.width;
+        let height = rect.size.height;
+        let dx = rect.origin.x;
+        let dy = rect.origin.y;
+
+        let mut radius = radius;
+        if radius * 2 > width {
+            radius = width / 2;
+        }
+        if radius * 2 > height {
+            radius = height / 2;
+        }
+
+        let lh = height - radius * 2;
+        if lh > 0 {
+            let rect_line = Rect::new(dx, dy + radius, width, lh);
+            self.fill_rect(rect_line, color);
+        }
+
+        let mut cx = radius;
+        let mut cy = 0;
+        let mut f = -2 * radius + 3;
+        let qh = height - 1;
+
+        while cx >= cy {
+            {
+                let bx = radius - cy;
+                let by = radius - cx;
+                let dw = width - bx * 2;
+                self.draw_hline(Point::new(dx + bx, dy + by), dw, color);
+                self.draw_hline(Point::new(dx + bx, dy + qh - by), dw, color);
+            }
+
+            {
+                let bx = radius - cx;
+                let by = radius - cy;
+                let dw = width - bx * 2;
+                self.draw_hline(Point::new(dx + bx, dy + by), dw, color);
+                self.draw_hline(Point::new(dx + bx, dy + qh - by), dw, color);
+            }
+
+            if f >= 0 {
+                cx -= 1;
+                f -= 4 * cx;
+            }
+            cy += 1;
+            f += 4 * cy + 2;
+        }
+    }
+
+    pub fn draw_round_rect(&mut self, rect: Rect, radius: isize, color: IndexedColor) {
+        let width = rect.size.width;
+        let height = rect.size.height;
+        let dx = rect.origin.x;
+        let dy = rect.origin.y;
+
+        let mut radius = radius;
+        if radius * 2 > width {
+            radius = width / 2;
+        }
+        if radius * 2 > height {
+            radius = height / 2;
+        }
+
+        let lh = height - radius * 2;
+        if lh > 0 {
+            self.draw_vline(Point::new(dx, dy + radius), lh, color);
+            self.draw_vline(Point::new(dx + width - 1, dy + radius), lh, color);
+        }
+        let lw = width - radius * 2;
+        if lw > 0 {
+            self.draw_hline(Point::new(dx + radius, dy), lw, color);
+            self.draw_hline(Point::new(dx + radius, dy + height - 1), lw, color);
+        }
+
+        let mut cx = radius;
+        let mut cy = 0;
+        let mut f = -2 * radius + 3;
+        let qh = height - 1;
+
+        while cx >= cy {
+            {
+                let bx = radius - cy;
+                let by = radius - cx;
+                let dw = width - bx * 2 - 1;
+                self.set_pixel(Point::new(dx + bx, dy + by), color);
+                self.set_pixel(Point::new(dx + bx, dy + qh - by), color);
+                self.set_pixel(Point::new(dx + bx + dw, dy + by), color);
+                self.set_pixel(Point::new(dx + bx + dw, dy + qh - by), color);
+            }
+
+            {
+                let bx = radius - cx;
+                let by = radius - cy;
+                let dw = width - bx * 2 - 1;
+                self.set_pixel(Point::new(dx + bx, dy + by), color);
+                self.set_pixel(Point::new(dx + bx, dy + qh - by), color);
+                self.set_pixel(Point::new(dx + bx + dw, dy + by), color);
+                self.set_pixel(Point::new(dx + bx + dw, dy + qh - by), color);
+            }
+
+            if f >= 0 {
+                cx -= 1;
+                f -= 4 * cx;
+            }
+            cy += 1;
+            f += 4 * cy + 2;
+        }
+    }
 }
 
 impl BitmapTrait for OsMutBitmap8<'_> {

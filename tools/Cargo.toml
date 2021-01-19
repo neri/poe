@@ -1,0 +1,10 @@
+[workspace]
+members = [
+  "convert",
+]
+
+[profile.release]
+lto = true
+opt-level = "z"
+
+[profile.dev]

@@ -82,11 +82,24 @@ impl System {
 
         let bitmap = shared.main_screen.as_mut().unwrap();
 
-        bitmap.fill_rect(Rect::from(size), IndexedColor::WHITE);
+        // bitmap.fill_rect(Rect::from(size), IndexedColor::WHITE);
+        for y in 0..info.screen_height {
+            for x in 0..info.screen_width {
+                let point = Point::new(x as isize, y as isize);
+                let color = if ((x ^ y) & 1) == 0 {
+                    IndexedColor::BLACK
+                } else {
+                    IndexedColor::WHITE
+                };
+                bitmap.set_pixel(point, color);
+            }
+        }
 
-        bitmap.fill_rect(Rect::new(50, 50, 100, 100), IndexedColor::BLUE);
-        bitmap.fill_rect(Rect::new(100, 100, 100, 100), IndexedColor::RED);
-        bitmap.fill_rect(Rect::new(150, 50, 100, 100), IndexedColor::GREEN);
+        bitmap.fill_round_rect(Rect::new(50, 50, 200, 200), 8, IndexedColor::WHITE);
+        bitmap.draw_round_rect(Rect::new(50, 50, 200, 200), 8, IndexedColor::BLACK);
+        bitmap.draw_circle(Point::new(100, 100), 48, IndexedColor::BLUE);
+        bitmap.draw_circle(Point::new(150, 150), 49, IndexedColor::RED);
+        bitmap.draw_circle(Point::new(200, 100), 50, IndexedColor::GREEN);
 
         loop {
             asm!("hlt");

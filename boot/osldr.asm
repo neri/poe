@@ -26,6 +26,9 @@
 %define OSZ_ARCH_NEC98      0   ; NEC PC-98 Series Computer
 %define OSZ_ARCH_FMT        2   ; Fujitsu FM TOWNS
 
+%define VESA_MODE           0x4101 ; 640x480x8
+
+
 [BITS 16]
 [ORG ORG_BASE]
 
@@ -55,7 +58,7 @@ _crt0:
     rep movsw
     push ds
 
-    jmp 0:_next
+    jmp 0:_init
 
 _puts:
 .loop:
@@ -69,7 +72,7 @@ _puts:
     ret
 
 
-_next:
+_init:
     push cs
     pop ds
 
@@ -85,9 +88,50 @@ _next:
     jmp forever
 .elf_ok:
 
-    mov ax, 0x0101
-    mov dx, 0xFC04
-    out dx, ax
+_set_video_mode:
+    sub sp, 256
+    push ss
+    pop es
+
+    mov ax, 0x4F02
+    mov bx, VESA_MODE
+    int 0x10
+    jc .no_vesa
+    or ah, ah
+    jnz .no_vesa
+    ; mov ax, 0x4F03
+    ; xor bx, bx
+    ; int 0x10
+; .vesa_ok:
+    mov ax, 0x4F01
+    mov cx, bx
+    mov di, sp
+    int 0x10
+    jc .no_vesa
+    or ah, ah
+    jnz .no_vesa
+    mov eax, [es:di + 0x12]
+    mov [_screen_width], eax
+    mov ax, [es:di + 0x10]
+    mov [_screen_stride], ax
+    mov al, [es:di + 0x19]
+    mov [_screen_bpp], al
+    mov eax, [es:di + 0x28]
+    mov [_vram_base],eax
+
+    jmp .next
+
+.no_vesa:
+    mov ax,0x0013
+    int 0x10
+    mov eax, 320 + 200 * 0x10000
+    mov [_screen_width], eax
+    mov [_screen_stride], ax
+    mov dword [_vram_base], 0x000A0000
+
+.next:
+    add sp, 256
+_next:
 
     lgdt [_GDT]
 
@@ -99,6 +143,7 @@ _next:
     pop cx
     mov ax, KERNEL_DS
     jmp KERNEL_CS:_next32
+
 
 [BITS 32]
 
@@ -160,6 +205,8 @@ _vram_base      dd 0x000A0000
 _screen_width   dw 640
 _screen_height  dw 480
 _screen_stride  dw 640
+_screen_bpp     db 0
+                db 0
 _boot_arch      db 0
 _boot_drive     db 0
 

@@ -22,3 +22,9 @@ impl IndexedColor {
     pub const YELLOW: Self = Self(14);
     pub const WHITE: Self = Self(15);
 }
+
+impl From<u8> for IndexedColor {
+    fn from(val: u8) -> Self {
+        Self(val)
+    }
+}

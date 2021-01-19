@@ -1,4 +1,4 @@
-/sys/target/
+target/
 
 **/*.rs.bk
 

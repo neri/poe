@@ -4,6 +4,7 @@ BIN			= bin/
 IMAGE		= $(BIN)boot.img
 IPLS		= $(BIN)fdboot.bin $(BIN)fdipl.bin
 KERNEL_LD	= sys/target/i586-unknown-linux-gnu/release/kernel
+KERNEL_BIN	= $(BIN)kernel.bin
 KERNEL_SYS	= $(BIN)kernel.sys
 TARGETS		= $(IPLS) $(KERNEL_SYS)
 
@@ -31,7 +32,10 @@ $(BIN)osldr.bin: boot/osldr.asm
 $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs
 	(cd sys; cargo build -Zbuild-std --release)
 
-$(KERNEL_SYS): $(BIN)osldr.bin $(KERNEL_LD)
+$(KERNEL_BIN): tools/convert/**/*.rs $(KERNEL_LD)
+	(cd tools/convert; cargo run ../../$(KERNEL_LD) ../../$(KERNEL_BIN))
+
+$(KERNEL_SYS): $(BIN)osldr.bin $(KERNEL_BIN)
 	cat $^ > $@
 
 install: $(IMAGE) $(KERNEL_SYS)
