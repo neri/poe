@@ -3,7 +3,10 @@
 use super::color::*;
 use super::coords::*;
 
-pub trait BitmapTrait {
+pub trait BitmapTrait
+where
+    Self::PixelType: Sized + Copy + Clone,
+{
     type PixelType;
 
     fn bits_per_pixel(&self) -> usize;
@@ -19,10 +22,7 @@ pub trait BitmapTrait {
         Size::new(self.width() as isize, self.height() as isize)
     }
 
-    fn get_pixel(&self, point: Point) -> Option<Self::PixelType>
-    where
-        Self::PixelType: Copy,
-    {
+    fn get_pixel(&self, point: Point) -> Option<Self::PixelType> {
         if point.is_within(Rect::from(self.size())) {
             Some(unsafe { self.get_pixel_unchecked(point) })
         } else {
@@ -31,10 +31,7 @@ pub trait BitmapTrait {
     }
 
     /// SAFETY: The point must be within the size range.
-    unsafe fn get_pixel_unchecked(&self, point: Point) -> Self::PixelType
-    where
-        Self::PixelType: Copy,
-    {
+    unsafe fn get_pixel_unchecked(&self, point: Point) -> Self::PixelType {
         *self
             .slice()
             .get_unchecked(point.x as usize + point.y as usize * self.stride())
@@ -59,6 +56,10 @@ pub trait MutableBitmapTrait: BitmapTrait {
             .slice_mut()
             .get_unchecked_mut(point.x as usize + point.y as usize * stride) = pixel;
     }
+}
+
+pub trait RasterFontWriter: MutableBitmapTrait {
+    fn draw_font(&mut self, src: &[u8], size: Size, origin: Point, color: Self::PixelType);
 }
 
 #[repr(C)]
@@ -442,6 +443,44 @@ impl BitmapTrait for OsMutBitmap8<'_> {
 impl MutableBitmapTrait for OsMutBitmap8<'_> {
     fn slice_mut(&mut self) -> &mut [Self::PixelType] {
         &mut self.slice
+    }
+}
+
+impl RasterFontWriter for OsMutBitmap8<'_> {
+    fn draw_font(&mut self, src: &[u8], size: Size, origin: Point, color: Self::PixelType) {
+        let width = size.width as usize;
+        let stride = (width + 7) / 8;
+        let w8 = width / 8;
+        let w7 = width & 7;
+        let mut cursor = 0;
+        for y in 0..size.height {
+            for i in 0..w8 {
+                let data = unsafe { src.get_unchecked(cursor + i) };
+                for j in 0..8 {
+                    let position = 0x80u8 >> j;
+                    if (data & position) != 0 {
+                        let x = (i * 8 + j) as isize;
+                        let y = y;
+                        let point = Point::new(origin.x + x, origin.y + y);
+                        self.set_pixel(point, color);
+                    }
+                }
+            }
+            if w7 > 0 {
+                let data = unsafe { src.get_unchecked(cursor + w8) };
+                let base_x = w8 * 8;
+                for i in 0..w7 {
+                    let position = 0x80u8 >> i;
+                    if (data & position) != 0 {
+                        let x = (i + base_x) as isize;
+                        let y = y;
+                        let point = Point::new(origin.x + x, origin.y + y);
+                        self.set_pixel(point, color);
+                    }
+                }
+            }
+            cursor += stride;
+        }
     }
 }
 

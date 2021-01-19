@@ -40,3 +40,5 @@ $(KERNEL_SYS): $(BIN)osldr.bin $(KERNEL_BIN)
 
 install: $(IMAGE) $(KERNEL_SYS)
 	mcopy -D o -i $(IMAGE) $(KERNEL_SYS) ::
+
+run: install

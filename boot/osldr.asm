@@ -8,19 +8,18 @@
 
 %define ORG_BASE            0x0800
 
-%define ELF_MAGIC           0x464C457F ; \x7FELF
-%define ELF_ENTRY           0x18
-%define ELF_PHOFF           0x1C
-%define ELF_PHENTSIZE       0x2A
-%define ELF_PHNUM           0x2C
+%define CEEF_MAGIC          0xCEEF
+%define CEEF_OFF_SECHDR     0x10
+%define CEEF_SIZE_SECHDR    0x10
 
-%define ELF_PT_LOAD         0x01
-%define ELF_P_TYPE          0x00
-%define ELF_P_OFFSET        0x04
-%define ELF_P_VADDR         0x08
-%define ELF_P_FILESZ        0x10
-%define ELF_P_MEMSZ         0x14
+%define CEEF_N_SECS         0x03
+%define CEEF_ENTRY          0x04
+%define CEEF_BASE           0x08
+%define CEEF_MINALLOC       0x0C
 
+%define CEEF_S_FILESZ       0x04
+%define CEEF_S_VADDR        0x08
+%define CEEF_S_MEMSZ        0x0C
 
 %define OSZ_ARCH_PC         1   ; IBM PC/AT Compatible
 %define OSZ_ARCH_NEC98      0   ; NEC PC-98 Series Computer
@@ -81,7 +80,7 @@ _init:
     mov [_boot_arch], cx
     push es
 
-    cmp dword [es: _END - _HEAD], ELF_MAGIC
+    cmp word [es:_END - _HEAD], CEEF_MAGIC
     jz .elf_ok
     mov si, bad_kernel_mes
     call _puts
@@ -159,36 +158,34 @@ _next32:
     shl ebp, 4
     add ebp, _END - _HEAD
 
-    mov ebx, [ebp + ELF_PHOFF]
-    add ebx, ebp
-    movzx edx, word [ebp + ELF_PHNUM]
-.loop:
-    cmp dword [ebx], ELF_PT_LOAD
-    jnz .no_load
-
-    mov ecx, [ebx + ELF_P_MEMSZ]
-    jecxz .no_load
-    mov edi, [ebx + ELF_P_VADDR]
+    mov edi, [ebp + CEEF_BASE]
+    mov ecx, [ebp + CEEF_MINALLOC]
     xor al, al
     rep stosb
 
-    mov ecx, [ebx + ELF_P_FILESZ]
-    jecxz .load_next
-    mov esi, [ebx + ELF_P_OFFSET]
-    add esi, ebp
-    mov edi, [ebx + ELF_P_VADDR]
+    movzx edx, byte [ebp + CEEF_N_SECS]
+    lea ebx, [ebp + CEEF_OFF_SECHDR]
+    mov esi, edx
+    shl esi, 4
+    add esi, ebx
+.loop:
+    mov al, [ebx]
+    and al, 0x07
+    jz .no_load
+
+    mov ecx, [ebx + CEEF_S_FILESZ]
+    jecxz .no_load
+    mov edi, [ebx + CEEF_S_VADDR]
     rep movsb
-.load_next:
 
 .no_load:
-    movzx eax, word [ebp + ELF_PHENTSIZE]
-    add ebx, eax
+    add ebx, CEEF_SIZE_SECHDR
     dec edx
     jnz .loop
 
     mov eax, _boot_info
     push eax
-    call dword [ebp + ELF_ENTRY]
+    call [ebp + CEEF_ENTRY]
     ud2
 
 cpu_err_mes:
@@ -198,7 +195,7 @@ no_mem_mes:
     db "NOT ENOUGH MEMORY", 13, 10, 0
 
 bad_kernel_mes:
-    db "BAD KERNEL SIGNATURE FOUND", 13, 10, 0
+    db "BAD KERNEL SIGNATURE", 13, 10, 0
 
 _boot_info:
 _vram_base      dd 0x000A0000

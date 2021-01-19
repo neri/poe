@@ -1,5 +1,6 @@
 // Fonts
 
+use super::graphics::bitmap::*;
 use crate::graphics::coords::*;
 
 // include!("megbtan.rs");
@@ -67,6 +68,26 @@ impl FixedFontDriver<'_> {
             Some(&self.data[base..base + self.stride])
         } else {
             None
+        }
+    }
+
+    pub fn write_char<T>(&self, character: char, to: &mut T, origin: Point, color: T::PixelType)
+    where
+        T: RasterFontWriter,
+    {
+        if let Some(font) = self.glyph_for(character) {
+            to.draw_font(font, self.size, origin, color);
+        }
+    }
+
+    pub fn write_str<T>(&self, s: &str, to: &mut T, origin: Point, color: T::PixelType)
+    where
+        T: RasterFontWriter,
+    {
+        let mut origin = origin;
+        for c in s.chars() {
+            self.write_char(c, to, origin, color);
+            origin.x += self.size.width();
         }
     }
 }

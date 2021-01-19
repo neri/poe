@@ -1,8 +1,8 @@
 // System
 
-use crate::graphics::bitmap::*;
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
+use crate::{fonts::*, graphics::bitmap::*};
 use bootprot::*;
 use core::fmt;
 
@@ -13,7 +13,7 @@ pub struct Version {
 }
 
 impl Version {
-    const SYSTEM_NAME: &'static str = "MEG-OS";
+    const SYSTEM_NAME: &'static str = "Codename TOE";
     const RELEASE: &'static str = "";
     const VERSION: Version = Version::new(0, 0, 1, Self::RELEASE);
 
@@ -82,24 +82,32 @@ impl System {
 
         let bitmap = shared.main_screen.as_mut().unwrap();
 
-        // bitmap.fill_rect(Rect::from(size), IndexedColor::WHITE);
-        for y in 0..info.screen_height {
+        bitmap.fill_rect(Rect::from(size), IndexedColor::WHITE);
+        bitmap.fill_rect(Rect::new(0, 23, size.width(), 1), IndexedColor::BLACK);
+        for y in 24..info.screen_height {
             for x in 0..info.screen_width {
                 let point = Point::new(x as isize, y as isize);
-                let color = if ((x ^ y) & 1) == 0 {
-                    IndexedColor::BLACK
-                } else {
-                    IndexedColor::WHITE
-                };
-                bitmap.set_pixel(point, color);
+                if ((x & y) & 3) == 3 {
+                    bitmap.set_pixel(point, IndexedColor::BLACK);
+                }
             }
         }
 
-        bitmap.fill_round_rect(Rect::new(50, 50, 200, 200), 8, IndexedColor::WHITE);
-        bitmap.draw_round_rect(Rect::new(50, 50, 200, 200), 8, IndexedColor::BLACK);
-        bitmap.draw_circle(Point::new(100, 100), 48, IndexedColor::BLUE);
-        bitmap.draw_circle(Point::new(150, 150), 49, IndexedColor::RED);
-        bitmap.draw_circle(Point::new(200, 100), 50, IndexedColor::GREEN);
+        bitmap.fill_round_rect(Rect::new(10, 30, 200, 100), 8, IndexedColor::WHITE);
+        bitmap.draw_round_rect(Rect::new(10, 30, 200, 100), 8, IndexedColor::BLACK);
+        // bitmap.draw_circle(Point::new(100, 100), 48, IndexedColor::BLUE);
+        // bitmap.draw_circle(Point::new(150, 150), 49, IndexedColor::RED);
+        // bitmap.draw_circle(Point::new(200, 100), 50, IndexedColor::GREEN);
+
+        let font = FontManager::fixed_system_font();
+        font.write_str(System::name(), bitmap, Point::new(10, 4), IndexedColor::RED);
+
+        font.write_str(
+            "Hello, world!",
+            bitmap,
+            Point::new(20, 40),
+            IndexedColor::BLUE,
+        );
 
         loop {
             asm!("hlt");

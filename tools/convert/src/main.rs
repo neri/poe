@@ -3,10 +3,10 @@
 // use byteorder::*;
 use convert::{ceef::*, elf::*};
 use core::mem::transmute;
-use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
+use std::{cmp, env};
 
 fn main() {
     let mut args = env::args();
@@ -28,6 +28,9 @@ fn main() {
         "Bad executable"
     );
 
+    const BASE_ADDR_MASK: u32 = 0xFFFFF000;
+    let mut base_addr = u32::MAX;
+    let mut minalloc = 0;
     let n_segments = header.e_phnum as usize;
     let mut ceef_sec_hdr: Vec<CeefSecHeader> = Vec::with_capacity(n_segments);
 
@@ -43,6 +46,10 @@ fn main() {
         );
 
         if phdr.p_type == ElfSegmentType::LOAD {
+            let max_addr = phdr.p_vaddr + phdr.p_memsz;
+            base_addr = cmp::min(base_addr, phdr.p_vaddr & BASE_ADDR_MASK);
+            minalloc = cmp::max(minalloc, max_addr);
+
             if phdr.p_filesz > 0 {
                 let f_offset = phdr.p_offset as usize;
                 let f_size = phdr.p_filesz as usize;
@@ -60,13 +67,16 @@ fn main() {
                     phdr.p_flags as u8,
                     phdr.p_vaddr,
                     phdr.p_filesz,
+                    phdr.p_memsz,
                 ));
             }
         }
     }
 
     let mut new_header = CeefHeader::default();
-    new_header.n_sec = ceef_sec_hdr.len() as u8;
+    new_header.n_secs = ceef_sec_hdr.len() as u8;
+    new_header.base = base_addr;
+    new_header.minalloc = minalloc - base_addr;
     new_header.entry = header.e_entry;
 
     let mut os = File::create(out_file).unwrap();
