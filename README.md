@@ -1,4 +1,4 @@
-# MEG-OS Lite
+# MEG-OS Lite (codename TOE)
 
 A hobby OS
 

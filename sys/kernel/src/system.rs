@@ -2,9 +2,11 @@
 
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
+use crate::graphics::emcon::*;
 use crate::{fonts::*, graphics::bitmap::*};
 use bootprot::*;
 use core::fmt;
+// use fmt::Write;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
@@ -58,6 +60,7 @@ impl fmt::Display for Version {
 
 pub struct System {
     main_screen: Option<OsMutBitmap8<'static>>,
+    em_console: EmConsole,
 }
 
 #[used]
@@ -65,7 +68,10 @@ static mut SYSTEM: System = System::new();
 
 impl System {
     const fn new() -> Self {
-        Self { main_screen: None }
+        Self {
+            main_screen: None,
+            em_console: EmConsole::new(),
+        }
     }
 
     #[inline]
@@ -93,22 +99,23 @@ impl System {
             }
         }
 
-        bitmap.fill_round_rect(Rect::new(10, 30, 200, 100), 8, IndexedColor::WHITE);
-        bitmap.draw_round_rect(Rect::new(10, 30, 200, 100), 8, IndexedColor::BLACK);
-        // bitmap.draw_circle(Point::new(100, 100), 48, IndexedColor::BLUE);
-        // bitmap.draw_circle(Point::new(150, 150), 49, IndexedColor::RED);
-        // bitmap.draw_circle(Point::new(200, 100), 50, IndexedColor::GREEN);
+        let window_rect = Rect::new(10, 30, 200, 100);
+        bitmap.fill_round_rect(window_rect, 8, IndexedColor::WHITE);
+        bitmap.draw_round_rect(window_rect, 8, IndexedColor::BLACK);
+        bitmap.draw_circle(Point::new(100, 150), 48, IndexedColor::BLUE);
+        bitmap.draw_circle(Point::new(150, 200), 49, IndexedColor::RED);
+        bitmap.draw_circle(Point::new(200, 150), 50, IndexedColor::GREEN);
+
+        bitmap.view(window_rect, |bitmap| {
+            bitmap.draw_round_rect(Rect::new(50, 50, 200, 200), 8, IndexedColor::BLUE);
+        });
 
         let font = FontManager::fixed_system_font();
-        font.write_str(System::name(), bitmap, Point::new(10, 4), IndexedColor::RED);
+        font.write_str("Hello", bitmap, Point::new(10, 4), IndexedColor::RED);
 
-        font.write_str(
-            "Hello, world!",
-            bitmap,
-            Point::new(20, 40),
-            IndexedColor::BLUE,
-        );
+        font.write_str("Welcome!", bitmap, Point::new(20, 40), IndexedColor::BLUE);
 
+        unimplemented!();
         loop {
             asm!("hlt");
         }
@@ -140,6 +147,18 @@ impl System {
     /// SAFETY: IT DESTROYS EVERYTHING.
     pub unsafe fn shutdown() -> ! {
         todo!();
+    }
+
+    /// Get main screen
+    pub fn main_screen() -> &'static mut OsMutBitmap8<'static> {
+        let shared = Self::shared();
+        shared.main_screen.as_mut().unwrap()
+    }
+
+    /// Get emergency console
+    pub fn em_console<'a>() -> &'a mut EmConsole {
+        let shared = Self::shared();
+        &mut shared.em_console
     }
 
     // #[inline]

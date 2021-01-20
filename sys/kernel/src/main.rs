@@ -1,9 +1,11 @@
-// MEG-OS Kernel
+// MEG-OS TOE Kernel
 // Copyright (c) 2021 MEG-OS project
 
 #![no_std]
 #![no_main]
 #![feature(asm)]
+
+use core::unimplemented;
 
 use kernel::*;
 
@@ -20,8 +22,6 @@ impl Application {
     }
 
     fn main() {
-        loop {
-            kernel_halt();
-        }
+        unimplemented!();
     }
 }

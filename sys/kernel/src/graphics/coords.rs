@@ -1,6 +1,6 @@
 // Coordinate Types
 
-use core::ops::*;
+use core::{convert::TryFrom, ops::*};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -71,7 +71,7 @@ impl Point {
 
     #[inline]
     pub fn is_within(self, rect: Rect) -> bool {
-        if let Some(coords) = Coordinates::from_rect(rect) {
+        if let Ok(coords) = Coordinates::from_rect(rect) {
             coords.left <= self.x
                 && coords.right > self.x
                 && coords.top <= self.y
@@ -299,11 +299,11 @@ impl Coordinates {
     }
 
     #[inline]
-    pub fn from_rect(rect: Rect) -> Option<Coordinates> {
+    pub fn from_rect(rect: Rect) -> Result<Coordinates, ()> {
         if rect.size.width == 0 || rect.size.height == 0 {
-            None
+            Err(())
         } else {
-            Some(unsafe { Self::from_rect_unchecked(rect) })
+            Ok(unsafe { Self::from_rect_unchecked(rect) })
         }
     }
 
@@ -321,7 +321,7 @@ impl Coordinates {
 
         let top: isize;
         let bottom: isize;
-        if rect.size.height > 0isize {
+        if rect.size.height > 0 {
             top = rect.origin.y;
             bottom = top + rect.size.height;
         } else {
@@ -334,6 +334,22 @@ impl Coordinates {
             top,
             right,
             bottom,
+        }
+    }
+}
+
+impl TryFrom<Rect> for Coordinates {
+    type Error = ();
+    fn try_from(value: Rect) -> Result<Self, Self::Error> {
+        Self::from_rect(value)
+    }
+}
+
+impl From<Coordinates> for Rect {
+    fn from(coods: Coordinates) -> Rect {
+        Rect {
+            origin: coods.left_top(),
+            size: coods.size(),
         }
     }
 }

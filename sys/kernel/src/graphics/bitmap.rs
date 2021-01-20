@@ -2,6 +2,8 @@
 
 use super::color::*;
 use super::coords::*;
+use crate::*;
+use core::convert::TryFrom;
 
 pub trait BitmapTrait
 where
@@ -261,8 +263,8 @@ impl OsMutBitmap8<'_> {
             dy = 0;
         }
         let b = dy + h;
-        if b >= (self.width as isize) {
-            h = (self.width as isize) - dy;
+        if b >= (self.height as isize) {
+            h = (self.height as isize) - dy;
         }
         if h <= 0 {
             return;
@@ -413,6 +415,43 @@ impl OsMutBitmap8<'_> {
             cy += 1;
             f += 4 * cy + 2;
         }
+    }
+
+    /// Make a bitmap view
+    pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut OsMutBitmap8) -> R,
+    {
+        let coords = match Coordinates::try_from(rect) {
+            Ok(v) => v,
+            Err(_) => return None,
+        };
+        let width = self.width as isize;
+        let height = self.height as isize;
+        let stride = self.stride;
+
+        if coords.left < 0
+            || coords.left >= width
+            || coords.right >= width
+            || coords.top < 0
+            || coords.top >= height
+            || coords.bottom >= height
+        {
+            return None;
+        }
+
+        let offset = rect.x() as usize + rect.y() as usize * stride;
+        let new_len = rect.height() as usize * stride;
+        let r = {
+            let mut view = OsMutBitmap8 {
+                width: rect.width() as usize,
+                height: rect.height() as usize,
+                stride,
+                slice: &mut self.slice[offset..offset + new_len],
+            };
+            f(&mut view)
+        };
+        Some(r)
     }
 }
 

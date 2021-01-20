@@ -71,15 +71,18 @@ impl FixedFontDriver<'_> {
         }
     }
 
+    /// Write character to bitmap
     pub fn write_char<T>(&self, character: char, to: &mut T, origin: Point, color: T::PixelType)
     where
         T: RasterFontWriter,
     {
         if let Some(font) = self.glyph_for(character) {
+            let origin = Point::new(origin.x, origin.y + self.leading);
             to.draw_font(font, self.size, origin, color);
         }
     }
 
+    /// Write string to bitmap
     pub fn write_str<T>(&self, s: &str, to: &mut T, origin: Point, color: T::PixelType)
     where
         T: RasterFontWriter,

@@ -3,29 +3,32 @@
 #![no_std]
 #![feature(asm)]
 
+use core::fmt::Write;
 use core::panic::PanicInfo;
+use graphics::emcon::EmConsole;
+use system::System;
 
 pub mod fonts;
 pub mod graphics;
 pub mod mem;
 pub mod system;
 
-// #[macro_export]
-// macro_rules! print {
-//     ($($arg:tt)*) => {
-//         write!(stdout(), $($arg)*).unwrap()
-//     };
-// }
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => {
+        write!(stdout(), $($arg)*).unwrap()
+    };
+}
 
-// #[macro_export]
-// macro_rules! println {
-//     ($fmt:expr) => {
-//         print!(concat!($fmt, "\r\n"))
-//     };
-//     ($fmt:expr, $($arg:tt)*) => {
-//         print!(concat!($fmt, "\r\n"), $($arg)*)
-//     };
-// }
+#[macro_export]
+macro_rules! println {
+    ($fmt:expr) => {
+        print!(concat!($fmt, "\r\n"))
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        print!(concat!($fmt, "\r\n"), $($arg)*)
+    };
+}
 
 #[macro_export]
 macro_rules! entry {
@@ -46,6 +49,16 @@ pub fn kernel_halt() {
 }
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {}
+fn panic(info: &PanicInfo) -> ! {
+    println!("{}", info);
+    loop {
+        unsafe {
+            asm!("hlt");
+        }
+    }
+}
+
+#[inline]
+pub fn stdout<'a>() -> &'a mut EmConsole {
+    System::em_console()
 }
