@@ -3,10 +3,11 @@
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
 use crate::graphics::emcon::*;
+use crate::*;
 use crate::{fonts::*, graphics::bitmap::*};
 use bootprot::*;
 use core::fmt;
-// use fmt::Write;
+use fmt::Write;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
@@ -88,34 +89,38 @@ impl System {
 
         let bitmap = shared.main_screen.as_mut().unwrap();
 
-        bitmap.fill_rect(Rect::from(size), IndexedColor::WHITE);
+        bitmap.fill_rect(Rect::from(size), IndexedColor::LIGHT_CYAN);
+        bitmap.fill_rect(Rect::new(0, 0, size.width(), 24), IndexedColor::LIGHT_GRAY);
         bitmap.fill_rect(Rect::new(0, 23, size.width(), 1), IndexedColor::BLACK);
         for y in 24..info.screen_height {
             for x in 0..info.screen_width {
                 let point = Point::new(x as isize, y as isize);
                 if ((x & y) & 3) == 3 {
-                    bitmap.set_pixel(point, IndexedColor::BLACK);
+                    bitmap.set_pixel(point, IndexedColor::WHITE);
                 }
             }
         }
 
-        let window_rect = Rect::new(10, 30, 200, 100);
-        bitmap.fill_round_rect(window_rect, 8, IndexedColor::WHITE);
-        bitmap.draw_round_rect(window_rect, 8, IndexedColor::BLACK);
-        bitmap.draw_circle(Point::new(100, 150), 48, IndexedColor::BLUE);
-        bitmap.draw_circle(Point::new(150, 200), 49, IndexedColor::RED);
-        bitmap.draw_circle(Point::new(200, 150), 50, IndexedColor::GREEN);
-
-        bitmap.view(window_rect, |bitmap| {
-            bitmap.draw_round_rect(Rect::new(50, 50, 200, 200), 8, IndexedColor::BLUE);
-        });
-
         let font = FontManager::fixed_system_font();
-        font.write_str("Hello", bitmap, Point::new(10, 4), IndexedColor::RED);
+        let window_rect = Rect::new(20, 40, 200, 100);
+        bitmap.fill_round_rect(window_rect, 8, IndexedColor::LIGHT_GRAY);
+        bitmap.view(window_rect, |bitmap| {
+            let title_rect = Rect::new(0, 0, 200, 24);
+            bitmap.view(title_rect, |bitmap| {
+                bitmap.fill_round_rect(Rect::new(0, 0, 200, 40), 8, IndexedColor::BLUE);
+                font.write_str("Hello", bitmap, Point::new(8, 4), IndexedColor::WHITE);
+            });
+            font.write_str("It works!", bitmap, Point::new(20, 40), IndexedColor::BLACK);
+        });
+        bitmap.draw_round_rect(window_rect, 8, IndexedColor::BLACK);
 
-        font.write_str("Welcome!", bitmap, Point::new(20, 40), IndexedColor::BLUE);
-
-        unimplemented!();
+        println!(
+            "{} v{} Memory {} KB",
+            System::name(),
+            System::version(),
+            info.memsz_mi
+        );
+        // unimplemented!();
         loop {
             asm!("hlt");
         }

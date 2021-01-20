@@ -9,6 +9,9 @@ pub struct BootInfo {
     pub screen_stride: u16,
     pub screen_bpp: u8,
     _reserved: u8,
+    pub memsz_lo: u16,
+    pub memsz_mi: u16,
+    pub memsz_hi: u32,
     pub arch: BootArch,
     pub bios_boot_drive: u8,
 }
