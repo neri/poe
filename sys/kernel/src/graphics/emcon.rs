@@ -26,6 +26,7 @@ impl EmConsole {
 
     pub fn write_char(&mut self, c: char) {
         let font = FontManager::fixed_system_font();
+        // let font = FontManager::fixed_small_font();
         let font_size = Size::new(font.width(), font.line_height());
         let bitmap = System::main_screen();
 

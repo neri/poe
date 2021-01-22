@@ -1,12 +1,16 @@
-;; MEG-OS ToE Loader
+;; TOE Loader
 ;; Copyright (c) 2021 MEG-OS project
 
 %define IPL_SIGN            0x1eaf
+%define ARCH_PC             1   ; IBM PC/AT Compatible
+%define ARCH_NEC98          0   ; NEC PC-98 Series Computer
+%define ARCH_FMT            2   ; Fujitsu FM TOWNS
+
+%define ORG_BASE            0x0800
 
 %define KERNEL_CS           0x10
 %define KERNEL_DS           0x18
-
-%define ORG_BASE            0x0800
+%define STACK_SIZE          0x10000
 
 %define CEEF_MAGIC          0xCEEF
 %define CEEF_OFF_SECHDR     0x10
@@ -21,12 +25,8 @@
 %define CEEF_S_VADDR        0x08
 %define CEEF_S_MEMSZ        0x0C
 
-%define OSZ_ARCH_PC         1   ; IBM PC/AT Compatible
-%define OSZ_ARCH_NEC98      0   ; NEC PC-98 Series Computer
-%define OSZ_ARCH_FMT        2   ; Fujitsu FM TOWNS
-
 %define VESA_MODE           0x4101 ; 640x480x8
-
+%define MAX_PALETTE         256
 
 [BITS 16]
 [ORG ORG_BASE]
@@ -61,9 +61,9 @@ _crt0:
 
 _puts:
     mov al, [cs:_boot_arch]
-    cmp al, OSZ_ARCH_NEC98
+    cmp al, ARCH_NEC98
     jz _puts_nec98
-    cmp al, OSZ_ARCH_FMT
+    cmp al, ARCH_FMT
     jz _puts_fmt
 .loop:
     lodsb
@@ -111,9 +111,9 @@ _init:
     pop ax
     mov [_boot_arch], ax
     push es
-    cmp al, OSZ_ARCH_NEC98
+    cmp al, ARCH_NEC98
     jz _init_n98
-    cmp al, OSZ_ARCH_FMT
+    cmp al, ARCH_FMT
     jz _init_fmt
 
     int 0x12
@@ -143,9 +143,9 @@ _init_n98:
     shl ax, cl
     mov [_memsz_mi] ,ax
 
-    ; mov ax, [0x0594]
-    ; shl eax, 20
-    ; mov [_memsz_hi], eax
+    mov ax, [0x0594]
+    shl ax, 4 ; shl eax, 20 -16
+    mov [_memsz_hi + 2], ax
 
     jmp _next
 
@@ -209,9 +209,9 @@ _next:
 
 _set_video_mode:
     mov al, [_boot_arch]
-    cmp al, OSZ_ARCH_NEC98
+    cmp al, ARCH_NEC98
     jz _vga_nec98
-    cmp al, OSZ_ARCH_FMT
+    cmp al, ARCH_FMT
     jz _vga_fmt
     jmp _vesa
 
@@ -254,7 +254,7 @@ _vga_nec98:
     int 0x18
 
     xor cx, cx
-    mov bx, 256
+    mov bx, MAX_PALETTE
     mov si, _palette
 .loop:
     mov al,cl
@@ -333,7 +333,7 @@ _vga_fmt:
     out dx, ax
 
     xor cx, cx
-    mov bx, 256
+    mov bx, MAX_PALETTE
     mov si, _palette
 
     mov dx, 0xFD90
@@ -399,7 +399,7 @@ _vesa:
 .next:
 
     xor cx, cx
-    mov bx, 256
+    mov bx, MAX_PALETTE
     mov si, _palette
 
     mov dx, 0x03DA
@@ -475,6 +475,11 @@ _next32:
     xor al, al
     rep stosb
 
+    or edi, 0x00000FFF
+    and edi, 0xFFFFF000
+    lea esp, [edi + STACK_SIZE]
+    mov [_kernel_end], esp
+
     movzx edx, byte [ebp + CEEF_N_SECS]
     lea ebx, [ebp + CEEF_OFF_SECHDR]
     mov esi, edx
@@ -495,10 +500,14 @@ _next32:
     dec edx
     jnz .loop
 
-    mov eax, _boot_info
-    push eax
+    push byte 0
+    popfd
+    mov ecx, _boot_info
+    push ecx
     call [ebp + CEEF_ENTRY]
     ud2
+
+
 
     db 22, 0, 15
 cpu_err_mes:
@@ -516,6 +525,7 @@ no_mem_mes:
 bad_kernel_mes:
     db "BAD KERNEL MAGIC", 13, 10, 0
 
+
 _boot_info:
 _vram_base      dd 0
 _screen_width   dw 0
@@ -526,8 +536,10 @@ _screen_bpp     db 0
 _memsz_lo       dw 0
 _memsz_mi       dw 0
 _memsz_hi       dd 0
+_kernel_end     dd 0
 _boot_arch      db 0
 _boot_drive     db 0
+
 
     ;; FM TOWNS 640x480x8 mode parameters
 _fmt_vga_param:

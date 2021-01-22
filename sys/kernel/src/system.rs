@@ -16,7 +16,7 @@ pub struct Version {
 }
 
 impl Version {
-    const SYSTEM_NAME: &'static str = "Codename TOE";
+    const SYSTEM_NAME: &'static str = "codename TOE";
     const RELEASE: &'static str = "";
     const VERSION: Version = Version::new(0, 0, 1, Self::RELEASE);
 
@@ -87,32 +87,58 @@ impl System {
             stride,
         ));
 
+        arch::Arch::init();
+
         let bitmap = shared.main_screen.as_mut().unwrap();
 
         bitmap.fill_rect(Rect::from(size), IndexedColor::LIGHT_CYAN);
         bitmap.fill_rect(Rect::new(0, 0, size.width(), 24), IndexedColor::LIGHT_GRAY);
-        bitmap.fill_rect(Rect::new(0, 23, size.width(), 1), IndexedColor::BLACK);
-        for y in 24..info.screen_height {
-            for x in 0..info.screen_width {
-                let point = Point::new(x as isize, y as isize);
-                if ((x & y) & 3) == 3 {
-                    bitmap.set_pixel(point, IndexedColor::WHITE);
-                }
-            }
-        }
+        bitmap.draw_hline(Point::new(0, 22), size.width(), IndexedColor::DARK_GRAY);
+        bitmap.draw_hline(Point::new(0, 23), size.width(), IndexedColor::BLACK);
 
         let font = FontManager::fixed_system_font();
-        let window_rect = Rect::new(20, 40, 200, 100);
-        bitmap.fill_round_rect(window_rect, 8, IndexedColor::LIGHT_GRAY);
-        bitmap.view(window_rect, |bitmap| {
-            let title_rect = Rect::new(0, 0, 200, 24);
-            bitmap.view(title_rect, |bitmap| {
-                bitmap.fill_round_rect(Rect::new(0, 0, 200, 40), 8, IndexedColor::BLUE);
-                font.write_str("Hello", bitmap, Point::new(8, 4), IndexedColor::WHITE);
+
+        {
+            let window_rect = Rect::new(20, 40, 200, 100);
+            bitmap.fill_round_rect(window_rect, 8, IndexedColor::LIGHT_GRAY);
+            bitmap.view(window_rect, |bitmap| {
+                let title_rect = Rect::new(0, 0, 200, 24);
+                bitmap.view(title_rect, |bitmap| {
+                    bitmap.fill_round_rect(Rect::new(0, 0, 200, 40), 8, IndexedColor::BLUE);
+                    font.write_str("Hello", bitmap, Point::new(8, 4), IndexedColor::WHITE);
+                });
+                font.write_str("It works!", bitmap, Point::new(10, 40), IndexedColor::BLACK);
             });
-            font.write_str("It works!", bitmap, Point::new(20, 40), IndexedColor::BLACK);
-        });
-        bitmap.draw_round_rect(window_rect, 8, IndexedColor::BLACK);
+            bitmap.draw_round_rect(window_rect, 8, IndexedColor::BLACK);
+        }
+
+        {
+            let window_rect = Rect::new(240, 200, 160, 100);
+            let coords = Coordinates::from_rect_unchecked(window_rect);
+            bitmap.fill_rect(window_rect, IndexedColor::LIGHT_GRAY);
+
+            bitmap.draw_hline(
+                coords.left_top() + Point::new(2, 2),
+                window_rect.width() - 4,
+                IndexedColor::WHITE,
+            );
+            bitmap.draw_vline(
+                coords.left_top() + Point::new(2, 2),
+                window_rect.height() - 4,
+                IndexedColor::WHITE,
+            );
+            bitmap.draw_vline(
+                coords.right_top() + Point::new(-2, 2),
+                window_rect.height() - 4,
+                IndexedColor::DARK_GRAY,
+            );
+            bitmap.draw_hline(
+                coords.left_bottom() + Point::new(2, -2),
+                window_rect.width() - 4,
+                IndexedColor::DARK_GRAY,
+            );
+            bitmap.draw_rect(window_rect, IndexedColor::BLACK);
+        }
 
         println!(
             "{} v{} Memory {} KB",
@@ -120,6 +146,7 @@ impl System {
             System::version(),
             info.memsz_mi
         );
+
         // unimplemented!();
         loop {
             asm!("hlt");

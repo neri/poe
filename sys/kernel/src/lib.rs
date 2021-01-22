@@ -1,13 +1,14 @@
-// MEG-OS ToE
-
 #![no_std]
 #![feature(asm)]
+#![feature(abi_x86_interrupt)]
+#![feature(global_asm)]
 
 use core::fmt::Write;
 use core::panic::PanicInfo;
 use graphics::emcon::EmConsole;
 use system::System;
 
+pub mod arch;
 pub mod fonts;
 pub mod graphics;
 pub mod mem;

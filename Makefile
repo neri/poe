@@ -26,7 +26,7 @@ $(BIN)fdipl.bin: boot/fdipl.asm
 $(IMAGE): $(BIN) $(BIN)fdboot.bin
 	mformat -C -i $@ -f 1440 -B $(BIN)fdboot.bin
 
-$(BIN)osldr.bin: boot/osldr.asm
+$(BIN)loader.bin: boot/loader.asm
 	nasm -f bin -I boot $< -o $@
 
 $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs
@@ -35,7 +35,7 @@ $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.
 $(KERNEL_BIN): tools/convert/**/*.rs $(KERNEL_LD)
 	(cd tools/convert; cargo run ../../$(KERNEL_LD) ../../$(KERNEL_BIN))
 
-$(KERNEL_SYS): $(BIN)osldr.bin $(KERNEL_BIN)
+$(KERNEL_SYS): $(BIN)loader.bin $(KERNEL_BIN)
 	cat $^ > $@
 
 install: $(IMAGE) $(KERNEL_SYS)

@@ -1,4 +1,4 @@
-// MEG-OS ToE Boot Protocol
+// TOE Boot Protocol
 #![no_std]
 
 #[repr(C)]
@@ -12,6 +12,7 @@ pub struct BootInfo {
     pub memsz_lo: u16,
     pub memsz_mi: u16,
     pub memsz_hi: u32,
+    pub kernel_end: u32,
     pub arch: BootArch,
     pub bios_boot_drive: u8,
 }

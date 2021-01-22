@@ -1,14 +1,20 @@
-# MEG-OS Lite (codename TOE)
+# codename TOE
 
-A hobby OS
+A hobby OS written in Rust.
+
+## Features
+
+- A hobby OS written in Rust
 
 ## Requirements
 
 - IBM PC compatible / 日本電気 PC-9800 ｼﾘｰｽﾞｺﾝﾋﾟｭｰﾀｰ / 富士通 FM TOWNS
-- Memory 640KB + 3MB or a lot
-- Processor 80386 or 486SX or better
-- Display 640 x 480
-- Standard floppy to boot
+- 80386 or 486SX or better processor
+- 3.6MB or a lot more memory
+- VGA or better video adapter
+  - 640 x 480 pixel resolution
+  - 256 color mode
+- Standard floppy drive
 - Standard keyboard and mouse
 
 # Build Environment
@@ -33,4 +39,4 @@ $ make run
 
 MIT License
 
-&copy; 2002-2021 MEG-OS project
+&copy; 2002, 2021 MEG-OS project

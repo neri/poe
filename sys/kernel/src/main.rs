@@ -1,4 +1,4 @@
-// MEG-OS TOE Kernel
+// TOE Kernel
 // Copyright (c) 2021 MEG-OS project
 
 #![no_std]

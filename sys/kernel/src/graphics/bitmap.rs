@@ -65,7 +65,10 @@ pub trait BasicDrawing: MutableBitmapTrait {
     fn draw_vline(&mut self, point: Point, height: isize, color: Self::PixelType);
 
     fn draw_rect(&mut self, rect: Rect, color: Self::PixelType) {
-        let coords = Coordinates::from_rect(rect).unwrap();
+        let coords = match Coordinates::from_rect(rect) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
         let width = rect.width();
         let height = rect.height();
         self.draw_hline(coords.left_top(), width, color);
@@ -230,12 +233,32 @@ pub trait BasicDrawing: MutableBitmapTrait {
 
 pub trait RasterFontWriter: MutableBitmapTrait {
     fn draw_font(&mut self, src: &[u8], size: Size, origin: Point, color: Self::PixelType) {
-        let width = size.width as usize;
-        let stride = (width + 7) / 8;
+        let stride = (size.width as usize + 7) / 8;
+
+        let mut coords = match Coordinates::from_rect(Rect { origin, size }) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let width = self.width() as isize;
+        let height = self.height() as isize;
+        if coords.right > width {
+            coords.right = width;
+        }
+        if coords.bottom > height {
+            coords.bottom = height;
+        }
+        if coords.left < 0 || coords.left >= width || coords.top < 0 || coords.top >= height {
+            return;
+        }
+
+        let new_rect = Rect::from(coords);
+        let width = new_rect.width() as usize;
+        let height = new_rect.height();
         let w8 = width / 8;
         let w7 = width & 7;
         let mut cursor = 0;
-        for y in 0..size.height {
+        for y in 0..height {
             for i in 0..w8 {
                 let data = unsafe { src.get_unchecked(cursor + i) };
                 for j in 0..8 {
@@ -345,6 +368,7 @@ impl OsMutBitmap8<'static> {
 }
 
 impl OsMutBitmap8<'_> {
+    /// Fast fill
     #[inline]
     fn memset_colors(slice: &mut [IndexedColor], cursor: usize, size: usize, color: IndexedColor) {
         // let slice = &mut slice[cursor..cursor + size];

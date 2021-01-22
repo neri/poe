@@ -3,13 +3,12 @@
 use super::graphics::bitmap::*;
 use crate::graphics::coords::*;
 
-// include!("megbtan.rs");
 include!("megh0816.rs");
-#[allow(dead_code)]
 const SYSTEM_FONT: FixedFontDriver = FixedFontDriver::new(8, 16, &FONT_MEGH0816_DATA);
+// include!("megbtan.rs");
+// const SYSTEM_FONT: FixedFontDriver = FixedFontDriver::new(8, 16, &FONT_MEGBTAN_DATA);
 
 include!("megh0608.rs");
-#[allow(dead_code)]
 const SMALL_FONT: FixedFontDriver = FixedFontDriver::new(6, 8, &FONT_MEGH0608_DATA);
 
 pub struct FontManager {}

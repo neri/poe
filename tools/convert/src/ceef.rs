@@ -1,4 +1,4 @@
-// Compact & Efficient Executable Format
+// Compact & Efficient Executable Format (unstable)
 
 use core::mem::size_of;
 use core::mem::transmute;
@@ -16,7 +16,7 @@ pub struct CeefHeader {
 
 impl CeefHeader {
     pub const MAGIC: u16 = 0xCEEF;
-    pub const VER_CURRENT: u8 = 1;
+    pub const VER_CURRENT: u8 = 0;
 
     pub const fn is_valid(&self) -> bool {
         self.magic == Self::MAGIC && self.version == Self::VER_CURRENT
