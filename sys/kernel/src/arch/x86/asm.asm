@@ -5,13 +5,8 @@
 
     ; pub unsafe extern "C" fn cpu_default_exception(ctx: &mut StackContext)
     extern cpu_default_exception
-
-    global _asm_int_00
-    global _asm_int_03
-    global _asm_int_06
-    global _asm_int_08
-    global _asm_int_0d
-    global _asm_int_0e
+    ; pub unsafe extern "fastcall" fn apic_handle_irq(irq: Irq)
+    extern pic_handle_irq
 
 _asm_int_00: ; #DE Divide Error
     push BYTE 0
@@ -32,19 +27,19 @@ _asm_int_08: ; #DF Double Fault
     push BYTE 0x08
     jmp short _exception
 
-_asm_int_0d: ; #GP General Protection Fault
+_asm_int_0D: ; #GP General Protection Fault
     push BYTE 0x0D
     jmp short _exception
 
-_asm_int_0e: ; #PF Page Fault
+_asm_int_0E: ; #PF Page Fault
     push BYTE 0x0E
     ; jmp short _exception
 
 _exception:
-    pushad
     push es
     push ss
     push ds
+    pushad
     mov eax, cr2
     push eax
     mov ebp, esp
@@ -63,6 +58,7 @@ _exception:
 _iretd:
     iretd
 
+
     global asm_handle_exception
 asm_handle_exception:
     cmp cl, 15
@@ -73,6 +69,116 @@ asm_handle_exception:
 .no_exception:
     xor eax, eax
     ret
+
+
+_irq0:
+    push ecx
+    mov cl, 0
+    jmp short _irq
+
+_irq1:
+    push ecx
+    mov cl, 1
+    jmp short _irq
+
+_irq2:
+    push ecx
+    mov cl, 2
+    jmp short _irq
+
+_irq3:
+    push ecx
+    mov cl, 3
+    jmp short _irq
+
+_irq4:
+    push ecx
+    mov cl, 4
+    jmp short _irq
+
+_irq5:
+    push ecx
+    mov cl, 5
+    jmp short _irq
+
+_irq6:
+    push ecx
+    mov cl, 6
+    jmp short _irq
+
+_irq7:
+    push ecx
+    mov cl, 7
+    jmp short _irq
+
+_irq8:
+    push ecx
+    mov cl, 8
+    jmp short _irq
+
+_irq9:
+    push ecx
+    mov cl, 9
+    jmp short _irq
+
+_irq10:
+    push ecx
+    mov cl, 10
+    jmp short _irq
+
+_irq11:
+    push ecx
+    mov cl, 11
+    jmp short _irq
+
+_irq12:
+    push ecx
+    mov cl, 12
+    jmp short _irq
+
+_irq13:
+    push ecx
+    mov cl, 13
+    jmp short _irq
+
+_irq14:
+    push ecx
+    mov cl, 14
+    jmp short _irq
+
+_irq15:
+    push ecx
+    mov cl, 15
+
+_irq:
+    push eax
+    push edx
+    push ds
+    push es
+    cld
+
+    call pic_handle_irq
+
+    pop es
+    pop ds
+    pop edx
+    pop eax
+    pop ecx
+    iretd
+
+
+    global asm_handle_irq_table
+asm_handle_irq_table:
+    push esi
+    push edi
+    mov esi, _irq_table
+    mov edi, ecx
+    mov ecx, 16
+    rep movsd
+    pop edi
+    pop esi
+    ret
+
 
 [section .rodata]
 _exception_table:
@@ -92,3 +198,21 @@ _exception_table:
     dd _asm_int_0D
     dd _asm_int_0E
     dd 0 ; int_0F
+
+_irq_table:
+    dd _irq0
+    dd _irq1
+    dd _irq2
+    dd _irq3
+    dd _irq4
+    dd _irq5
+    dd _irq6
+    dd _irq7
+    dd _irq8
+    dd _irq9
+    dd _irq10
+    dd _irq11
+    dd _irq12
+    dd _irq13
+    dd _irq14
+    dd _irq15

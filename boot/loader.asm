@@ -273,7 +273,7 @@ _vga_nec98:
 
 _vga_fmt:
     mov dword [_screen_width], 640 + 480 * 0x10000
-    mov word [_screen_stride], 1024
+    mov word [_screen_stride], 640 ;1024
     mov dword [_vram_base], 0x80100000
 
     xor cl, cl
@@ -475,7 +475,7 @@ _next32:
     xor al, al
     rep stosb
 
-    or edi, 0x00000FFF
+    add edi, 0x00000FFF
     and edi, 0xFFFFF000
     lea esp, [edi + STACK_SIZE]
     mov [_kernel_end], esp
@@ -527,26 +527,27 @@ bad_kernel_mes:
 
 
 _boot_info:
+_boot_arch      db 0
+_boot_drive     db 0
+                dw 0
+_memsz_lo       dw 0
+_memsz_mi       dw 0
+_memsz_hi       dd 0
+_kernel_end     dd 0
 _vram_base      dd 0
 _screen_width   dw 0
 _screen_height  dw 0
 _screen_stride  dw 0
 _screen_bpp     db 0
                 db 0
-_memsz_lo       dw 0
-_memsz_mi       dw 0
-_memsz_hi       dd 0
-_kernel_end     dd 0
-_boot_arch      db 0
-_boot_drive     db 0
-
+_acpi           dd 0
 
     ;; FM TOWNS 640x480x8 mode parameters
 _fmt_vga_param:
     dw 0x0060, 0x02C0,                 0x031F, 0x0000, 0x0004, 0x0000
     dw 0x0419, 0x008A, 0x030A, 0x008A, 0x030A, 0x0046, 0x0406, 0x0046
-    dw 0x0406, 0x0000, 0x008A, 0x0000, 0x0080, 0x0000, 0x008A, 0x0000
-    dw 0x0080, 0x0058, 0x0001, 0x0000, 0x000F, 0x0002, 0x0000, 0x0192
+    dw 0x0406, 0x0000, 0x008A, 0x0000, 0x0050, 0x0000, 0x008A, 0x0000
+    dw 0x0050, 0x0058, 0x0001, 0x0000, 0x000F, 0x0002, 0x0000, 0x0192
 
     ;;　GDT
     alignb 16

@@ -62,6 +62,7 @@ impl fmt::Display for Version {
 pub struct System {
     main_screen: Option<OsMutBitmap8<'static>>,
     em_console: EmConsole,
+    platform: BootPlatform,
 }
 
 #[used]
@@ -72,12 +73,14 @@ impl System {
         Self {
             main_screen: None,
             em_console: EmConsole::new(),
+            platform: BootPlatform::Unknown,
         }
     }
 
     #[inline]
     pub unsafe fn init(info: &BootInfo, _f: fn() -> ()) -> ! {
         let shared = Self::shared();
+        shared.platform = info.platform;
 
         let size = Size::new(info.screen_width as isize, info.screen_height as isize);
         let stride = info.screen_stride as usize;
@@ -140,16 +143,15 @@ impl System {
             bitmap.draw_rect(window_rect, IndexedColor::BLACK);
         }
 
-        println!(
-            "{} v{} Memory {} KB",
-            System::name(),
-            System::version(),
-            info.memsz_mi
-        );
+        println!("{} v{}", System::name(), System::version(),);
+        println!("Platform: {}", System::platform().name(),);
+        println!("Memory: {} KB + {} KB", info.memsz_lo >> 6, info.memsz_mi);
 
         // unimplemented!();
         loop {
             asm!("hlt");
+            let monotonic = arch::pit::Pit::monotonic();
+            print!("Monotonic Timer: {}\r", monotonic);
         }
     }
 
@@ -169,6 +171,12 @@ impl System {
     #[inline]
     pub const fn version() -> &'static Version {
         &Version::VERSION
+    }
+
+    #[inline]
+    pub fn platform() -> BootPlatform {
+        let shared = Self::shared();
+        shared.platform
     }
 
     /// SAFETY: IT DESTROYS EVERYTHING.

@@ -1,4 +1,4 @@
-// Emergency Console
+// Emergency debugging console
 
 use crate::fonts::*;
 use crate::graphics::bitmap::*;
