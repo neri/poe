@@ -2,6 +2,7 @@
 #![feature(asm)]
 #![feature(abi_x86_interrupt)]
 #![feature(global_asm)]
+#![feature(alloc_error_handler)]
 
 use core::fmt::Write;
 use core::panic::PanicInfo;
@@ -11,8 +12,13 @@ use system::System;
 pub mod arch;
 pub mod fonts;
 pub mod graphics;
+pub mod io;
 pub mod mem;
 pub mod system;
+pub mod task;
+pub mod window;
+
+extern crate alloc;
 
 #[macro_export]
 macro_rules! print {

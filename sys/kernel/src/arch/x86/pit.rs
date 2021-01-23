@@ -1,8 +1,10 @@
 // Programmable Interval Timer
 
-use bootprot::*;
-
 use super::{cpu::Cpu, pic::Irq};
+use crate::task::scheduler::*;
+use alloc::boxed::Box;
+use bootprot::*;
+use core::time::Duration;
 
 static mut PIT: Pit = Pit::new();
 
@@ -23,37 +25,39 @@ impl Pit {
         }
     }
 
-    pub(super) unsafe fn init(platform: BootPlatform) {
+    pub(super) unsafe fn init(platform: Platform) {
         let shared = Self::shared();
         match platform {
-            BootPlatform::PcCompatible => {
+            Platform::PcCompatible => {
                 shared.tmr_cnt0 = 0x0040;
                 shared.beep_cnt0 = 0x0042;
                 shared.tmr_ctl = 0x0043;
                 shared.init_timer(0b0011_0100, 11930);
                 Irq(0).register(Self::timer_irq_handler_pc).unwrap();
             }
-            BootPlatform::Nec98 => {
+            Platform::Nec98 => {
                 shared.tmr_cnt0 = 0x0071;
                 shared.beep_cnt0 = 0x0073;
                 shared.tmr_ctl = 0x0077;
                 shared.init_timer(0b0011_0100, 24576);
                 Irq(0).register(Self::timer_irq_handler_pc).unwrap();
             }
-            BootPlatform::FmTowns => {
+            Platform::FmTowns => {
                 shared.tmr_cnt0 = 0x0040;
                 shared.beep_cnt0 = 0x0044;
                 shared.tmr_ctl = 0x0046;
                 shared.init_timer(0b0011_0110, 3072);
+                Irq(0).register(Self::timer_irq_handler_fmt).unwrap();
                 asm!("
-                    in al, 0x60
-                    or al, 0x81
+                    mov al, 0x81
                     out 0x60, al
                     ", out ("al") _);
-                Irq(0).register(Self::timer_irq_handler_fmt).unwrap();
             }
             _ => unreachable!(),
         }
+
+        Timer::set_timer(&PIT);
+        Cpu::enable_interrupt();
     }
 
     #[inline]
@@ -70,16 +74,16 @@ impl Pit {
             ", in ("edx") self.tmr_cnt0, in ("eax") count);
     }
 
-    /// Timer IRQ handler for PC compatible and PC98
+    /// Timer IRQ handler for PC and PC98
     fn timer_irq_handler_pc(_irq: Irq) {
         let shared = Self::shared();
-        shared.monotonic += 1;
+        shared.monotonic += 10;
     }
 
     /// Timer IRQ handler for FM TOWNS
     fn timer_irq_handler_fmt(_irq: Irq) {
         let shared = Self::shared();
-        shared.monotonic += 1;
+        shared.monotonic += 10;
         unsafe {
             asm!("
             in al, 0x60
@@ -89,12 +93,40 @@ impl Pit {
         }
     }
 
-    pub fn monotonic() -> u64 {
-        unsafe {
-            Cpu::without_interrupts(|| {
-                let shared = Self::shared();
-                shared.monotonic
-            })
+    fn measure(&self) -> TimeSpec {
+        let shared = Self::shared();
+        loop {
+            unsafe {
+                let h: u32;
+                let l: u32;
+                let check: u32;
+                asm!("
+                    mov {1}, [{0}]
+                    mov {2}, [{0}+4]
+                    mov {3}, [{0}]
+                ", in (reg) &shared.monotonic,
+                    out (reg) l,
+                    out (reg) h,
+                    out (reg) check,
+                );
+                if l == check {
+                    break ((h as u64) << 32) + (l as u64);
+                }
+            }
         }
+    }
+}
+
+impl TimerSource for Pit {
+    fn create(&self, duration: Duration) -> TimeSpec {
+        self.measure() + duration.as_millis() as TimeSpec
+    }
+
+    fn until(&self, deadline: TimeSpec) -> bool {
+        deadline > self.measure()
+    }
+
+    fn monotonic(&self) -> Duration {
+        Duration::from_millis(self.measure())
     }
 }

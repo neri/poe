@@ -1,13 +1,13 @@
 // System
 
+use crate::graphics::bitmap::*;
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
 use crate::graphics::emcon::*;
 use crate::*;
-use crate::{fonts::*, graphics::bitmap::*};
+use arch::cpu::Cpu;
 use bootprot::*;
 use core::fmt;
-use fmt::Write;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
@@ -62,7 +62,7 @@ impl fmt::Display for Version {
 pub struct System {
     main_screen: Option<OsMutBitmap8<'static>>,
     em_console: EmConsole,
-    platform: BootPlatform,
+    platform: Platform,
 }
 
 #[used]
@@ -73,12 +73,12 @@ impl System {
         Self {
             main_screen: None,
             em_console: EmConsole::new(),
-            platform: BootPlatform::Unknown,
+            platform: Platform::Unknown,
         }
     }
 
     #[inline]
-    pub unsafe fn init(info: &BootInfo, _f: fn() -> ()) -> ! {
+    pub unsafe fn init(info: &BootInfo, f: fn() -> ()) -> ! {
         let shared = Self::shared();
         shared.platform = info.platform;
 
@@ -92,66 +92,12 @@ impl System {
 
         arch::Arch::init();
 
-        let bitmap = shared.main_screen.as_mut().unwrap();
+        io::hid::HidManager::init();
 
-        bitmap.fill_rect(Rect::from(size), IndexedColor::LIGHT_CYAN);
-        bitmap.fill_rect(Rect::new(0, 0, size.width(), 24), IndexedColor::LIGHT_GRAY);
-        bitmap.draw_hline(Point::new(0, 22), size.width(), IndexedColor::DARK_GRAY);
-        bitmap.draw_hline(Point::new(0, 23), size.width(), IndexedColor::BLACK);
+        f();
 
-        let font = FontManager::fixed_system_font();
-
-        {
-            let window_rect = Rect::new(20, 40, 200, 100);
-            bitmap.fill_round_rect(window_rect, 8, IndexedColor::LIGHT_GRAY);
-            bitmap.view(window_rect, |bitmap| {
-                let title_rect = Rect::new(0, 0, 200, 24);
-                bitmap.view(title_rect, |bitmap| {
-                    bitmap.fill_round_rect(Rect::new(0, 0, 200, 40), 8, IndexedColor::BLUE);
-                    font.write_str("Hello", bitmap, Point::new(8, 4), IndexedColor::WHITE);
-                });
-                font.write_str("It works!", bitmap, Point::new(10, 40), IndexedColor::BLACK);
-            });
-            bitmap.draw_round_rect(window_rect, 8, IndexedColor::BLACK);
-        }
-
-        {
-            let window_rect = Rect::new(240, 200, 160, 100);
-            let coords = Coordinates::from_rect_unchecked(window_rect);
-            bitmap.fill_rect(window_rect, IndexedColor::LIGHT_GRAY);
-
-            bitmap.draw_hline(
-                coords.left_top() + Point::new(2, 2),
-                window_rect.width() - 4,
-                IndexedColor::WHITE,
-            );
-            bitmap.draw_vline(
-                coords.left_top() + Point::new(2, 2),
-                window_rect.height() - 4,
-                IndexedColor::WHITE,
-            );
-            bitmap.draw_vline(
-                coords.right_top() + Point::new(-2, 2),
-                window_rect.height() - 4,
-                IndexedColor::DARK_GRAY,
-            );
-            bitmap.draw_hline(
-                coords.left_bottom() + Point::new(2, -2),
-                window_rect.width() - 4,
-                IndexedColor::DARK_GRAY,
-            );
-            bitmap.draw_rect(window_rect, IndexedColor::BLACK);
-        }
-
-        println!("{} v{}", System::name(), System::version(),);
-        println!("Platform: {}", System::platform().name(),);
-        println!("Memory: {} KB + {} KB", info.memsz_lo >> 6, info.memsz_mi);
-
-        // unimplemented!();
         loop {
-            asm!("hlt");
-            let monotonic = arch::pit::Pit::monotonic();
-            print!("Monotonic Timer: {}\r", monotonic);
+            Cpu::halt();
         }
     }
 
@@ -174,7 +120,7 @@ impl System {
     }
 
     #[inline]
-    pub fn platform() -> BootPlatform {
+    pub fn platform() -> Platform {
         let shared = Self::shared();
         shared.platform
     }

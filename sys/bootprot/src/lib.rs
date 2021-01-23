@@ -1,9 +1,11 @@
 // TOE Boot Protocol
 #![no_std]
 
+use core::fmt;
+
 #[repr(C)]
 pub struct BootInfo {
-    pub platform: BootPlatform,
+    pub platform: Platform,
     pub bios_boot_drive: u8,
     _reserved_1: [u8; 2],
     pub memsz_lo: u16,
@@ -22,20 +24,20 @@ pub struct BootInfo {
 #[non_exhaustive]
 #[repr(i8)]
 #[derive(Debug, Clone, Copy)]
-pub enum BootPlatform {
+pub enum Platform {
     Unknown = -1,
     Nec98 = 0,
     PcCompatible = 1,
     FmTowns = 2,
 }
 
-impl BootPlatform {
-    pub const fn name(&self) -> &str {
+impl fmt::Display for Platform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::PcCompatible => "PC Compatible",
-            Self::Nec98 => "PC-98",
-            Self::FmTowns => "FM TOWNS",
-            _ => "Unknown",
+            Self::PcCompatible => write!(f, "PC Compatible"),
+            Self::Nec98 => write!(f, "PC-98"),
+            Self::FmTowns => write!(f, "FM TOWNS"),
+            _ => write!(f, "Unknown"),
         }
     }
 }

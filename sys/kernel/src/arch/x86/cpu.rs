@@ -21,6 +21,11 @@ impl Cpu {
     }
 
     #[inline]
+    pub fn noop() {
+        unsafe { asm!("nop") };
+    }
+
+    #[inline]
     pub unsafe fn halt() {
         asm!("hlt");
     }

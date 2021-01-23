@@ -2,7 +2,6 @@
 
 use super::color::*;
 use super::coords::*;
-use crate::*;
 use core::convert::TryFrom;
 
 pub trait BitmapTrait

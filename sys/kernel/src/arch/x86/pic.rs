@@ -17,6 +17,7 @@ pub struct Pic {
     data0: u32,
     cmd1: u32,
     data1: u32,
+    chain_eoi: u8,
     idt: [usize; Irq::MAX.0 as usize],
 }
 
@@ -27,28 +28,29 @@ impl Pic {
             data0: 0,
             cmd1: 0,
             data1: 0,
+            chain_eoi: 0,
             idt: [0; Irq::MAX.0 as usize],
         }
     }
 
-    pub(super) unsafe fn init(platform: BootPlatform) {
+    pub(super) unsafe fn init(platform: Platform) {
         let shared = Self::shared();
         match platform {
-            BootPlatform::PcCompatible => {
+            Platform::PcCompatible => {
                 shared.cmd0 = 0x0020;
                 shared.data0 = 0x0021;
                 shared.cmd1 = 0x00A0;
                 shared.data1 = 0x00A1;
                 shared.init_pic([0b00010001, 0b0000_0100, 0x02, 0b0001_0101, 0b0000_0001]);
             }
-            BootPlatform::Nec98 => {
+            Platform::Nec98 => {
                 shared.cmd0 = 0x0000;
                 shared.data0 = 0x0002;
                 shared.cmd1 = 0x0008;
                 shared.data1 = 0x000A;
                 shared.init_pic([0b00010001, 0b1000_0000, 0x07, 0b0001_1101, 0b0000_1001]);
             }
-            BootPlatform::FmTowns => {
+            Platform::FmTowns => {
                 shared.cmd0 = 0x0000;
                 shared.data0 = 0x0002;
                 shared.cmd1 = 0x0010;
@@ -68,8 +70,6 @@ impl Pic {
                 super::cpu::PrivilegeLevel::Kernel,
             );
         }
-
-        Cpu::enable_interrupt();
     }
 
     #[inline]
@@ -113,36 +113,25 @@ impl Pic {
 
     /// Init PICs
     #[inline]
-    unsafe fn init_pic(&self, cmds: [u8; 5]) {
+    unsafe fn init_pic(&mut self, cmds: [u8; 5]) {
         self.write_data0(u8::MAX);
-        Cpu::spin_loop_hint();
         self.write_data1(u8::MAX);
-        Cpu::spin_loop_hint();
 
         self.write_cmd0(cmds[0]);
-        Cpu::spin_loop_hint();
-
         self.write_data0(Irq::BASE.0);
-        Cpu::spin_loop_hint();
         self.write_data0(cmds[1]);
-        Cpu::spin_loop_hint();
         self.write_data0(cmds[3]);
-        Cpu::spin_loop_hint();
 
         self.write_cmd1(cmds[0]);
-        Cpu::spin_loop_hint();
         self.write_data1(Irq::BASE.0 + 8);
-        Cpu::spin_loop_hint();
         self.write_data1(cmds[2]);
-        Cpu::spin_loop_hint();
         self.write_data1(cmds[4]);
-        Cpu::spin_loop_hint();
 
         // Enable slave and spurious irq
         self.write_data0(!cmds[1] & 0x7F);
-        Cpu::spin_loop_hint();
         self.write_data1(0x7F);
-        Cpu::spin_loop_hint();
+
+        self.chain_eoi = 0x60 + cmds[2];
     }
 
     pub unsafe fn register(irq: Irq, f: IrqHandler) -> Result<(), ()> {
@@ -162,7 +151,7 @@ impl Pic {
         Cpu::without_interrupts(|| {
             let shared = Self::shared();
             if irq.is_slave() {
-                let irq = irq.0 - 8;
+                let irq = irq.local_number();
                 let mut imr = shared.read_data1();
                 if enabled {
                     imr &= !(1 << irq);
@@ -171,7 +160,7 @@ impl Pic {
                 }
                 shared.write_data1(imr);
             } else {
-                let irq = irq.0;
+                let irq = irq.local_number();
                 let mut imr = shared.read_data0();
                 if enabled {
                     imr &= !(1 << irq);
@@ -204,10 +193,10 @@ pub unsafe extern "fastcall" fn pic_handle_irq(irq: Irq) {
 
     // EOI
     if irq.is_slave() {
-        shared.write_cmd1(0x60 + irq.0 - 8);
-        shared.write_cmd0(0x20);
+        shared.write_cmd1(0x60 + irq.local_number());
+        shared.write_cmd0(shared.chain_eoi);
     } else {
-        shared.write_cmd0(0x60 + irq.0);
+        shared.write_cmd0(0x60 + irq.local_number());
     }
 }
 
@@ -219,16 +208,16 @@ impl Irq {
     const BASE: InterruptVector = InterruptVector(0x20);
     const MAX: Irq = Irq(16);
 
-    pub const LPC_TIMER: Irq = Irq(0);
-    pub const LPC_PS2K: Irq = Irq(1);
-    pub const LPC_COM2: Irq = Irq(3);
-    pub const LPC_COM1: Irq = Irq(4);
-    pub const LPC_FDC: Irq = Irq(6);
-    pub const LPC_LPT: Irq = Irq(7);
-    pub const LPC_RTC: Irq = Irq(8);
-    pub const LPC_PS2M: Irq = Irq(12);
-    pub const LPC_IDE1: Irq = Irq(14);
-    pub const LPC_IDE2: Irq = Irq(15);
+    // pub const LPC_TIMER: Irq = Irq(0);
+    // pub const LPC_PS2K: Irq = Irq(1);
+    // pub const LPC_COM2: Irq = Irq(3);
+    // pub const LPC_COM1: Irq = Irq(4);
+    // pub const LPC_FDC: Irq = Irq(6);
+    // pub const LPC_LPT: Irq = Irq(7);
+    // pub const LPC_RTC: Irq = Irq(8);
+    // pub const LPC_PS2M: Irq = Irq(12);
+    // pub const LPC_IDE1: Irq = Irq(14);
+    // pub const LPC_IDE2: Irq = Irq(15);
 
     pub const fn as_vec(self) -> InterruptVector {
         InterruptVector(Self::BASE.0 + self.0)
@@ -248,6 +237,10 @@ impl Irq {
 
     pub const fn is_slave(&self) -> bool {
         self.0 >= 8
+    }
+
+    pub const fn local_number(&self) -> u8 {
+        self.0 & 7
     }
 }
 

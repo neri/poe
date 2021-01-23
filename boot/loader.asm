@@ -10,7 +10,7 @@
 
 %define KERNEL_CS           0x10
 %define KERNEL_DS           0x18
-%define STACK_SIZE          0x10000
+%define STACK_SIZE          0x1000
 
 %define CEEF_MAGIC          0xCEEF
 %define CEEF_OFF_SECHDR     0x10
