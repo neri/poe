@@ -2,11 +2,7 @@
 
 use super::pic::*;
 use crate::io::hid::*;
-use _core::iter::empty;
 use bitflags::*;
-
-use crate::*;
-use core::fmt::Write;
 
 static mut TOWNS: FmTowns = FmTowns::new();
 
@@ -40,7 +36,7 @@ impl FmTowns {
         Irq(11).register(Self::irq11).unwrap();
     }
 
-    /// IRQ1 Keyboard
+    /// IRQ1 Standard Keyboard
     fn irq1(_irq: Irq) {
         let shared = Self::shared();
         unsafe {
@@ -56,11 +52,13 @@ impl FmTowns {
         }
     }
 
+    /// IRQ11 VSYNC (mouse polling)
     fn irq11(_irq: Irq) {
         let shared = Self::shared();
         shared.poll_mouse();
     }
 
+    #[inline]
     fn process_keydata(&mut self, data: u8) {
         let leading = self.key_lead_data;
         if leading.contains(KbdLeadData::EXTEND) {
@@ -76,7 +74,7 @@ impl FmTowns {
             .set(Modifier::LCTRL, leading.contains(KbdLeadData::HAS_CTRL));
         self.key_modifier
             .set(Modifier::LSHIFT, leading.contains(KbdLeadData::HAS_SHIFT));
-        let usage = Usage(unsafe { *KBD_TO_HID.get_unchecked(data as usize) });
+        let usage = Usage(unsafe { *SCAN_TO_HID.get_unchecked(data as usize) });
         if usage >= Usage::MOD_MIN && usage < Usage::MOD_MAX {
             let bit_position =
                 unsafe { Modifier::from_bits_unchecked(1 << (usage.0 - Usage::MOD_MIN.0)) };
@@ -87,6 +85,7 @@ impl FmTowns {
         }
     }
 
+    #[inline]
     fn poll_mouse(&mut self) {
         unsafe {
             asm!("out dx, al", in("edx") 0x04D6, in("al") 0b0010_1100u8);
@@ -144,7 +143,7 @@ impl KbdLeadData {
 }
 
 // Keyboard scan code to HID usage table
-static KBD_TO_HID: [u8; 128] = [
+static SCAN_TO_HID: [u8; 128] = [
     0x00, 0x29, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2D, 0x2E, 0x89, 0x2A,
     0x2B, 0x14, 0x1A, 0x08, 0x15, 0x17, 0x1C, 0x18, 0x0C, 0x12, 0x13, 0x2F, 0x30, 0x28, 0x04, 0x16,
     0x07, 0x09, 0x0A, 0x0B, 0x0D, 0x0E, 0x0F, 0x33, 0x34, 0x31, 0x1D, 0x1B, 0x06, 0x19, 0x05, 0x11,

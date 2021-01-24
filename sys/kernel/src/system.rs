@@ -90,6 +90,7 @@ impl System {
             stride,
         ));
 
+        mem::mm::MemoryManager::init_first(&info);
         arch::Arch::init();
 
         io::hid::HidManager::init();

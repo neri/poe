@@ -6,7 +6,8 @@
 #![feature(asm)]
 
 use arch::cpu::Cpu;
-use core::fmt::Write;
+use audio::AudioManager;
+use core::{fmt::Write, time::Duration};
 use kernel::fonts::FontManager;
 use kernel::graphics::bitmap::*;
 use kernel::graphics::color::*;
@@ -56,29 +57,29 @@ impl Application {
         {
             let window_rect = Rect::new(240, 200, 160, 100);
             let coords = unsafe { Coordinates::from_rect_unchecked(window_rect) };
-            bitmap.fill_rect(window_rect, IndexedColor::LIGHT_GRAY);
+            bitmap.fill_round_rect(window_rect, 1, IndexedColor::LIGHT_GRAY);
 
             bitmap.draw_hline(
-                coords.left_top() + Point::new(2, 2),
-                window_rect.width() - 4,
+                coords.left_top() + Point::new(1, 1),
+                window_rect.width() - 3,
                 IndexedColor::WHITE,
             );
             bitmap.draw_vline(
-                coords.left_top() + Point::new(2, 2),
-                window_rect.height() - 4,
+                coords.left_top() + Point::new(1, 1),
+                window_rect.height() - 3,
                 IndexedColor::WHITE,
             );
             bitmap.draw_vline(
                 coords.right_top() + Point::new(-2, 2),
-                window_rect.height() - 4,
+                window_rect.height() - 3,
                 IndexedColor::DARK_GRAY,
             );
             bitmap.draw_hline(
                 coords.left_bottom() + Point::new(2, -2),
-                window_rect.width() - 4,
+                window_rect.width() - 3,
                 IndexedColor::DARK_GRAY,
             );
-            bitmap.draw_rect(window_rect, IndexedColor::BLACK);
+            bitmap.draw_round_rect(window_rect, 1, IndexedColor::BLACK);
         }
 
         println!("{} v{}", System::name(), System::version(),);
@@ -92,6 +93,10 @@ impl Application {
             // print!("Monotonic Timer: {}\r", monotonic.as_millis());
             if let Some(key) = WindowManager::get_key() {
                 print!("{}", key);
+                AudioManager::make_beep(1000);
+                Timer::usleep(200_000);
+                AudioManager::make_beep(0);
+                Timer::usleep(200_00);
             }
         }
     }

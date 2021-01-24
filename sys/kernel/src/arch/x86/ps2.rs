@@ -147,6 +147,7 @@ impl Ps2 {
         ps2.process_mouse_data(data);
     }
 
+    #[inline]
     fn process_key_data(&mut self, data: Ps2Data) {
         if data == Ps2Data::SCAN_E0 {
             self.key_state = Ps2KeyState::PrefixE0;
@@ -176,6 +177,7 @@ impl Ps2 {
         }
     }
 
+    #[inline]
     fn process_mouse_data(&mut self, data: Ps2Data) {
         match self.mouse_phase {
             Ps2MousePhase::Ack => {

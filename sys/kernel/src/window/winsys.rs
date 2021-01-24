@@ -4,7 +4,6 @@ use crate::graphics::bitmap::*;
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
 use crate::{io::hid::*, system::System};
-use core::mem::replace;
 
 static mut WM: WindowManager = WindowManager::new();
 
@@ -29,6 +28,11 @@ impl WindowManager {
     }
 
     pub fn post_key_event(event: KeyEvent) {
+        // TODO:
+        // let shared = match Self::shared_opt() {
+        //     Some(v) => v,
+        //     None => return,
+        // };
         let shared = Self::shared();
         if let Some(event) = event.key_data() {
             shared.last_key = Some(event.into_char());

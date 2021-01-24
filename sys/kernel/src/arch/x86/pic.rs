@@ -208,17 +208,6 @@ impl Irq {
     const BASE: InterruptVector = InterruptVector(0x20);
     const MAX: Irq = Irq(16);
 
-    // pub const LPC_TIMER: Irq = Irq(0);
-    // pub const LPC_PS2K: Irq = Irq(1);
-    // pub const LPC_COM2: Irq = Irq(3);
-    // pub const LPC_COM1: Irq = Irq(4);
-    // pub const LPC_FDC: Irq = Irq(6);
-    // pub const LPC_LPT: Irq = Irq(7);
-    // pub const LPC_RTC: Irq = Irq(8);
-    // pub const LPC_PS2M: Irq = Irq(12);
-    // pub const LPC_IDE1: Irq = Irq(14);
-    // pub const LPC_IDE2: Irq = Irq(15);
-
     pub const fn as_vec(self) -> InterruptVector {
         InterruptVector(Self::BASE.0 + self.0)
     }

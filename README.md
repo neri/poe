@@ -16,6 +16,7 @@ A hobby OS written in Rust.
   - 256 color mode
 - Standard floppy drive
 - Standard keyboard and mouse
+- i8253 Sound
 
 # Build Environment
 

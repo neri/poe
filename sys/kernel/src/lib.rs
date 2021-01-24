@@ -4,12 +4,14 @@
 #![feature(global_asm)]
 #![feature(alloc_error_handler)]
 
+use arch::cpu::Cpu;
 use core::fmt::Write;
 use core::panic::PanicInfo;
 use graphics::emcon::EmConsole;
 use system::System;
 
 pub mod arch;
+pub mod audio;
 pub mod fonts;
 pub mod graphics;
 pub mod io;
@@ -58,11 +60,7 @@ pub fn kernel_halt() {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    loop {
-        unsafe {
-            asm!("hlt");
-        }
-    }
+    unsafe { Cpu::stop() };
 }
 
 #[inline]
