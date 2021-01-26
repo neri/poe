@@ -90,19 +90,19 @@ impl FmTowns {
         unsafe {
             asm!("out dx, al", in("edx") 0x04D6, in("al") 0b0010_1100u8);
             let p0: u8;
-            asm!("in al, dx", in("edx") 0x04D2, lateout("al") p0);
+            asm!("in al, dx", in("edx") 0x04D2, out("al") p0);
 
             asm!("out dx, al", in("edx") 0x04D6, in("al") 0b0000_0000u8);
             let p1: u8;
-            asm!("in al, dx", in("edx") 0x04D2, lateout("al") p1);
+            asm!("in al, dx", in("edx") 0x04D2, out("al") p1);
 
             asm!("out dx, al", in("edx") 0x04D6, in("al") 0b0010_0000u8);
             let p2: u8;
-            asm!("in al, dx", in("edx") 0x04D2, lateout("al") p2);
+            asm!("in al, dx", in("edx") 0x04D2, out("al") p2);
 
             asm!("out dx, al", in("edx") 0x04D6, in("al") 0b0000_0000u8);
             let p3: u8;
-            asm!("in al, dx", in("edx") 0x04D2, lateout("al") p3);
+            asm!("in al, dx", in("edx") 0x04D2, out("al") p3);
 
             let buttons: MouseButton = if (p0 & 0x10) == 0 {
                 MouseButton::LEFT
@@ -116,7 +116,6 @@ impl FmTowns {
             let x = 0 - ((p0 << 4) | (p1 & 0x0F)) as i8;
             let y = 0 - ((p2 << 4) | (p3 & 0x0F)) as i8;
             let report = MouseReport { buttons, x, y };
-            // print!("[M {:x} {} {}]", buttons.bits(), x, y);
             self.mouse_state.process_mouse_report(report);
         }
     }

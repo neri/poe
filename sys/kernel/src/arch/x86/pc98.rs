@@ -83,19 +83,9 @@ impl Pc98 {
             c0 &= 0x0F;
             asm!("out dx, al", in("edx") Self::PORT_MOUSE_CTRL, in("al") c0);
 
-            let buttons: MouseButton = if (m0 & 0x80) == 0 {
-                MouseButton::LEFT
-            } else {
-                MouseButton::empty()
-            } | if (m0 & 0x20) == 0 {
-                MouseButton::RIGHT
-            } else {
-                MouseButton::empty()
-            } | if (m0 & 0x40) == 0 {
-                MouseButton::MIDDLE
-            } else {
-                MouseButton::empty()
-            };
+            const MOUSE_BUTTON_TABLE: [u8; 8] =
+                [0b111, 0b101, 0b011, 0b001, 0b110, 0b100, 0b010, 0b000];
+            let buttons = MouseButton::from_bits_unchecked(MOUSE_BUTTON_TABLE[(m0 >> 5) as usize]);
             let x = ((m1 << 4) | (m0 & 0x0F)) as i8;
             let y = ((m3 << 4) | (m2 & 0x0F)) as i8;
             let report = MouseReport { buttons, x, y };

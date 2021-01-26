@@ -135,7 +135,7 @@ impl TimerSource for Pit {
 impl BeepDriver for Pit {
     fn make_beep(&self, freq: usize) {
         unsafe {
-            match System::platform() {
+            Cpu::without_interrupts(|| match System::platform() {
                 Platform::PcCompatible => {
                     if freq > 0 {
                         asm!("out dx, al", in ("edx") self.tmr_ctl, in ("al") 0b1011_0110u8);
@@ -204,7 +204,7 @@ impl BeepDriver for Pit {
                     }
                 }
                 _ => (),
-            }
+            })
         }
     }
 }

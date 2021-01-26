@@ -25,8 +25,8 @@ impl EmConsole {
     }
 
     pub fn write_char(&mut self, c: char) {
-        let font = FontManager::fixed_system_font();
-        // let font = FontManager::fixed_small_font();
+        // let font = FontManager::fixed_system_font();
+        let font = FontManager::fixed_small_font();
         let font_size = Size::new(font.width(), font.line_height());
         let bitmap = System::main_screen();
 
@@ -38,8 +38,16 @@ impl EmConsole {
             self.y += 1;
         }
         if self.y >= rows {
-            // TODO: scroll?
             self.y = rows - 1;
+            let sh = font_size.height() * self.y as isize;
+            let mut rect = bitmap.bounds();
+            rect.origin.y += font_size.height();
+            rect.size.height = sh;
+            bitmap.blt(&bitmap.clone(), Point::new(0, 0), rect, BltOption::empty());
+            bitmap.fill_rect(
+                Rect::new(0, sh, rect.width(), font_size.height()),
+                self.bg_color,
+            );
         }
 
         match c {

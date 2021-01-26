@@ -2,7 +2,10 @@
 
 use super::color::*;
 use super::coords::*;
+use bitflags::*;
+use core::cell::UnsafeCell;
 use core::convert::TryFrom;
+use core::mem::transmute;
 
 pub trait BitmapTrait
 where
@@ -20,6 +23,10 @@ where
 
     fn size(&self) -> Size {
         Size::new(self.width() as isize, self.height() as isize)
+    }
+
+    fn bounds(&self) -> Rect {
+        Rect::from(self.size())
     }
 
     fn get_pixel(&self, point: Point) -> Option<Self::PixelType> {
@@ -288,6 +295,12 @@ pub trait RasterFontWriter: MutableBitmapTrait {
     }
 }
 
+bitflags! {
+    pub struct BltOption: usize {
+        const COPY = 0b0000_0001;
+    }
+}
+
 #[repr(C)]
 pub struct OsBitmap8<'a> {
     width: usize,
@@ -304,6 +317,16 @@ impl<'a> OsBitmap8<'a> {
             height: size.height() as usize,
             stride,
             slice,
+        }
+    }
+
+    #[inline]
+    pub const fn from_bytes(bytes: &'a [u8], size: Size) -> Self {
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride: size.width() as usize,
+            slice: unsafe { transmute(bytes) },
         }
     }
 }
@@ -337,7 +360,7 @@ pub struct OsMutBitmap8<'a> {
     width: usize,
     height: usize,
     stride: usize,
-    slice: &'a mut [IndexedColor],
+    slice: UnsafeCell<&'a mut [IndexedColor]>,
 }
 
 impl<'a> OsMutBitmap8<'a> {
@@ -347,7 +370,19 @@ impl<'a> OsMutBitmap8<'a> {
             width: size.width() as usize,
             height: size.height() as usize,
             stride,
-            slice,
+            slice: UnsafeCell::new(slice),
+        }
+    }
+
+    /// Clone a bitmap
+    #[inline]
+    pub fn clone(&self) -> OsMutBitmap8<'a> {
+        let slice = unsafe { self.slice.get().as_mut().unwrap() };
+        Self {
+            width: self.width(),
+            height: self.height(),
+            stride: self.stride(),
+            slice: UnsafeCell::new(slice),
         }
     }
 }
@@ -361,7 +396,7 @@ impl OsMutBitmap8<'static> {
             width: size.width() as usize,
             height: size.height() as usize,
             stride,
-            slice,
+            slice: UnsafeCell::new(slice),
         }
     }
 }
@@ -374,7 +409,7 @@ impl OsMutBitmap8<'_> {
         unsafe {
             let slice = slice.get_unchecked_mut(cursor);
             let color = color.0;
-            let mut ptr: *mut u8 = core::mem::transmute(slice);
+            let mut ptr: *mut u8 = transmute(slice);
             let mut remain = size;
 
             while (ptr as usize & 0x3) != 0 && remain > 0 {
@@ -407,6 +442,128 @@ impl OsMutBitmap8<'_> {
         }
     }
 
+    /// Fast copy
+    #[allow(dead_code)]
+    #[inline]
+    fn memcpy_colors(
+        dest: &mut [IndexedColor],
+        dest_cursor: usize,
+        src: &[IndexedColor],
+        src_cursor: usize,
+        size: usize,
+    ) {
+        // let dest = &mut dest[dest_cursor..dest_cursor + size];
+        // let src = &src[src_cursor..src_cursor + size];
+        unsafe {
+            let dest = dest.get_unchecked_mut(dest_cursor);
+            let src = src.get_unchecked(src_cursor);
+            let mut ptr_d: *mut u8 = transmute(dest);
+            let mut ptr_s: *const u8 = transmute(src);
+            let mut remain = size;
+            if ((ptr_d as usize) & 0x3) == ((ptr_s as usize) & 0x3) {
+                while (ptr_d as usize & 0x3) != 0 && remain > 0 {
+                    ptr_d.write_volatile(ptr_s.read_volatile());
+                    ptr_d = ptr_d.add(1);
+                    ptr_s = ptr_s.add(1);
+                    remain -= 1;
+                }
+
+                if remain > 4 {
+                    let count = remain / 4;
+                    let mut ptr2d = ptr_d as *mut u32;
+                    let mut ptr2s = ptr_s as *const u32;
+
+                    for _ in 0..count {
+                        ptr2d.write_volatile(ptr2s.read_volatile());
+                        ptr2d = ptr2d.add(1);
+                        ptr2s = ptr2s.add(1);
+                    }
+
+                    ptr_d = ptr2d as *mut u8;
+                    ptr_s = ptr2s as *const u8;
+                    remain -= count * 4;
+                }
+
+                for _ in 0..remain {
+                    ptr_d.write_volatile(ptr_s.read_volatile());
+                    ptr_d = ptr_d.add(1);
+                    ptr_s = ptr_s.add(1);
+                }
+            } else {
+                for i in 0..size {
+                    ptr_d.write_volatile(ptr_s.read_volatile());
+                    ptr_d = ptr_d.add(1);
+                    ptr_s = ptr_s.add(1);
+                }
+            }
+        }
+    }
+
+    /// Blit
+    pub fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect, option: BltOption)
+    where
+        T: BitmapTrait<PixelType = <Self as BitmapTrait>::PixelType>,
+    {
+        let mut dx = origin.x;
+        let mut dy = origin.y;
+        let mut sx = rect.origin.x;
+        let mut sy = rect.origin.y;
+        let mut width = rect.width();
+        let mut height = rect.height();
+
+        if dx < 0 {
+            sx -= dx;
+            width += dx;
+            dx = 0;
+        }
+        if dy < 0 {
+            sy -= dy;
+            height += dy;
+            dy = 0;
+        }
+        let sw = src.width() as isize;
+        let sh = src.height() as isize;
+        if width > sx + sw {
+            width = sw - sx;
+        }
+        if height > sy + sh {
+            height = sh - sy;
+        }
+        let r = dx + width;
+        let b = dy + height;
+        let dw = self.width() as isize;
+        let dh = self.height() as isize;
+        if r >= dw {
+            width = dw - dx;
+        }
+        if b >= dh {
+            height = dh - dy;
+        }
+        if width <= 0 || height <= 0 {
+            return;
+        }
+
+        let width = width as usize;
+        let height = height as usize;
+
+        let ds = self.stride();
+        let ss = src.stride();
+        let mut dest_cursor = dx as usize + dy as usize * ds;
+        let mut src_cursor = sx as usize + sy as usize * ss;
+        let dest_fb = self.slice_mut();
+        let src_fb = src.slice();
+
+        if ds == width && ss == width {
+            Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width * height);
+        } else {
+            for _ in 0..height {
+                Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width);
+                dest_cursor += ds;
+                src_cursor += ss;
+            }
+        }
+    }
+
     /// Make a bitmap view
     pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
     where
@@ -433,11 +590,12 @@ impl OsMutBitmap8<'_> {
         let offset = rect.x() as usize + rect.y() as usize * stride;
         let new_len = rect.height() as usize * stride;
         let r = {
+            let slice = self.slice.get_mut();
             let mut view = OsMutBitmap8 {
                 width: rect.width() as usize,
                 height: rect.height() as usize,
                 stride,
-                slice: &mut self.slice[offset..offset + new_len],
+                slice: UnsafeCell::new(&mut slice[offset..offset + new_len]),
             };
             f(&mut view)
         };
@@ -465,13 +623,13 @@ impl BitmapTrait for OsMutBitmap8<'_> {
     }
 
     fn slice(&self) -> &[Self::PixelType] {
-        self.slice
+        unsafe { self.slice.get().as_ref().unwrap() }
     }
 }
 
 impl MutableBitmapTrait for OsMutBitmap8<'_> {
     fn slice_mut(&mut self) -> &mut [Self::PixelType] {
-        &mut self.slice
+        self.slice.get_mut()
     }
 }
 
@@ -507,10 +665,10 @@ impl BasicDrawing for OsMutBitmap8<'_> {
         let stride = self.stride;
         let mut cursor = dx as usize + dy as usize * stride;
         if stride == width {
-            Self::memset_colors(self.slice, cursor, width * height, color);
+            Self::memset_colors(self.slice_mut(), cursor, width * height, color);
         } else {
             for _ in 0..height {
-                Self::memset_colors(self.slice, cursor, width, color);
+                Self::memset_colors(self.slice_mut(), cursor, width, color);
                 cursor += stride;
             }
         }
@@ -537,7 +695,7 @@ impl BasicDrawing for OsMutBitmap8<'_> {
         }
 
         let cursor = dx as usize + dy as usize * self.stride;
-        Self::memset_colors(self.slice, cursor, w as usize, color);
+        Self::memset_colors(self.slice_mut(), cursor, w as usize, color);
     }
 
     fn draw_vline(&mut self, point: Point, height: isize, color: Self::PixelType) {
@@ -563,7 +721,7 @@ impl BasicDrawing for OsMutBitmap8<'_> {
         let stride = self.stride;
         let mut cursor = dx as usize + dy as usize * stride;
         for _ in 0..h {
-            self.slice[cursor] = color;
+            self.slice_mut()[cursor] = color;
             cursor += stride;
         }
     }

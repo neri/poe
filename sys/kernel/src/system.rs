@@ -1,4 +1,4 @@
-// System
+// A Computer System
 
 use crate::graphics::bitmap::*;
 use crate::graphics::color::*;

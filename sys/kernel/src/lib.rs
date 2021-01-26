@@ -3,6 +3,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(global_asm)]
 #![feature(alloc_error_handler)]
+#![feature(const_fn_transmute)]
 
 use arch::cpu::Cpu;
 use core::fmt::Write;
@@ -18,6 +19,7 @@ pub mod io;
 pub mod mem;
 pub mod system;
 pub mod task;
+pub mod util;
 pub mod window;
 
 extern crate alloc;

@@ -8,15 +8,19 @@ A hobby OS written in Rust.
 
 ## Requirements
 
-- IBM PC compatible / 日本電気 PC-9800 ｼﾘｰｽﾞｺﾝﾋﾟｭｰﾀｰ / 富士通 FM TOWNS
+- IBM PC compatible / 日本電気 PC-9800 ｼﾘｰｽﾞ ﾊﾟｰｿﾅﾙ ｺﾝﾋﾟｭｰﾀ / 富士通 FM TOWNS
 - 80386 or 486SX or better processor
 - 3.6MB or a lot more memory
 - VGA or better video adapter
   - 640 x 480 pixel resolution
   - 256 color mode
-- Standard floppy drive
 - Standard keyboard and mouse
-- i8253 Sound
+- 8253/8254 Sound
+- Standard floppy drive
+
+### Will it work with real hardware?
+
+- Not tested.
 
 # Build Environment
 
