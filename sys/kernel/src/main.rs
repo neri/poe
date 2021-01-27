@@ -92,13 +92,13 @@ impl Application {
             let bitmap =
                 OsBitmap8::from_bytes(&BITMAP_DATA, Size::new(BITMAP_WIDTH, BITMAP_HEIGHT));
             for _ in 0..100 {
-                let x = (rng.next() % 240) as isize;
-                let y = (rng.next() % 200) as isize;
-                screen.blt(
+                let x = (rng.next() % 300) as isize;
+                let y = (rng.next() % 180) as isize;
+                screen.blt_with_key(
                     &bitmap,
                     Point::new(x, y),
                     bitmap.bounds(),
-                    BltOption::empty(),
+                    IndexedColor(0xFF),
                 );
             }
         }

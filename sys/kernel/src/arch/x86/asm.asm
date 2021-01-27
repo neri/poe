@@ -3,17 +3,17 @@
 [bits 32]
 [section .text]
 
-    global memset
-memset:
-    push edi
-    mov edi, [esp+8]
-    mov al, [esp+12]
-    mov ecx, [esp+16]
-    mov edx, edi
-    rep stosb
-    mov eax, edx
-    pop edi
-    ret
+;     global memset
+; memset:
+;     push edi
+;     mov edi, [esp+8]
+;     mov al, [esp+12]
+;     mov ecx, [esp+16]
+;     mov edx, edi
+;     rep stosb
+;     mov eax, edx
+;     pop edi
+;     ret
 
     ; pub unsafe extern "C" fn cpu_default_exception(ctx: &mut StackContext)
     extern cpu_default_exception

@@ -121,12 +121,28 @@ _init:
     shl ax, cl
     mov [_memsz_lo], ax
 
-    mov ah, 0x88
-    stc
-    int 0x15
-    jc _next
-    mov [_memsz_mi], ax
-    jmp _next
+;     mov ax, 0xDA88
+;     xor cx, cx
+;     xor bx, bx
+;     int 0x15
+;     or cl, cl
+;     jnz .da88_32
+;     or bx, bx
+;     jz .no_da88
+;     mov [_memsz_mi], bx
+;     jmp _next
+; .da88_32:
+;     ; TODO:
+;     mov word [_memsz_mi], 15 * 1024
+;     jmp _next
+
+; .no_da88:
+;     mov ah, 0x88
+;     stc
+;     int 0x15
+;     jc _next
+;     mov [_memsz_mi], ax
+;     jmp _next
 
 _init_n98:
 
@@ -143,9 +159,9 @@ _init_n98:
     shl ax, cl
     mov [_memsz_mi] ,ax
 
-    mov ax, [0x0594]
-    shl ax, 4 ; shl eax, 20 -16
-    mov [_memsz_hi + 2], ax
+    ; mov ax, [0x0594]
+    ; shl ax, 4 ; shl eax, 20 -16
+    ; mov [_memsz_hi + 2], ax
 
     jmp _next
 
@@ -189,14 +205,49 @@ _next:
     and ax, dx
     jz short .bad_cpu
 
+_smap:
+    mov al, [_boot_arch]
+    cmp al, ARCH_PC
+    jnz _end_smap
+    push es
+    sub sp, 20
+    xor ebx, ebx
+    mov es, bx
+    mov di, sp
+.loop:
+    mov eax, 0xE820
+    mov edx, 0x534D4150 ; SMAP
+    mov ecx, 20
+    int 0x15
+    cmp eax, 0x534D4150 ; SMAP
+    jnz .end
+    mov eax, [es:di + 4]
+    or eax, [es:di + 12]
+    jnz .skip
+    ; mov ecx, 0x00100000
+    ; cmp [es:di], ecx
+    ; jnz .skip
+    ; mov eax, [es:di + 8]
+    ; sub eax, ecx
+    ; shr eax, 10
+    ; mov [_memsz_mi], ax
+    ; jmp .end
+.skip:
+    or ebx, ebx
+    jnz .loop
+.end:
+    add sp, 20
+    pop es
+    jmp _end_smap
+_end_smap:
 
     ;; memory check (temp)
-    cmp word [_memsz_mi], 3000
-    ja .mem_ok
-    mov si, no_mem_mes
-    call _puts
-    jmp forever
-.mem_ok:
+;     cmp word [_memsz_mi], 3000
+;     ja .mem_ok
+;     mov si, no_mem_mes
+;     call _puts
+;     jmp forever
+; .mem_ok:
 
     ;; kernel signature check
     cmp word [es:_END - _HEAD], CEEF_MAGIC

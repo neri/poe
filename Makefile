@@ -2,7 +2,7 @@
 
 BIN			= bin/
 IMAGE		= $(BIN)boot.img
-IPLS		= $(BIN)fdboot.bin $(BIN)fdipl.bin
+IPLS		= $(BIN)fdboot.bin
 KERNEL_LD	= sys/target/i586-unknown-linux-gnu/release/kernel
 KERNEL_BIN	= $(BIN)kernel.bin
 KERNEL_SYS	= $(BIN)kernel.sys
@@ -18,9 +18,6 @@ $(BIN):
 	mkdir -p $@
 
 $(BIN)fdboot.bin: boot/fdboot.asm
-	nasm -f bin $< -o $@
-
-$(BIN)fdipl.bin: boot/fdipl.asm
 	nasm -f bin $< -o $@
 
 $(IMAGE): $(BIN) $(BIN)fdboot.bin

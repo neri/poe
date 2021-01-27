@@ -1,25 +1,19 @@
-// Bitmap
+// Bitmap Drawing
 
 use super::color::*;
 use super::coords::*;
-use bitflags::*;
 use core::cell::UnsafeCell;
 use core::convert::TryFrom;
 use core::mem::transmute;
 
-pub trait BitmapTrait
+pub trait ImageTrait
 where
     Self::PixelType: Sized + Copy + Clone,
 {
     type PixelType;
 
-    fn bits_per_pixel(&self) -> usize;
     fn width(&self) -> usize;
     fn height(&self) -> usize;
-    fn stride(&self) -> usize {
-        self.width()
-    }
-    fn slice(&self) -> &[Self::PixelType];
 
     fn size(&self) -> Size {
         Size::new(self.width() as isize, self.height() as isize)
@@ -28,6 +22,13 @@ where
     fn bounds(&self) -> Rect {
         Rect::from(self.size())
     }
+}
+
+pub trait RasterImage: ImageTrait {
+    fn stride(&self) -> usize {
+        self.width()
+    }
+    fn slice(&self) -> &[Self::PixelType];
 
     fn get_pixel(&self, point: Point) -> Option<Self::PixelType> {
         if point.is_within(Rect::from(self.size())) {
@@ -45,7 +46,7 @@ where
     }
 }
 
-pub trait MutableBitmapTrait: BitmapTrait {
+pub trait MutableRasterImage: RasterImage {
     fn slice_mut(&mut self) -> &mut [Self::PixelType];
 
     fn set_pixel(&mut self, point: Point, pixel: Self::PixelType) {
@@ -65,7 +66,7 @@ pub trait MutableBitmapTrait: BitmapTrait {
     }
 }
 
-pub trait BasicDrawing: MutableBitmapTrait {
+pub trait BasicDrawing: MutableRasterImage {
     fn fill_rect(&mut self, rect: Rect, color: Self::PixelType);
     fn draw_hline(&mut self, point: Point, width: isize, color: Self::PixelType);
     fn draw_vline(&mut self, point: Point, height: isize, color: Self::PixelType);
@@ -235,9 +236,13 @@ pub trait BasicDrawing: MutableBitmapTrait {
             });
         }
     }
+
+    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
+    where
+        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>;
 }
 
-pub trait RasterFontWriter: MutableBitmapTrait {
+pub trait RasterFontWriter: MutableRasterImage {
     fn draw_font(&mut self, src: &[u8], size: Size, origin: Point, color: Self::PixelType) {
         let stride = (size.width as usize + 7) / 8;
 
@@ -295,12 +300,6 @@ pub trait RasterFontWriter: MutableBitmapTrait {
     }
 }
 
-bitflags! {
-    pub struct BltOption: usize {
-        const COPY = 0b0000_0001;
-    }
-}
-
 #[repr(C)]
 pub struct OsBitmap8<'a> {
     width: usize,
@@ -331,12 +330,8 @@ impl<'a> OsBitmap8<'a> {
     }
 }
 
-impl BitmapTrait for OsBitmap8<'_> {
+impl ImageTrait for OsBitmap8<'_> {
     type PixelType = IndexedColor;
-
-    fn bits_per_pixel(&self) -> usize {
-        8
-    }
 
     fn width(&self) -> usize {
         self.width
@@ -345,7 +340,9 @@ impl BitmapTrait for OsBitmap8<'_> {
     fn height(&self) -> usize {
         self.height
     }
+}
 
+impl RasterImage for OsBitmap8<'_> {
     fn stride(&self) -> usize {
         self.stride
     }
@@ -412,29 +409,35 @@ impl OsMutBitmap8<'_> {
             let mut ptr: *mut u8 = transmute(slice);
             let mut remain = size;
 
-            while (ptr as usize & 0x3) != 0 && remain > 0 {
+            // prologue
+            let prologue = usize::min(ptr as usize & 0x0F, remain);
+            remain -= prologue;
+            for _ in 0..prologue {
                 ptr.write_volatile(color);
                 ptr = ptr.add(1);
-                remain -= 1;
             }
 
-            if remain > 4 {
+            // kernel
+            if remain > 16 {
                 let color32 = color as u32
                     | (color as u32) << 8
                     | (color as u32) << 16
                     | (color as u32) << 24;
-                let count = remain / 4;
-                let mut ptr2 = ptr as *mut u32;
+                let color64 = color32 as u64 | (color32 as u64) << 32;
+                let color128 = color64 as u128 | (color64 as u128) << 64;
+                let count = remain / 16;
+                let mut ptr2 = ptr as *mut u128;
 
                 for _ in 0..count {
-                    ptr2.write_volatile(color32);
+                    ptr2.write_volatile(color128);
                     ptr2 = ptr2.add(1);
                 }
 
                 ptr = ptr2 as *mut u8;
-                remain -= count * 4;
+                remain -= count * 16;
             }
 
+            // epilogue
             for _ in 0..remain {
                 ptr.write_volatile(color);
                 ptr = ptr.add(1);
@@ -490,7 +493,7 @@ impl OsMutBitmap8<'_> {
                     ptr_s = ptr_s.add(1);
                 }
             } else {
-                for i in 0..size {
+                for _ in 0..size {
                     ptr_d.write_volatile(ptr_s.read_volatile());
                     ptr_d = ptr_d.add(1);
                     ptr_s = ptr_s.add(1);
@@ -499,10 +502,27 @@ impl OsMutBitmap8<'_> {
         }
     }
 
-    /// Blit
-    pub fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect, option: BltOption)
-    where
-        T: BitmapTrait<PixelType = <Self as BitmapTrait>::PixelType>,
+    pub fn blt_with_key<T>(
+        &mut self,
+        src: &T,
+        origin: Point,
+        rect: Rect,
+        color_key: <Self as ImageTrait>::PixelType,
+    ) where
+        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>,
+    {
+        self.blt_main(src, origin, rect, Some(color_key));
+    }
+
+    #[inline]
+    fn blt_main<T>(
+        &mut self,
+        src: &T,
+        origin: Point,
+        rect: Rect,
+        color_key: Option<<Self as ImageTrait>::PixelType>,
+    ) where
+        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>,
     {
         let mut dx = origin.x;
         let mut dy = origin.y;
@@ -553,13 +573,26 @@ impl OsMutBitmap8<'_> {
         let dest_fb = self.slice_mut();
         let src_fb = src.slice();
 
-        if ds == width && ss == width {
-            Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width * height);
-        } else {
+        if let Some(color_key) = color_key {
             for _ in 0..height {
-                Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width);
+                for i in 0..width {
+                    let c = src_fb[src_cursor + i];
+                    if c != color_key {
+                        dest_fb[dest_cursor + i] = c;
+                    }
+                }
                 dest_cursor += ds;
                 src_cursor += ss;
+            }
+        } else {
+            if ds == width && ss == width {
+                Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width * height);
+            } else {
+                for _ in 0..height {
+                    Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width);
+                    dest_cursor += ds;
+                    src_cursor += ss;
+                }
             }
         }
     }
@@ -603,12 +636,8 @@ impl OsMutBitmap8<'_> {
     }
 }
 
-impl BitmapTrait for OsMutBitmap8<'_> {
+impl ImageTrait for OsMutBitmap8<'_> {
     type PixelType = IndexedColor;
-
-    fn bits_per_pixel(&self) -> usize {
-        8
-    }
 
     fn width(&self) -> usize {
         self.width
@@ -617,7 +646,9 @@ impl BitmapTrait for OsMutBitmap8<'_> {
     fn height(&self) -> usize {
         self.height
     }
+}
 
+impl RasterImage for OsMutBitmap8<'_> {
     fn stride(&self) -> usize {
         self.stride
     }
@@ -627,7 +658,7 @@ impl BitmapTrait for OsMutBitmap8<'_> {
     }
 }
 
-impl MutableBitmapTrait for OsMutBitmap8<'_> {
+impl MutableRasterImage for OsMutBitmap8<'_> {
     fn slice_mut(&mut self) -> &mut [Self::PixelType] {
         self.slice.get_mut()
     }
@@ -724,6 +755,13 @@ impl BasicDrawing for OsMutBitmap8<'_> {
             self.slice_mut()[cursor] = color;
             cursor += stride;
         }
+    }
+
+    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
+    where
+        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>,
+    {
+        self.blt_main(src, origin, rect, None);
     }
 }
 

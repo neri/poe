@@ -1,6 +1,6 @@
 # codename TOE
 
-A hobby OS written in Rust.
+A hobby OS written in Rust, currently a subset of myos.
 
 ## Features
 

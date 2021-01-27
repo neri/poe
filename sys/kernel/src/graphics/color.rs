@@ -1,7 +1,7 @@
 // Colors
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IndexedColor(pub u8);
 
 impl IndexedColor {
