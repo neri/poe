@@ -43,18 +43,27 @@ impl WindowManager {
         }
     }
 
+    pub(crate) fn init() {
+        //
+    }
+
     #[inline]
     fn shared<'a>() -> &'a mut Self {
         unsafe { &mut WM }
     }
 
+    #[inline]
+    fn shared_opt<'a>() -> Option<&'a mut Self> {
+        unsafe { Some(&mut WM) }
+    }
+
     pub fn post_key_event(event: KeyEvent) {
         // TODO:
-        // let shared = match Self::shared_opt() {
-        //     Some(v) => v,
-        //     None => return,
-        // };
-        let shared = Self::shared();
+        let shared = match Self::shared_opt() {
+            Some(v) => v,
+            None => return,
+        };
+
         if let Some(event) = event.key_data() {
             shared.last_key = Some(event.into_char());
         }
@@ -62,11 +71,10 @@ impl WindowManager {
 
     pub fn post_mouse_event(mouse_state: &mut MouseState) {
         // TODO:
-        // let shared = match Self::shared_opt() {
-        //     Some(v) => v,
-        //     None => return,
-        // };
-        let shared = Self::shared();
+        let shared = match Self::shared_opt() {
+            Some(v) => v,
+            None => return,
+        };
 
         let screen = System::main_screen();
 

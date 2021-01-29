@@ -20,7 +20,7 @@ pub(super) struct Ps2 {
 
 #[allow(dead_code)]
 impl Ps2 {
-    const WRITE_TIMEOUT: u64 = 10_000;
+    const WRITE_TIMEOUT: u64 = 100_000;
     const READ_TIMEOUT: u64 = 100_000;
 
     const fn new() -> Self {

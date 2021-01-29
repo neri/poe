@@ -93,6 +93,7 @@ impl System {
         mem::mm::MemoryManager::init_first(&info);
         arch::Arch::init();
 
+        window::WindowManager::init();
         io::hid::HidManager::init();
 
         f();

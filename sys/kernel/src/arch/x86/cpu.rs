@@ -168,11 +168,11 @@ pub struct Selector(pub u16);
 
 impl Selector {
     pub const NULL: Selector = Selector(0);
+    pub const SYSTEM_TSS: Selector = Selector::new(1, PrivilegeLevel::Kernel);
     pub const KERNEL_CODE: Selector = Selector::new(2, PrivilegeLevel::Kernel);
     pub const KERNEL_DATA: Selector = Selector::new(3, PrivilegeLevel::Kernel);
     pub const USER_CODE: Selector = Selector::new(4, PrivilegeLevel::User);
     pub const USER_DATA: Selector = Selector::new(5, PrivilegeLevel::User);
-    pub const SYSTEM_TSS: Selector = Selector::new(6, PrivilegeLevel::Kernel);
 
     #[inline]
     pub const fn new(index: usize, rpl: PrivilegeLevel) -> Self {
@@ -194,8 +194,8 @@ impl Selector {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub enum PrivilegeLevel {
     Kernel = 0,
-    System1,
-    System2,
+    Ring1,
+    Ring2,
     User,
 }
 
@@ -207,8 +207,8 @@ impl PrivilegeLevel {
     pub const fn from_usize(value: usize) -> Self {
         match value & 3 {
             0 => PrivilegeLevel::Kernel,
-            1 => PrivilegeLevel::System1,
-            2 => PrivilegeLevel::System2,
+            1 => PrivilegeLevel::Ring1,
+            2 => PrivilegeLevel::Ring2,
             _ => PrivilegeLevel::User,
         }
     }
@@ -268,14 +268,14 @@ pub enum Exception {
 }
 
 impl Exception {
-    pub const fn as_vec(self) -> InterruptVector {
-        InterruptVector(self as u8)
+    pub const fn as_vec(&self) -> InterruptVector {
+        InterruptVector(*self as u8)
     }
 }
 
 impl From<Exception> for InterruptVector {
-    fn from(ex: Exception) -> Self {
-        InterruptVector(ex as u8)
+    fn from(ex: Exception) -> InterruptVector {
+        ex.as_vec()
     }
 }
 

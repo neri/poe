@@ -14,6 +14,7 @@ use kernel::graphics::color::*;
 use kernel::graphics::coords::*;
 use kernel::system::System;
 use kernel::*;
+use mem::mm::MemoryManager;
 use task::scheduler::Timer;
 use util::rng::XorShift32;
 use window::WindowManager;
@@ -85,8 +86,9 @@ impl Application {
 
         println!("{} v{}", System::name(), System::version(),);
         println!("Platform: {}", System::platform(),);
+        println!("Memory: {} MB", MemoryManager::total_memory_size() >> 20);
 
-        {
+        if false {
             let screen = bitmap;
             let mut rng = XorShift32::default();
             let bitmap =

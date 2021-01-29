@@ -51,6 +51,11 @@ impl EmConsole {
         }
 
         match c {
+            '\x08' => {
+                if self.x > 0 {
+                    self.x -= 1;
+                }
+            }
             '\r' => {
                 self.x = 0;
             }

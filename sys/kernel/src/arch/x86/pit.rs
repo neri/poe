@@ -17,6 +17,8 @@ pub struct Pit {
 }
 
 impl Pit {
+    const TIMER_DIV: u64 = 10;
+
     const fn new() -> Self {
         Self {
             monotonic: 0,
@@ -34,7 +36,7 @@ impl Pit {
                 shared.tmr_cnt0 = 0x0040;
                 shared.beep_cnt0 = 0x0042;
                 shared.tmr_ctl = 0x0043;
-                shared.timer_div = 11930;
+                shared.timer_div = 11932;
                 Irq(0).register(Self::timer_irq_handler_pc).unwrap();
             }
             Platform::Nec98 => {
@@ -78,13 +80,13 @@ impl Pit {
     /// Timer IRQ handler for IBM PC and NEC PC98
     fn timer_irq_handler_pc(_irq: Irq) {
         let shared = Self::shared();
-        shared.monotonic += 10;
+        shared.monotonic += Self::TIMER_DIV;
     }
 
     /// Timer IRQ handler for FM TOWNS
     fn timer_irq_handler_fmt(_irq: Irq) {
         let shared = Self::shared();
-        shared.monotonic += 10;
+        shared.monotonic += Self::TIMER_DIV;
         unsafe {
             asm!("
             in al, 0x60

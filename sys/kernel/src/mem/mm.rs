@@ -27,12 +27,9 @@ impl MemoryManager {
 
     pub(crate) unsafe fn init_first(info: &BootInfo) {
         let shared = Self::shared();
-        shared.total_memory_size = (((info.memsz_lo as u32) << 4)
-            + ((info.memsz_mi as u32) << 10)
-            + info.memsz_hi) as usize;
+        shared.total_memory_size = (info.smap.0 + info.smap.1) as usize;
         shared.static_start = info.kernel_end as usize;
-        shared.static_free =
-            (((info.memsz_mi as u32) << 10) + info.kernel_end - 0x0010_0000) as usize;
+        shared.static_free = (info.smap.0 - info.kernel_end) as usize;
         shared.static_end = shared.static_start + shared.static_free;
     }
 
@@ -42,13 +39,15 @@ impl MemoryManager {
     }
 
     #[inline]
-    pub fn total_memory_size(&self) -> usize {
-        self.total_memory_size
+    pub fn total_memory_size() -> usize {
+        let shared = Self::shared();
+        shared.total_memory_size
     }
 
     #[inline]
-    pub fn page_size_min(&self) -> usize {
-        self.page_size_min
+    pub fn page_size_min() -> usize {
+        let shared = Self::shared();
+        shared.page_size_min
     }
 
     /// Allocate static pages
