@@ -37,7 +37,8 @@
 [ORG ORG_BASE]
 
 _HEAD:
-    jmp _crt0
+    jmp short _crt0
+    dw _END - _HEAD
 
 forever:
     sti

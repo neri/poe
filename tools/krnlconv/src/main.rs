@@ -1,19 +1,34 @@
 // Kernel file converter
 
 // use byteorder::*;
-use convert::{ceef::*, elf::*};
 use core::mem::transmute;
-use std::fs::File;
-use std::io::Read;
+use krnlconv::{ceef::*, elf::*};
 use std::io::Write;
 use std::{cmp, env};
+use std::{fs::File, process};
+use std::{io::Read, path::Path};
+
+fn usage() {
+    let mut args = env::args_os();
+    let arg = args.next().unwrap();
+    let path = Path::new(&arg);
+    let lpc = path.file_name().unwrap();
+    eprintln!("{} INFILE OUTFILE", lpc.to_str().unwrap());
+    process::exit(1);
+}
 
 fn main() {
     let mut args = env::args();
     let _ = args.next().unwrap();
 
-    let in_file = args.next().unwrap();
-    let out_file = args.next().unwrap();
+    let in_file = match args.next() {
+        Some(v) => v,
+        None => return usage(),
+    };
+    let out_file = match args.next() {
+        Some(v) => v,
+        None => return usage(),
+    };
 
     let mut is = File::open(in_file).unwrap();
     let mut blob = Vec::new();
@@ -53,15 +68,7 @@ fn main() {
             if phdr.p_filesz > 0 {
                 let f_offset = phdr.p_offset as usize;
                 let f_size = phdr.p_filesz as usize;
-                let old_size = data.len();
                 data.extend(blob[f_offset..f_offset + f_size].iter());
-                println!(
-                    "### COPY {} => {}, fpos {} size {}",
-                    old_size,
-                    data.len(),
-                    f_offset,
-                    f_size
-                );
 
                 ceef_sec_hdr.push(CeefSecHeader::new(
                     phdr.p_flags as u8,

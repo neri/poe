@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "convert",
+  "krnlconv",
 ]
 
 [profile.release]

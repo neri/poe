@@ -5,19 +5,19 @@
 #![no_main]
 #![feature(asm)]
 
-use arch::cpu::Cpu;
-use audio::AudioManager;
 use core::{fmt::Write, time::Duration};
+use kernel::arch::cpu::Cpu;
+use kernel::audio::AudioManager;
 use kernel::fonts::FontManager;
 use kernel::graphics::bitmap::*;
 use kernel::graphics::color::*;
 use kernel::graphics::coords::*;
+use kernel::mem::mm::MemoryManager;
 use kernel::system::System;
+use kernel::task::scheduler::Timer;
+use kernel::util::rng::XorShift32;
+use kernel::window::WindowManager;
 use kernel::*;
-use mem::mm::MemoryManager;
-use task::scheduler::Timer;
-use util::rng::XorShift32;
-use window::WindowManager;
 
 entry!(Application::main);
 
@@ -85,8 +85,8 @@ impl Application {
         }
 
         println!("{} v{}", System::name(), System::version(),);
-        println!("Platform: {}", System::platform(),);
-        println!("Memory: {} MB", MemoryManager::total_memory_size() >> 20);
+        println!("Platform {}", System::platform(),);
+        println!("Memory {} MB OK", MemoryManager::total_memory_size() >> 20);
 
         if false {
             let screen = bitmap;
@@ -110,7 +110,10 @@ impl Application {
                 Cpu::halt();
             }
             if let Some(key) = WindowManager::get_key() {
-                print!("{}", key);
+                match key {
+                    'r' => unsafe { Cpu::reset() },
+                    _ => print!("{}", key),
+                }
             }
         }
     }

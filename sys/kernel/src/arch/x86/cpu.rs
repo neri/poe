@@ -2,6 +2,7 @@
 
 use crate::*;
 use bitflags::*;
+use bootprot::Platform;
 use core::fmt::Write;
 
 extern "fastcall" {
@@ -53,11 +54,23 @@ impl Cpu {
         unsafe { asm!("int3") };
     }
 
-    pub(crate) unsafe fn reset() -> ! {
-        // let _ = MyScheduler::freeze(true);
-
-        // Self::out8(0x0CF9, 0x06);
-        // asm!("out 0x92, al", in("al") 0x01 as u8);
+    pub unsafe fn reset() -> ! {
+        match System::platform() {
+            Platform::PcCompatible => {
+                Self::out8(0x0CF9, 0x06);
+                asm!("out 0x92, al", in("al") 0x01u8);
+            }
+            Platform::Nec98 => {
+                asm!("out 0x37, al", in("al") 0x0Fu8);
+                asm!("out 0x37, al", in("al") 0x0Bu8);
+                asm!("out 0xF0, al", in("al") 0x00u8);
+            }
+            Platform::FmTowns => {
+                asm!("out 0x20, al", in("al") 0x01u8);
+                asm!("out 0x22, al", in("al") 0x00u8);
+            }
+            _ => unreachable!(),
+        }
 
         Cpu::stop();
     }
@@ -107,7 +120,7 @@ impl Cpu {
             asm!("
                 pushfd
                 pop {0}
-                ", lateout (reg) eax);
+                ", out(reg) eax);
             Eflags::from_bits_unchecked(eax)
         };
         assert!(!flags.contains(Eflags::IF));
@@ -123,7 +136,7 @@ impl Cpu {
             pushfd
             cli
             pop {0}
-            ", lateout (reg) eax);
+            ", out(reg) eax);
         let flags = Eflags::from_bits_unchecked(eax);
 
         let result = f();
@@ -187,6 +200,24 @@ impl Selector {
     #[inline]
     pub const fn index(self) -> usize {
         (self.0 >> 3) as usize
+    }
+}
+
+impl From<usize> for Selector {
+    fn from(val: usize) -> Self {
+        Selector(val as u16)
+    }
+}
+
+impl From<u16> for Selector {
+    fn from(val: u16) -> Self {
+        Selector(val as u16)
+    }
+}
+
+impl From<u32> for Selector {
+    fn from(val: u32) -> Self {
+        Selector(val as u16)
     }
 }
 

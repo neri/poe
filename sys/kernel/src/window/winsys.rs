@@ -63,9 +63,18 @@ impl WindowManager {
             Some(v) => v,
             None => return,
         };
-
-        if let Some(event) = event.key_data() {
-            shared.last_key = Some(event.into_char());
+        if event.usage() == Usage::DELETE
+            && event.modifier().has_ctrl()
+            && event.modifier().has_alt()
+        {
+            // TODO:
+            unsafe {
+                System::reset();
+            }
+        } else {
+            if let Some(event) = event.key_data() {
+                shared.last_key = Some(event.into_char());
+            }
         }
     }
 

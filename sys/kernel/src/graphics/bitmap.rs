@@ -409,7 +409,6 @@ impl OsMutBitmap8<'_> {
             let mut ptr: *mut u8 = transmute(slice);
             let mut remain = size;
 
-            // prologue
             let prologue = usize::min(ptr as usize & 0x0F, remain);
             remain -= prologue;
             for _ in 0..prologue {
@@ -417,7 +416,6 @@ impl OsMutBitmap8<'_> {
                 ptr = ptr.add(1);
             }
 
-            // kernel
             if remain > 16 {
                 let color32 = color as u32
                     | (color as u32) << 8
@@ -437,7 +435,6 @@ impl OsMutBitmap8<'_> {
                 remain -= count * 16;
             }
 
-            // epilogue
             for _ in 0..remain {
                 ptr.write_volatile(color);
                 ptr = ptr.add(1);

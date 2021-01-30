@@ -30,6 +30,36 @@ impl Elf32Hdr {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Elf64Hdr {
+    pub n_ident: [u8; 16],
+    pub e_type: ElfType,
+    pub e_machine: Machine,
+    pub e_version: u32,
+    pub e_entry: u64,
+    pub e_phoff: u64,
+    pub e_shoff: u64,
+    pub e_flags: u32,
+    pub e_ehsize: u16,
+    pub e_phentsize: u16,
+    pub e_phnum: u16,
+    pub e_shentsize: u16,
+    pub e_shnum: u16,
+    pub e_shstrndx: u16,
+}
+
+impl Elf64Hdr {
+    pub const MAGIC: [u8; 4] = *b"\x7FELF";
+
+    pub fn is_valid(&self) -> bool {
+        (self.n_ident[..4] == Self::MAGIC)
+            && (self.n_ident[4] == 2)
+            && (self.n_ident[5] == 1)
+            && (self.n_ident[6] == 1)
+    }
+}
+
 #[repr(u16)]
 #[non_exhaustive]
 #[allow(non_camel_case_types)]
@@ -51,6 +81,12 @@ pub enum Machine {
     M32 = 1,
     SPARC = 2,
     _386 = 3,
+    MIPS = 8,
+    PowerPC = 0x14,
+    Arm = 0x28,
+    IA64 = 0x32,
+    x86_64 = 0x3E,
+    Arch64 = 0xB7,
 }
 
 #[repr(C)]
@@ -64,6 +100,19 @@ pub struct Elf32Phdr {
     pub p_memsz: u32,
     pub p_flags: u32,
     pub p_align: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Elf64Phdr {
+    pub p_type: ElfSegmentType,
+    pub p_flags: u32,
+    pub p_offset: u64,
+    pub p_vaddr: u64,
+    pub p_paddr: u64,
+    pub p_filesz: u64,
+    pub p_memsz: u64,
+    pub p_align: u64,
 }
 
 #[repr(u32)]
