@@ -2,6 +2,8 @@
 
 use super::color::*;
 use super::coords::*;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::cell::UnsafeCell;
 use core::convert::TryFrom;
 use core::mem::transmute;
@@ -300,6 +302,16 @@ pub trait RasterFontWriter: MutableRasterImage {
     }
 }
 
+//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//
+//
+//
+//
+//
+//
+//
+//
+//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//
+
 #[repr(C)]
 pub struct OsBitmap8<'a> {
     width: usize,
@@ -398,108 +410,10 @@ impl OsMutBitmap8<'static> {
     }
 }
 
-impl OsMutBitmap8<'_> {
-    /// Fast fill
-    #[inline]
-    fn memset_colors(slice: &mut [IndexedColor], cursor: usize, size: usize, color: IndexedColor) {
-        // let slice = &mut slice[cursor..cursor + size];
-        unsafe {
-            let slice = slice.get_unchecked_mut(cursor);
-            let color = color.0;
-            let mut ptr: *mut u8 = transmute(slice);
-            let mut remain = size;
+impl BitmapHogeHoge for OsMutBitmap8<'_> {}
 
-            let prologue = usize::min(ptr as usize & 0x0F, remain);
-            remain -= prologue;
-            for _ in 0..prologue {
-                ptr.write_volatile(color);
-                ptr = ptr.add(1);
-            }
-
-            if remain > 16 {
-                let color32 = color as u32
-                    | (color as u32) << 8
-                    | (color as u32) << 16
-                    | (color as u32) << 24;
-                let color64 = color32 as u64 | (color32 as u64) << 32;
-                let color128 = color64 as u128 | (color64 as u128) << 64;
-                let count = remain / 16;
-                let mut ptr2 = ptr as *mut u128;
-
-                for _ in 0..count {
-                    ptr2.write_volatile(color128);
-                    ptr2 = ptr2.add(1);
-                }
-
-                ptr = ptr2 as *mut u8;
-                remain -= count * 16;
-            }
-
-            for _ in 0..remain {
-                ptr.write_volatile(color);
-                ptr = ptr.add(1);
-            }
-        }
-    }
-
-    /// Fast copy
-    #[allow(dead_code)]
-    #[inline]
-    fn memcpy_colors(
-        dest: &mut [IndexedColor],
-        dest_cursor: usize,
-        src: &[IndexedColor],
-        src_cursor: usize,
-        size: usize,
-    ) {
-        // let dest = &mut dest[dest_cursor..dest_cursor + size];
-        // let src = &src[src_cursor..src_cursor + size];
-        unsafe {
-            let dest = dest.get_unchecked_mut(dest_cursor);
-            let src = src.get_unchecked(src_cursor);
-            let mut ptr_d: *mut u8 = transmute(dest);
-            let mut ptr_s: *const u8 = transmute(src);
-            let mut remain = size;
-            if ((ptr_d as usize) & 0x3) == ((ptr_s as usize) & 0x3) {
-                while (ptr_d as usize & 0x3) != 0 && remain > 0 {
-                    ptr_d.write_volatile(ptr_s.read_volatile());
-                    ptr_d = ptr_d.add(1);
-                    ptr_s = ptr_s.add(1);
-                    remain -= 1;
-                }
-
-                if remain > 4 {
-                    let count = remain / 4;
-                    let mut ptr2d = ptr_d as *mut u32;
-                    let mut ptr2s = ptr_s as *const u32;
-
-                    for _ in 0..count {
-                        ptr2d.write_volatile(ptr2s.read_volatile());
-                        ptr2d = ptr2d.add(1);
-                        ptr2s = ptr2s.add(1);
-                    }
-
-                    ptr_d = ptr2d as *mut u8;
-                    ptr_s = ptr2s as *const u8;
-                    remain -= count * 4;
-                }
-
-                for _ in 0..remain {
-                    ptr_d.write_volatile(ptr_s.read_volatile());
-                    ptr_d = ptr_d.add(1);
-                    ptr_s = ptr_s.add(1);
-                }
-            } else {
-                for _ in 0..size {
-                    ptr_d.write_volatile(ptr_s.read_volatile());
-                    ptr_d = ptr_d.add(1);
-                    ptr_s = ptr_s.add(1);
-                }
-            }
-        }
-    }
-
-    pub fn blt_with_key<T>(
+pub trait BitmapHogeHoge: MutableRasterImage<PixelType = IndexedColor> {
+    fn blt_with_key<T>(
         &mut self,
         src: &T,
         origin: Point,
@@ -583,10 +497,10 @@ impl OsMutBitmap8<'_> {
             }
         } else {
             if ds == width && ss == width {
-                Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width * height);
+                memcpy_colors8(dest_fb, dest_cursor, src_fb, src_cursor, width * height);
             } else {
                 for _ in 0..height {
-                    Self::memcpy_colors(dest_fb, dest_cursor, src_fb, src_cursor, width);
+                    memcpy_colors8(dest_fb, dest_cursor, src_fb, src_cursor, width);
                     dest_cursor += ds;
                     src_cursor += ss;
                 }
@@ -595,7 +509,7 @@ impl OsMutBitmap8<'_> {
     }
 
     /// Make a bitmap view
-    pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
+    fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
     where
         F: FnOnce(&mut OsMutBitmap8) -> R,
     {
@@ -603,9 +517,9 @@ impl OsMutBitmap8<'_> {
             Ok(v) => v,
             Err(_) => return None,
         };
-        let width = self.width as isize;
-        let height = self.height as isize;
-        let stride = self.stride;
+        let width = self.width() as isize;
+        let height = self.height() as isize;
+        let stride = self.stride();
 
         if coords.left < 0
             || coords.left >= width
@@ -620,7 +534,7 @@ impl OsMutBitmap8<'_> {
         let offset = rect.x() as usize + rect.y() as usize * stride;
         let new_len = rect.height() as usize * stride;
         let r = {
-            let slice = self.slice.get_mut();
+            let slice = self.slice_mut();
             let mut view = OsMutBitmap8 {
                 width: rect.width() as usize,
                 height: rect.height() as usize,
@@ -693,10 +607,10 @@ impl BasicDrawing for OsMutBitmap8<'_> {
         let stride = self.stride;
         let mut cursor = dx as usize + dy as usize * stride;
         if stride == width {
-            Self::memset_colors(self.slice_mut(), cursor, width * height, color);
+            memset_colors8(self.slice_mut(), cursor, width * height, color);
         } else {
             for _ in 0..height {
-                Self::memset_colors(self.slice_mut(), cursor, width, color);
+                memset_colors8(self.slice_mut(), cursor, width, color);
                 cursor += stride;
             }
         }
@@ -723,7 +637,7 @@ impl BasicDrawing for OsMutBitmap8<'_> {
         }
 
         let cursor = dx as usize + dy as usize * self.stride;
-        Self::memset_colors(self.slice_mut(), cursor, w as usize, color);
+        memset_colors8(self.slice_mut(), cursor, w as usize, color);
     }
 
     fn draw_vline(&mut self, point: Point, height: isize, color: Self::PixelType) {
@@ -767,5 +681,198 @@ impl RasterFontWriter for OsMutBitmap8<'_> {}
 impl<'a> From<&'a OsMutBitmap8<'a>> for OsBitmap8<'a> {
     fn from(src: &'a OsMutBitmap8) -> Self {
         Self::from_slice(src.slice(), src.size(), src.stride())
+    }
+}
+
+#[repr(C)]
+pub struct BoxedBitmap8 {
+    width: usize,
+    height: usize,
+    stride: usize,
+    vec: Vec<IndexedColor>,
+}
+
+impl BoxedBitmap8 {
+    pub fn new(size: Size, bg_color: IndexedColor) -> Self {
+        let len = size.width() as usize * size.height() as usize;
+        let mut vec = Vec::with_capacity(len);
+        vec.resize_with(len, || bg_color);
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride: size.width() as usize,
+            vec,
+        }
+    }
+
+    /// Make a bitmap view
+    pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut OsMutBitmap8) -> R,
+    {
+        let coords = match Coordinates::try_from(rect) {
+            Ok(v) => v,
+            Err(_) => return None,
+        };
+        let width = self.width as isize;
+        let height = self.height as isize;
+        let stride = self.stride;
+
+        if coords.left < 0
+            || coords.left >= width
+            || coords.right > width
+            || coords.top < 0
+            || coords.top >= height
+            || coords.bottom > height
+        {
+            return None;
+        }
+
+        let offset = rect.x() as usize + rect.y() as usize * stride;
+        let new_len = rect.height() as usize * stride;
+        let r = {
+            let slice = self.slice_mut();
+            let mut view = OsMutBitmap8 {
+                width: rect.width() as usize,
+                height: rect.height() as usize,
+                stride,
+                slice: UnsafeCell::new(&mut slice[offset..offset + new_len]),
+            };
+            f(&mut view)
+        };
+        Some(r)
+    }
+}
+
+impl ImageTrait for BoxedBitmap8 {
+    type PixelType = IndexedColor;
+
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+}
+
+impl RasterImage for BoxedBitmap8 {
+    fn stride(&self) -> usize {
+        self.stride
+    }
+
+    fn slice(&self) -> &[Self::PixelType] {
+        self.vec.as_slice()
+    }
+}
+
+impl MutableRasterImage for BoxedBitmap8 {
+    fn slice_mut(&mut self) -> &mut [Self::PixelType] {
+        self.vec.as_mut_slice()
+    }
+}
+
+impl<'a> From<&'a mut BoxedBitmap8> for OsMutBitmap8<'a> {
+    fn from(src: &'a mut BoxedBitmap8) -> Self {
+        let size = src.size();
+        let stride = src.stride();
+        Self::from_slice(src.slice_mut(), size, stride)
+    }
+}
+
+/// Fast fill
+#[inline]
+fn memset_colors8(slice: &mut [IndexedColor], cursor: usize, size: usize, color: IndexedColor) {
+    // let slice = &mut slice[cursor..cursor + size];
+    unsafe {
+        let slice = slice.get_unchecked_mut(cursor);
+        let color = color.0;
+        let mut ptr: *mut u8 = transmute(slice);
+        let mut remain = size;
+
+        let prologue = usize::min(ptr as usize & 0x0F, remain);
+        remain -= prologue;
+        for _ in 0..prologue {
+            ptr.write_volatile(color);
+            ptr = ptr.add(1);
+        }
+
+        if remain > 16 {
+            let color32 =
+                color as u32 | (color as u32) << 8 | (color as u32) << 16 | (color as u32) << 24;
+            let color64 = color32 as u64 | (color32 as u64) << 32;
+            let color128 = color64 as u128 | (color64 as u128) << 64;
+            let count = remain / 16;
+            let mut ptr2 = ptr as *mut u128;
+
+            for _ in 0..count {
+                ptr2.write_volatile(color128);
+                ptr2 = ptr2.add(1);
+            }
+
+            ptr = ptr2 as *mut u8;
+            remain -= count * 16;
+        }
+
+        for _ in 0..remain {
+            ptr.write_volatile(color);
+            ptr = ptr.add(1);
+        }
+    }
+}
+
+/// Fast copy
+#[inline]
+fn memcpy_colors8(
+    dest: &mut [IndexedColor],
+    dest_cursor: usize,
+    src: &[IndexedColor],
+    src_cursor: usize,
+    size: usize,
+) {
+    // let dest = &mut dest[dest_cursor..dest_cursor + size];
+    // let src = &src[src_cursor..src_cursor + size];
+    unsafe {
+        let dest = dest.get_unchecked_mut(dest_cursor);
+        let src = src.get_unchecked(src_cursor);
+        let mut ptr_d: *mut u8 = transmute(dest);
+        let mut ptr_s: *const u8 = transmute(src);
+        let mut remain = size;
+        if ((ptr_d as usize) & 0x3) == ((ptr_s as usize) & 0x3) {
+            while (ptr_d as usize & 0x3) != 0 && remain > 0 {
+                ptr_d.write_volatile(ptr_s.read_volatile());
+                ptr_d = ptr_d.add(1);
+                ptr_s = ptr_s.add(1);
+                remain -= 1;
+            }
+
+            if remain > 4 {
+                let count = remain / 4;
+                let mut ptr2d = ptr_d as *mut u32;
+                let mut ptr2s = ptr_s as *const u32;
+
+                for _ in 0..count {
+                    ptr2d.write_volatile(ptr2s.read_volatile());
+                    ptr2d = ptr2d.add(1);
+                    ptr2s = ptr2s.add(1);
+                }
+
+                ptr_d = ptr2d as *mut u8;
+                ptr_s = ptr2s as *const u8;
+                remain -= count * 4;
+            }
+
+            for _ in 0..remain {
+                ptr_d.write_volatile(ptr_s.read_volatile());
+                ptr_d = ptr_d.add(1);
+                ptr_s = ptr_s.add(1);
+            }
+        } else {
+            for _ in 0..size {
+                ptr_d.write_volatile(ptr_s.read_volatile());
+                ptr_d = ptr_d.add(1);
+                ptr_s = ptr_s.add(1);
+            }
+        }
     }
 }

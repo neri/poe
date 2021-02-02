@@ -4,6 +4,10 @@
 #![feature(global_asm)]
 #![feature(alloc_error_handler)]
 #![feature(const_fn_transmute)]
+#![feature(const_fn)]
+#![feature(generic_associated_types)]
+#![feature(associated_type_bounds)]
+#![feature(option_result_contains)]
 
 use arch::cpu::Cpu;
 use core::fmt::Write;
@@ -17,6 +21,7 @@ pub mod fonts;
 pub mod graphics;
 pub mod io;
 pub mod mem;
+pub mod sync;
 pub mod system;
 pub mod task;
 pub mod util;

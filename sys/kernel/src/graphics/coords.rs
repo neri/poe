@@ -184,6 +184,73 @@ impl Size {
     }
 }
 
+impl Add<Self> for Size {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        Size {
+            width: self.width + rhs.width,
+            height: self.height + rhs.height,
+        }
+    }
+}
+
+impl Add<EdgeInsets> for Size {
+    type Output = Self;
+    fn add(self, rhs: EdgeInsets) -> Self {
+        Size {
+            width: self.width + rhs.left + rhs.right,
+            height: self.height + rhs.top + rhs.bottom,
+        }
+    }
+}
+
+impl AddAssign<Self> for Size {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = Self {
+            width: self.width + rhs.width,
+            height: self.height + rhs.height,
+        }
+    }
+}
+
+impl AddAssign<EdgeInsets> for Size {
+    fn add_assign(&mut self, rhs: EdgeInsets) {
+        *self = Self {
+            width: self.width + rhs.left + rhs.right,
+            height: self.height + rhs.top + rhs.bottom,
+        }
+    }
+}
+
+impl Sub<Self> for Size {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
+        Size {
+            width: self.width - rhs.width,
+            height: self.height - rhs.height,
+        }
+    }
+}
+
+impl Sub<EdgeInsets> for Size {
+    type Output = Self;
+    fn sub(self, rhs: EdgeInsets) -> Self {
+        Size {
+            width: self.width - (rhs.left + rhs.left),
+            height: self.height - (rhs.top + rhs.bottom),
+        }
+    }
+}
+
+impl SubAssign for Size {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = Self {
+            width: self.width - rhs.width,
+            height: self.height - rhs.height,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Rect {
@@ -381,6 +448,52 @@ impl EdgeInsets {
             left: value,
             bottom: value,
             right: value,
+        }
+    }
+}
+
+impl Add for EdgeInsets {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        Self {
+            top: self.top + rhs.top,
+            left: self.left + rhs.left,
+            bottom: self.bottom + rhs.bottom,
+            right: self.right + rhs.right,
+        }
+    }
+}
+
+impl AddAssign for EdgeInsets {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = Self {
+            top: self.top + rhs.top,
+            left: self.left + rhs.left,
+            bottom: self.bottom + rhs.bottom,
+            right: self.right + rhs.right,
+        }
+    }
+}
+
+impl Sub for EdgeInsets {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
+        Self {
+            top: self.top - rhs.top,
+            left: self.left - rhs.left,
+            bottom: self.bottom - rhs.bottom,
+            right: self.right - rhs.right,
+        }
+    }
+}
+
+impl SubAssign for EdgeInsets {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = Self {
+            top: self.top - rhs.top,
+            left: self.left - rhs.left,
+            bottom: self.bottom - rhs.bottom,
+            right: self.right - rhs.right,
         }
     }
 }

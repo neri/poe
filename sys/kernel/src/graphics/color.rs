@@ -23,6 +23,13 @@ impl IndexedColor {
     pub const LIGHT_MAGENTA: Self = Self(13);
     pub const YELLOW: Self = Self(14);
     pub const WHITE: Self = Self(15);
+
+    pub const fn from_rgb(rgb: u32) -> Self {
+        let b = (((rgb & 0xFF) + 25) / 51) as u8;
+        let g = ((((rgb >> 8) & 0xFF) + 25) / 51) as u8;
+        let r = ((((rgb >> 16) & 0xFF) + 25) / 51) as u8;
+        Self(16 + r + g * 6 + b * 36)
+    }
 }
 
 impl From<u8> for IndexedColor {
