@@ -1,22 +1,30 @@
 // Executable and Linking Format
 
+pub type ElfHalf = u16;
+pub type ElfWord = u32;
+pub type ElfXWord = u64;
+pub type Elf32Addr = u32;
+pub type Elf32Off = u32;
+pub type Elf64Addr = u64;
+pub type Elf64Off = u64;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Elf32Hdr {
     pub n_ident: [u8; 16],
     pub e_type: ElfType,
     pub e_machine: Machine,
-    pub e_version: u32,
-    pub e_entry: u32,
-    pub e_phoff: u32,
-    pub e_shoff: u32,
-    pub e_flags: u32,
-    pub e_ehsize: u16,
-    pub e_phentsize: u16,
-    pub e_phnum: u16,
-    pub e_shentsize: u16,
-    pub e_shnum: u16,
-    pub e_shstrndx: u16,
+    pub e_version: ElfWord,
+    pub e_entry: Elf32Addr,
+    pub e_phoff: Elf32Off,
+    pub e_shoff: Elf32Off,
+    pub e_flags: ElfWord,
+    pub e_ehsize: ElfHalf,
+    pub e_phentsize: ElfHalf,
+    pub e_phnum: ElfHalf,
+    pub e_shentsize: ElfHalf,
+    pub e_shnum: ElfHalf,
+    pub e_shstrndx: ElfHalf,
 }
 
 impl Elf32Hdr {
@@ -36,17 +44,17 @@ pub struct Elf64Hdr {
     pub n_ident: [u8; 16],
     pub e_type: ElfType,
     pub e_machine: Machine,
-    pub e_version: u32,
-    pub e_entry: u64,
-    pub e_phoff: u64,
-    pub e_shoff: u64,
-    pub e_flags: u32,
-    pub e_ehsize: u16,
-    pub e_phentsize: u16,
-    pub e_phnum: u16,
-    pub e_shentsize: u16,
-    pub e_shnum: u16,
-    pub e_shstrndx: u16,
+    pub e_version: ElfWord,
+    pub e_entry: Elf64Addr,
+    pub e_phoff: Elf64Off,
+    pub e_shoff: Elf64Off,
+    pub e_flags: ElfWord,
+    pub e_ehsize: ElfHalf,
+    pub e_phentsize: ElfHalf,
+    pub e_phnum: ElfHalf,
+    pub e_shentsize: ElfHalf,
+    pub e_shnum: ElfHalf,
+    pub e_shstrndx: ElfHalf,
 }
 
 impl Elf64Hdr {
@@ -93,26 +101,26 @@ pub enum Machine {
 #[derive(Debug, Clone, Copy)]
 pub struct Elf32Phdr {
     pub p_type: ElfSegmentType,
-    pub p_offset: u32,
-    pub p_vaddr: u32,
-    pub p_paddr: u32,
-    pub p_filesz: u32,
-    pub p_memsz: u32,
-    pub p_flags: u32,
-    pub p_align: u32,
+    pub p_offset: Elf32Off,
+    pub p_vaddr: Elf32Addr,
+    pub p_paddr: Elf32Addr,
+    pub p_filesz: ElfWord,
+    pub p_memsz: ElfWord,
+    pub p_flags: ElfWord,
+    pub p_align: ElfWord,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Elf64Phdr {
     pub p_type: ElfSegmentType,
-    pub p_flags: u32,
-    pub p_offset: u64,
-    pub p_vaddr: u64,
-    pub p_paddr: u64,
-    pub p_filesz: u64,
-    pub p_memsz: u64,
-    pub p_align: u64,
+    pub p_flags: ElfWord,
+    pub p_offset: Elf64Off,
+    pub p_vaddr: Elf64Addr,
+    pub p_paddr: Elf64Addr,
+    pub p_filesz: ElfXWord,
+    pub p_memsz: ElfXWord,
+    pub p_align: ElfXWord,
 }
 
 #[repr(u32)]

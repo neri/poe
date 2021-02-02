@@ -14,7 +14,6 @@ pub struct BootInfo {
     pub screen_stride: u16,
     pub screen_bpp: u8,
     _reserved_1: u8,
-    pub kernel_end: u32,
     pub acpi: u32,
     pub smap: (u32, u32),
 }

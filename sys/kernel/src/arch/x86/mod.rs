@@ -8,7 +8,7 @@ pub mod pit;
 pub mod ps2;
 
 use crate::system::*;
-use bootprot::Platform;
+use toeboot::Platform;
 
 pub(crate) struct Arch;
 

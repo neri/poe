@@ -8,4 +8,4 @@ version = "0.1.0"
 
 [dependencies]
 bitflags = "1.2.1"
-bootprot = {path = "../bootprot/"}
+toeboot = {path = "../../common/toeboot/"}

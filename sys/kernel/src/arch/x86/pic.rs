@@ -1,8 +1,8 @@
 // Programmable Interrupt Controller
 
 use super::cpu::{Cpu, InterruptDescriptorTable, InterruptVector, Selector};
-use bootprot::*;
 use core::num::NonZeroUsize;
+use toeboot::*;
 
 static mut PIC: Pic = Pic::new();
 

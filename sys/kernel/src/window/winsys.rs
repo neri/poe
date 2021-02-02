@@ -1,5 +1,7 @@
 // A Window System
 
+use core::num::NonZeroUsize;
+
 use crate::graphics::bitmap::*;
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
@@ -110,12 +112,12 @@ impl WindowManager {
         shared.pointer_x = x;
         shared.pointer_y = y;
 
-        let origin = Point::new(x, y);
-        let cursor = OsBitmap8::from_bytes(
-            &MOUSE_POINTER_SOURCE,
-            Size::new(MOUSE_POINTER_WIDTH as isize, MOUSE_POINTER_HEIGHT as isize),
-        );
-        screen.blt_with_key(&cursor, origin, cursor.bounds(), MOUSE_POINTER_COLOR_KEY);
+        // let origin = Point::new(x, y);
+        // let cursor = OsBitmap8::from_bytes(
+        //     &MOUSE_POINTER_SOURCE,
+        //     Size::new(MOUSE_POINTER_WIDTH as isize, MOUSE_POINTER_HEIGHT as isize),
+        // );
+        // screen.blt_with_key(&cursor, origin, cursor.bounds(), MOUSE_POINTER_COLOR_KEY);
     }
 
     pub fn get_key() -> Option<char> {

@@ -3,8 +3,8 @@
 use super::{cpu::Cpu, pic::Irq};
 use crate::System;
 use crate::{audio::*, task::scheduler::*};
-use bootprot::Platform;
 use core::time::Duration;
+use toeboot::Platform;
 
 static mut PIT: Pit = Pit::new();
 

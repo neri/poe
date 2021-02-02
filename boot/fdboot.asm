@@ -1,5 +1,5 @@
-;; Regular Floppy Boot Sector for MEG-OS
-;; WTFPL/PUBLIC DOMAIN
+;; Floppy Boot Sector for MEG-OS
+;; License: PUBLIC DOMAIN
 
 %define IPL_SIGN    0x1eaf
 %define ARCH_PC     1
@@ -26,7 +26,7 @@ _HEAD:
     dw 18
     dw 2
 
-;;  Variables
+;;  Runtime Variables
 fat2        dw 0    ; 2
 arch_id     db 0    ; 1
 drive       db 0    ; 1

@@ -1,5 +1,5 @@
-;; TOE Loader
-;; Copyright (c) 2021 MEG-OS project
+;; MEG-OS TOE Loader
+;; Licenst: MIT (c) 2021 MEG-OS project
 
 %define IPL_SIGN            0x1eaf
 %define ARCH_PC             1   ; IBM PC/AT Compatible
@@ -523,7 +523,12 @@ _next32:
     add edi, 0x00000FFF
     and edi, 0xFFFFF000
     lea esp, [edi + STACK_SIZE]
-    mov [_kernel_end], esp
+    mov ecx, esp
+    mov eax, [_kernel_end]
+    add eax, [_memsz_mid]
+    mov [_kernel_end], ecx
+    sub eax, ecx
+    mov [_memsz_mid], eax
 
     movzx edx, byte [ebp + CEEF_N_SECS]
     lea ebx, [ebp + CEEF_OFF_SECHDR]
@@ -581,12 +586,10 @@ _screen_height  dw 0
 _screen_stride  dw 0
 _screen_bpp     db 8
                 db 0
-
-_kernel_end     dd 0
 _acpi           dd 0
 
 _smap:
-                dd 0x00100000
+_kernel_end     dd 0x00100000
 _memsz_mid      dd 0
 
 _memsz_lo       dw 0

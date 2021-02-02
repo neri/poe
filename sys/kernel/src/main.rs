@@ -5,7 +5,7 @@
 #![no_main]
 #![feature(asm)]
 
-use core::{fmt::Write, time::Duration};
+use core::{alloc::Layout, fmt::Write, time::Duration};
 use kernel::arch::cpu::Cpu;
 use kernel::audio::AudioManager;
 use kernel::fonts::FontManager;
@@ -35,14 +35,15 @@ impl Application {
         let bitmap = System::main_screen();
         let size = bitmap.size();
 
-        bitmap.fill_rect(Rect::from(size), IndexedColor::LIGHT_CYAN);
-        bitmap.fill_rect(Rect::new(0, 0, size.width(), 24), IndexedColor::LIGHT_GRAY);
-        bitmap.draw_hline(Point::new(0, 22), size.width(), IndexedColor::DARK_GRAY);
-        bitmap.draw_hline(Point::new(0, 23), size.width(), IndexedColor::BLACK);
+        bitmap.fill_rect(Rect::from(size), IndexedColor::BLUE);
+        // bitmap.fill_rect(Rect::from(size), IndexedColor::LIGHT_CYAN);
+        // bitmap.fill_rect(Rect::new(0, 0, size.width(), 24), IndexedColor::LIGHT_GRAY);
+        // bitmap.draw_hline(Point::new(0, 22), size.width(), IndexedColor::DARK_GRAY);
+        // bitmap.draw_hline(Point::new(0, 23), size.width(), IndexedColor::BLACK);
 
         let font = FontManager::fixed_system_font();
 
-        {
+        if false {
             let window_rect = Rect::new(20, 40, 200, 100);
             bitmap.fill_round_rect(window_rect, 8, IndexedColor::LIGHT_GRAY);
             bitmap.view(window_rect, |bitmap| {
@@ -56,7 +57,7 @@ impl Application {
             bitmap.draw_round_rect(window_rect, 8, IndexedColor::BLACK);
         }
 
-        {
+        if false {
             let window_rect = Rect::new(240, 200, 160, 100);
             let coords = unsafe { Coordinates::from_rect_unchecked(window_rect) };
             bitmap.fill_round_rect(window_rect, 1, IndexedColor::LIGHT_GRAY);
@@ -86,7 +87,11 @@ impl Application {
 
         println!("{} v{}", System::name(), System::version(),);
         println!("Platform {}", System::platform(),);
-        println!("Memory {} MB OK", MemoryManager::total_memory_size() >> 20);
+        println!(
+            "Memory {} KB Free, {} MB Total",
+            MemoryManager::free_memory_size() >> 10,
+            MemoryManager::total_memory_size() >> 20
+        );
 
         if false {
             let screen = bitmap;
@@ -105,14 +110,19 @@ impl Application {
             }
         }
 
+        print!("# ");
         loop {
-            unsafe {
-                Cpu::halt();
-            }
             if let Some(key) = WindowManager::get_key() {
                 match key {
                     'r' => unsafe { Cpu::reset() },
+                    '\x08' => print!(" \x08\x08"),
+                    '\r' => print!(" \n# "),
                     _ => print!("{}", key),
+                }
+            } else {
+                print!("\x7F\x08");
+                unsafe {
+                    Cpu::halt();
                 }
             }
         }

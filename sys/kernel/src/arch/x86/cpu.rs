@@ -2,8 +2,8 @@
 
 use crate::*;
 use bitflags::*;
-use bootprot::Platform;
 use core::fmt::Write;
+use toeboot::Platform;
 
 extern "fastcall" {
     fn asm_handle_exception(_: InterruptVector) -> usize;

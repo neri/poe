@@ -46,7 +46,7 @@ macro_rules! entry {
     ($path:path) => {
         #[inline]
         #[no_mangle]
-        pub fn _start(info: &bootprot::BootInfo) {
+        pub fn _start(info: &toeboot::BootInfo) {
             let f: fn() = $path;
             unsafe { system::System::init(info, f) }
         }

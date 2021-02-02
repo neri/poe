@@ -6,8 +6,8 @@ use crate::graphics::coords::*;
 use crate::graphics::emcon::*;
 use crate::*;
 use arch::cpu::Cpu;
-use bootprot::*;
 use core::fmt;
+use toeboot::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
