@@ -18,7 +18,7 @@ const WINDOW_TITLE_LENGTH: usize = 32;
 const WINDOW_BORDER_PADDING: isize = 1;
 const WINDOW_TITLE_HEIGHT: isize = 24;
 
-const WINDOW_BORDER_COLOR: IndexedColor = IndexedColor::BLACK;
+const WINDOW_BORDER_COLOR: IndexedColor = IndexedColor::from_rgb(0x333333);
 const WINDOW_DEFAULT_BGCOLOR: IndexedColor = IndexedColor::WHITE;
 const WINDOW_ACTIVE_TITLE_BG_COLOR: IndexedColor = IndexedColor::from_rgb(0xCCCCCC);
 const WINDOW_ACTIVE_TITLE_FG_COLOR: IndexedColor = IndexedColor::from_rgb(0x333333);
@@ -164,12 +164,12 @@ impl WindowManager {
         shared.pointer_x = x;
         shared.pointer_y = y;
 
-        // let origin = Point::new(x, y);
-        // let cursor = OsBitmap8::from_bytes(
-        //     &MOUSE_POINTER_SOURCE,
-        //     Size::new(MOUSE_POINTER_WIDTH as isize, MOUSE_POINTER_HEIGHT as isize),
-        // );
-        // screen.blt_with_key(&cursor, origin, cursor.bounds(), MOUSE_POINTER_COLOR_KEY);
+        let origin = Point::new(x, y);
+        let cursor = OsBitmap8::from_bytes(
+            &MOUSE_POINTER_SOURCE,
+            Size::new(MOUSE_POINTER_WIDTH as isize, MOUSE_POINTER_HEIGHT as isize),
+        );
+        screen.blt_with_key(&cursor, origin, cursor.bounds(), MOUSE_POINTER_COLOR_KEY);
     }
 
     pub fn get_key() -> Option<char> {
@@ -258,7 +258,7 @@ impl WindowLevel {
 
 impl RawWindow {
     #[inline]
-    pub fn actual_bounds(&self) -> Rect {
+    pub fn bounds(&self) -> Rect {
         self.frame.size().into()
     }
 

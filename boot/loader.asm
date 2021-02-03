@@ -270,6 +270,7 @@ _vga_nec98:
     test al, 0x40
     jz _bad_vga
 
+    ;; A20
     xor al, al
     out 0xF2, al
 
@@ -288,9 +289,10 @@ _vga_nec98:
     push ds
     push word 0xE000
     pop ds
-    mov ax, 1
-    mov [0x0100], al
-    mov [0x0102], ax
+    xor al, al
+    mov [0x0100], al ; packed pixel
+    mov al, 1
+    mov [0x0102], al ; linear frame buffer
     pop ds
 
     mov ah, 0x0C
@@ -405,6 +407,11 @@ _vesa:
     sub sp, 256
     push ss
     pop es
+
+    ;; A20 control
+    in al, 0x92
+    or al, 2
+    out 0x92, al
 
     mov ax, 0x4F02
     mov bx, VESA_MODE
