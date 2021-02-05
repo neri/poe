@@ -90,13 +90,13 @@ impl System {
             stride,
         ));
 
-        println!("{} v{}", System::name(), System::version(),);
-        println!("Platform {}", System::platform(),);
-        println!(
-            "Memory {} KB Free, {} MB Total",
-            mem::mm::MemoryManager::free_memory_size() >> 10,
-            mem::mm::MemoryManager::total_memory_size() >> 20
-        );
+        // println!("{} v{}", System::name(), System::version(),);
+        // println!("Platform {}", System::platform(),);
+        // println!(
+        //     "Memory {} KB Free, {} MB Total",
+        //     mem::mm::MemoryManager::free_memory_size() >> 10,
+        //     mem::mm::MemoryManager::total_memory_size() >> 20
+        // );
 
         mem::mm::MemoryManager::init_first(&info);
         arch::Arch::init();

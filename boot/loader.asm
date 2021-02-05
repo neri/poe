@@ -277,7 +277,8 @@ _vga_nec98:
     mov eax, 640 + 480 * 0x10000
     mov [_screen_width], eax
     mov [_screen_stride], ax
-    mov dword [_vram_base], 0xFFF00000
+    ;; TODO: ISA hole check
+    mov dword [_vram_base], 0x00F00000
 
     mov ax, 0x300C
     mov bh, 0x32
@@ -594,6 +595,8 @@ _screen_stride  dw 0
 _screen_bpp     db 8
                 db 0
 _acpi           dd 0
+_initrd_base    dd 0
+_initrd_size    dd 0
 
 _smap:
 _kernel_end     dd 0x00100000

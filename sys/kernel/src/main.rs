@@ -56,14 +56,14 @@ impl Application {
         }
 
         {
-            let window_size = Size::new(240, 96);
+            let window_size = Size::new(240, 150);
             let mut window = WindowBuilder::new("Hello").size(window_size).build_inner();
             window.draw_frame();
             window
                 .draw_in_rect(window_size.into(), |bitmap| {
                     let font = FontManager::fixed_system_font();
                     font.write_str("It works!", bitmap, Point::new(10, 10), IndexedColor::BLACK);
-                    let rect = Rect::new(40, 40, 160, 15);
+                    let rect = Rect::new(40, 60, 160, 20);
                     let radius = 8;
                     bitmap.fill_round_rect(rect, radius, IndexedColor::LIGHT_BLUE);
                     bitmap.draw_round_rect(rect, radius, IndexedColor::BLACK);
@@ -72,7 +72,7 @@ impl Application {
             window.draw_to_screen(window.bounds());
         }
 
-        // println!("\n\n");
+        println!("\n\n");
         println!("{} v{}", System::name(), System::version(),);
         println!("Platform {}", System::platform(),);
         println!(

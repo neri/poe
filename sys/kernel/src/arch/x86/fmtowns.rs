@@ -85,6 +85,7 @@ impl FmTowns {
         }
     }
 
+    /// TODO: adjust polling timing
     #[inline]
     fn poll_mouse(&mut self) {
         unsafe {
