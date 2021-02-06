@@ -60,9 +60,10 @@ impl fmt::Display for Version {
 }
 
 pub struct System {
-    main_screen: Option<OsMutBitmap8<'static>>,
+    main_screen: Option<Bitmap8<'static>>,
     em_console: EmConsole,
     platform: Platform,
+    cpu_ver: CpuVersion,
 }
 
 #[used]
@@ -74,6 +75,7 @@ impl System {
             main_screen: None,
             em_console: EmConsole::new(),
             platform: Platform::Unknown,
+            cpu_ver: CpuVersion::UNSPECIFIED,
         }
     }
 
@@ -81,22 +83,15 @@ impl System {
     pub unsafe fn init(info: &BootInfo, f: fn() -> ()) -> ! {
         let shared = Self::shared();
         shared.platform = info.platform;
+        shared.cpu_ver = info.cpu_ver;
 
         let size = Size::new(info.screen_width as isize, info.screen_height as isize);
         let stride = info.screen_stride as usize;
-        shared.main_screen = Some(OsMutBitmap8::from_static(
+        shared.main_screen = Some(Bitmap8::from_static(
             info.vram_base as usize as *mut IndexedColor,
             size,
             stride,
         ));
-
-        // println!("{} v{}", System::name(), System::version(),);
-        // println!("Platform {}", System::platform(),);
-        // println!(
-        //     "Memory {} KB Free, {} MB Total",
-        //     mem::mm::MemoryManager::free_memory_size() >> 10,
-        //     mem::mm::MemoryManager::total_memory_size() >> 20
-        // );
 
         mem::mm::MemoryManager::init_first(&info);
         arch::Arch::init();
@@ -135,6 +130,12 @@ impl System {
         shared.platform
     }
 
+    #[inline]
+    pub fn cpu_ver() -> CpuVersion {
+        let shared = Self::shared();
+        shared.cpu_ver
+    }
+
     /// SAFETY: IT DESTROYS EVERYTHING.
     pub unsafe fn reset() -> ! {
         Cpu::reset();
@@ -146,7 +147,7 @@ impl System {
     }
 
     /// Get main screen
-    pub fn main_screen() -> &'static mut OsMutBitmap8<'static> {
+    pub fn main_screen() -> &'static mut Bitmap8<'static> {
         let shared = Self::shared();
         shared.main_screen.as_mut().unwrap()
     }

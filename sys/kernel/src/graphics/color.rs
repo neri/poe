@@ -23,6 +23,7 @@ impl IndexedColor {
     pub const LIGHT_MAGENTA: Self = Self(13);
     pub const YELLOW: Self = Self(14);
     pub const WHITE: Self = Self(15);
+    pub const DEFAULT_KEY: Self = Self(0xFF);
 
     pub const fn from_rgb(rgb: u32) -> Self {
         let b = (((rgb & 0xFF) + 25) / 51) as u8;

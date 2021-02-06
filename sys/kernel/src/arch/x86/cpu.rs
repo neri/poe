@@ -72,7 +72,8 @@ impl Cpu {
             _ => unreachable!(),
         }
 
-        Cpu::stop();
+        Self::halt();
+        Self::stop();
     }
 
     #[inline]

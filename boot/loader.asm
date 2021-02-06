@@ -2,8 +2,8 @@
 ;; Licenst: MIT (c) 2021 MEG-OS project
 
 %define IPL_SIGN            0x1eaf
-%define ARCH_PC             1   ; IBM PC/AT Compatible
 %define ARCH_NEC98          0   ; NEC PC-98 Series Computer
+%define ARCH_PC             1   ; IBM PC/AT Compatible
 %define ARCH_FMT            2   ; Fujitsu FM TOWNS
 
 %define ORG_BASE            0x0800
@@ -39,6 +39,7 @@
 _HEAD:
     jmp short _crt0
     dw _END - _HEAD
+    db "TOE" ,0
 
 forever:
     sti
@@ -120,6 +121,8 @@ _init:
     push es
 
     ;; check cpu
+_check_cpu:
+    ;; is 286 or later
     mov dx, 0xF000
     pushf
     pop ax
@@ -138,6 +141,7 @@ _init:
     jmp forever
 
 .286_ok:
+    ;; is 386 or later
     or cx, dx
     push cx
     popf
@@ -145,6 +149,35 @@ _init:
     pop ax
     and ax, dx
     jz short .bad_cpu
+    mov di, 3
+
+    ;; is 486 or later
+    pushfd
+    pop eax
+    mov ecx, eax
+    xor eax, 0x00040000 ; AC
+    push eax
+    popfd
+    pushfd
+    pop eax
+    cmp eax, ecx
+    jz .end_cpu
+    inc di
+
+    ; has cpuid?
+    mov eax, ecx
+    xor eax, 0x00200000 ; ID
+    push eax
+    popfd
+    pushfd
+    pop eax
+    xor eax, ecx
+    jz .end_cpu
+    inc di
+
+.end_cpu:
+    mov ax, di
+    mov [_cpu_ver], al
 
 _mem_check:
     mov al, [_boot_arch]
@@ -584,16 +617,17 @@ bad_kernel_mes:
     db "BAD KERNEL MAGIC", 13, 10, 0
 
 
+    alignb 16
 _boot_info:
 _boot_arch      db 0
 _boot_drive     db 0
-_boot_flags     dw 0
+_cpu_ver        db 0
+_screen_bpp     db 8
 _vram_base      dd 0
 _screen_width   dw 0
 _screen_height  dw 0
 _screen_stride  dw 0
-_screen_bpp     db 8
-                db 0
+_boot_flags     dw 0
 _acpi           dd 0
 _initrd_base    dd 0
 _initrd_size    dd 0

@@ -1,4 +1,4 @@
-// My Poop Allocator
+// Allocator
 use super::mm::*;
 use core::alloc::{GlobalAlloc, Layout};
 use core::num::NonZeroUsize;

@@ -39,7 +39,6 @@ impl Ps2 {
             Err(_) => return Err(Ps2Error::Unsupported),
             Ok(_) => (),
         }
-
         Self::write_command(Ps2Command::DISABLE_FIRST_PORT);
         Self::send_command(Ps2Command::DISABLE_SECOND_PORT, 1)?;
 

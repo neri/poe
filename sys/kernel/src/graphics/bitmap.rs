@@ -2,7 +2,6 @@
 
 use super::color::*;
 use super::coords::*;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::cell::UnsafeCell;
 use core::convert::TryFrom;
@@ -305,14 +304,14 @@ pub trait RasterFontWriter: MutableRasterImage {
 //-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//
 
 #[repr(C)]
-pub struct OsBitmap8<'a> {
+pub struct ConstBitmap8<'a> {
     width: usize,
     height: usize,
     stride: usize,
     slice: &'a [IndexedColor],
 }
 
-impl<'a> OsBitmap8<'a> {
+impl<'a> ConstBitmap8<'a> {
     #[inline]
     pub const fn from_slice(slice: &'a [IndexedColor], size: Size, stride: usize) -> Self {
         Self {
@@ -334,7 +333,7 @@ impl<'a> OsBitmap8<'a> {
     }
 }
 
-impl ImageTrait for OsBitmap8<'_> {
+impl ImageTrait for ConstBitmap8<'_> {
     type PixelType = IndexedColor;
 
     fn width(&self) -> usize {
@@ -346,7 +345,7 @@ impl ImageTrait for OsBitmap8<'_> {
     }
 }
 
-impl RasterImage for OsBitmap8<'_> {
+impl RasterImage for ConstBitmap8<'_> {
     fn stride(&self) -> usize {
         self.stride
     }
@@ -357,14 +356,14 @@ impl RasterImage for OsBitmap8<'_> {
 }
 
 #[repr(C)]
-pub struct OsMutBitmap8<'a> {
+pub struct Bitmap8<'a> {
     width: usize,
     height: usize,
     stride: usize,
     slice: UnsafeCell<&'a mut [IndexedColor]>,
 }
 
-impl<'a> OsMutBitmap8<'a> {
+impl<'a> Bitmap8<'a> {
     #[inline]
     pub fn from_slice(slice: &'a mut [IndexedColor], size: Size, stride: usize) -> Self {
         Self {
@@ -377,7 +376,7 @@ impl<'a> OsMutBitmap8<'a> {
 
     /// Clone a bitmap
     #[inline]
-    pub fn clone(&self) -> OsMutBitmap8<'a> {
+    pub fn clone(&self) -> Bitmap8<'a> {
         let slice = unsafe { self.slice.get().as_mut().unwrap() };
         Self {
             width: self.width(),
@@ -388,7 +387,7 @@ impl<'a> OsMutBitmap8<'a> {
     }
 }
 
-impl OsMutBitmap8<'static> {
+impl Bitmap8<'static> {
     /// SAFETY: Must guarantee the existence of the `ptr`.
     #[inline]
     pub unsafe fn from_static(ptr: *mut IndexedColor, size: Size, stride: usize) -> Self {
@@ -402,9 +401,9 @@ impl OsMutBitmap8<'static> {
     }
 }
 
-impl BitmapHogeHoge for OsMutBitmap8<'_> {}
+impl BitmapDrawing8 for Bitmap8<'_> {}
 
-pub trait BitmapHogeHoge: MutableRasterImage<PixelType = IndexedColor> {
+pub trait BitmapDrawing8: MutableRasterImage<PixelType = IndexedColor> {
     fn blt_with_key<T>(
         &mut self,
         src: &T,
@@ -503,7 +502,7 @@ pub trait BitmapHogeHoge: MutableRasterImage<PixelType = IndexedColor> {
     /// Make a bitmap view
     fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
     where
-        F: FnOnce(&mut OsMutBitmap8) -> R,
+        F: FnOnce(&mut Bitmap8) -> R,
     {
         let coords = match Coordinates::try_from(rect) {
             Ok(v) => v,
@@ -527,7 +526,7 @@ pub trait BitmapHogeHoge: MutableRasterImage<PixelType = IndexedColor> {
         let new_len = rect.height() as usize * stride;
         let r = {
             let slice = self.slice_mut();
-            let mut view = OsMutBitmap8 {
+            let mut view = Bitmap8 {
                 width: rect.width() as usize,
                 height: rect.height() as usize,
                 stride,
@@ -539,7 +538,7 @@ pub trait BitmapHogeHoge: MutableRasterImage<PixelType = IndexedColor> {
     }
 }
 
-impl ImageTrait for OsMutBitmap8<'_> {
+impl ImageTrait for Bitmap8<'_> {
     type PixelType = IndexedColor;
 
     fn width(&self) -> usize {
@@ -551,7 +550,7 @@ impl ImageTrait for OsMutBitmap8<'_> {
     }
 }
 
-impl RasterImage for OsMutBitmap8<'_> {
+impl RasterImage for Bitmap8<'_> {
     fn stride(&self) -> usize {
         self.stride
     }
@@ -561,13 +560,13 @@ impl RasterImage for OsMutBitmap8<'_> {
     }
 }
 
-impl MutableRasterImage for OsMutBitmap8<'_> {
+impl MutableRasterImage for Bitmap8<'_> {
     fn slice_mut(&mut self) -> &mut [Self::PixelType] {
         self.slice.get_mut()
     }
 }
 
-impl BasicDrawing for OsMutBitmap8<'_> {
+impl BasicDrawing for Bitmap8<'_> {
     fn fill_rect(&mut self, rect: Rect, color: Self::PixelType) {
         let mut width = rect.width();
         let mut height = rect.height();
@@ -668,23 +667,23 @@ impl BasicDrawing for OsMutBitmap8<'_> {
     }
 }
 
-impl RasterFontWriter for OsMutBitmap8<'_> {}
+impl RasterFontWriter for Bitmap8<'_> {}
 
-impl<'a> From<&'a OsMutBitmap8<'a>> for OsBitmap8<'a> {
-    fn from(src: &'a OsMutBitmap8) -> Self {
+impl<'a> From<&'a Bitmap8<'a>> for ConstBitmap8<'a> {
+    fn from(src: &'a Bitmap8) -> Self {
         Self::from_slice(src.slice(), src.size(), src.stride())
     }
 }
 
 #[repr(C)]
-pub struct BoxedBitmap8 {
+pub struct VecBitmap8 {
     width: usize,
     height: usize,
     stride: usize,
     vec: Vec<IndexedColor>,
 }
 
-impl BoxedBitmap8 {
+impl VecBitmap8 {
     pub fn new(size: Size, bg_color: IndexedColor) -> Self {
         let len = size.width() as usize * size.height() as usize;
         let mut vec = Vec::with_capacity(len);
@@ -700,7 +699,7 @@ impl BoxedBitmap8 {
     /// Make a bitmap view
     pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
     where
-        F: FnOnce(&mut OsMutBitmap8) -> R,
+        F: FnOnce(&mut Bitmap8) -> R,
     {
         let coords = match Coordinates::try_from(rect) {
             Ok(v) => v,
@@ -724,7 +723,7 @@ impl BoxedBitmap8 {
         let new_len = rect.height() as usize * stride;
         let r = {
             let slice = self.slice_mut();
-            let mut view = OsMutBitmap8 {
+            let mut view = Bitmap8 {
                 width: rect.width() as usize,
                 height: rect.height() as usize,
                 stride,
@@ -736,7 +735,7 @@ impl BoxedBitmap8 {
     }
 }
 
-impl ImageTrait for BoxedBitmap8 {
+impl ImageTrait for VecBitmap8 {
     type PixelType = IndexedColor;
 
     fn width(&self) -> usize {
@@ -748,7 +747,7 @@ impl ImageTrait for BoxedBitmap8 {
     }
 }
 
-impl RasterImage for BoxedBitmap8 {
+impl RasterImage for VecBitmap8 {
     fn stride(&self) -> usize {
         self.stride
     }
@@ -758,14 +757,14 @@ impl RasterImage for BoxedBitmap8 {
     }
 }
 
-impl MutableRasterImage for BoxedBitmap8 {
+impl MutableRasterImage for VecBitmap8 {
     fn slice_mut(&mut self) -> &mut [Self::PixelType] {
         self.vec.as_mut_slice()
     }
 }
 
-impl<'a> From<&'a mut BoxedBitmap8> for OsMutBitmap8<'a> {
-    fn from(src: &'a mut BoxedBitmap8) -> Self {
+impl<'a> From<&'a mut VecBitmap8> for Bitmap8<'a> {
+    fn from(src: &'a mut VecBitmap8) -> Self {
         let size = src.size();
         let stride = src.stride();
         Self::from_slice(src.slice_mut(), size, stride)

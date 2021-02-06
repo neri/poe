@@ -1,6 +1,6 @@
 # codename TOE
 
-A hobby OS written in Rust, currently a subset of myos.
+A hobby OS written in Rust, currently a subset of MYOS.
 
 ## Features
 
@@ -9,8 +9,8 @@ A hobby OS written in Rust, currently a subset of myos.
 ## Requirements
 
 - IBM PC compatible / 日本電気 PC-9800 ｼﾘｰｽﾞ ﾊﾟｰｿﾅﾙ ｺﾝﾋﾟｭｰﾀ / 富士通 FM TOWNS
-- 80386 or 486SX or better processor
-- 3.6MB or a lot more memory
+- 486SX or later
+- 3.6MB? or a lot more memory
 - VGA or better video adapter
   - 640 x 480 pixel resolution
   - 256 color mode
@@ -22,7 +22,7 @@ A hobby OS written in Rust, currently a subset of myos.
 
 - Not tested.
 
-# Build Environment
+## Build Environment
 
 * Rust nightly
 * llvm (ld.lld)
@@ -39,6 +39,12 @@ $ make
 ```
 $ make run
 ```
+
+## History
+
+### 2021-01-06
+
+- Initial Commit
 
 ## License
 

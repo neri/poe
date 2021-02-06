@@ -3,7 +3,7 @@
 use core::{convert::TryFrom, ops::*};
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct Point {
     pub x: isize,
     pub y: isize,
@@ -161,7 +161,7 @@ impl SubAssign for Point {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct Size {
     pub width: isize,
     pub height: isize,
@@ -252,7 +252,7 @@ impl SubAssign for Size {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct Rect {
     pub origin: Point,
     pub size: Size,
@@ -309,6 +309,19 @@ impl Rect {
                 height: self.size.height - (insets.top + insets.bottom),
             },
         }
+    }
+
+    pub fn is_within_rect(self, rhs: Self) -> bool {
+        let cl = match Coordinates::from_rect(self) {
+            Ok(coords) => coords,
+            Err(_) => return false,
+        };
+        let cr = match Coordinates::from_rect(rhs) {
+            Ok(coords) => coords,
+            Err(_) => return false,
+        };
+
+        cl.left < cr.right && cr.left < cl.right && cl.top < cr.bottom && cr.top < cl.bottom
     }
 }
 
