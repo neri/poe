@@ -3,7 +3,7 @@
 use core::mem::transmute;
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndexedColor(pub u8);
 
 impl IndexedColor {

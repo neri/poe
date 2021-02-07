@@ -96,13 +96,16 @@ impl System {
         mem::mm::MemoryManager::init_first(&info);
         arch::Arch::init();
 
-        window::WindowManager::init();
-        io::hid::HidManager::init();
+        task::scheduler::Scheduler::start(Self::late_init, f as usize);
+    }
 
-        f();
+    fn late_init(f: usize) {
+        unsafe {
+            window::WindowManager::init();
+            io::hid::HidManager::init();
 
-        loop {
-            Cpu::halt();
+            let f: fn() -> () = core::mem::transmute(f);
+            f();
         }
     }
 

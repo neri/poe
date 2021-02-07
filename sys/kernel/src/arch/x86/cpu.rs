@@ -2,11 +2,16 @@
 
 use crate::*;
 use bitflags::*;
+use core::ffi::c_void;
 use core::fmt::Write;
 use toeboot::Platform;
 
 extern "fastcall" {
     fn asm_handle_exception(_: InterruptVector) -> usize;
+    fn asm_sch_switch_context(current: *mut u8, next: *mut u8);
+}
+extern "C" {
+    fn asm_sch_make_new_thread(context: *mut u8, new_sp: *mut c_void, start: usize, arg: usize);
 }
 
 pub struct Cpu {}
@@ -14,6 +19,47 @@ pub struct Cpu {}
 impl Cpu {
     pub(crate) unsafe fn init() {
         InterruptDescriptorTable::init();
+    }
+
+    #[inline]
+    pub unsafe fn switch_context(current: *mut u8, next: *mut u8) {
+        asm_sch_switch_context(current, next);
+    }
+
+    #[inline]
+    pub unsafe fn make_new_thread(context: *mut u8, new_sp: *mut c_void, start: usize, arg: usize) {
+        asm_sch_make_new_thread(context, new_sp, start, arg);
+    }
+
+    #[inline]
+    pub fn interlocked_increment(p: &mut usize) -> usize {
+        unsafe {
+            Self::without_interrupts(|| {
+                let p = p as *mut usize;
+                let r;
+                let _t: usize;
+                asm!("
+                    mov {1}, [{0}]
+                    lea {2}, [{1} + 1]
+                    lock xchg {2}, [{0}]
+                    ", in(reg) p, out(reg) _t, out(reg) r);
+                r
+            })
+        }
+    }
+
+    #[inline]
+    pub fn interlocked_add(p: &mut usize, val: usize) -> usize {
+        unsafe {
+            Self::without_interrupts(|| {
+                let p = p as *mut usize;
+                let mut r = val + p.read_volatile();
+                asm!("
+                    lock xchg {1}, [{0}]
+                    ", in(reg) p, inout(reg) r);
+                r
+            })
+        }
     }
 
     #[inline]
@@ -297,6 +343,11 @@ pub enum Exception {
     AlignmentCheck = 17,
     MachineCheck = 18,
     SimdException = 19,
+    Virtualization = 20,
+    //Reserved
+    Security = 30,
+    //Reserved = 31,
+    MaxReserved = 32,
 }
 
 impl Exception {
@@ -522,17 +573,8 @@ impl InterruptDescriptorTable {
 
     unsafe fn init() {
         Self::load();
-        for exception in [
-            Exception::DivideError,
-            Exception::Breakpoint,
-            Exception::InvalidOpcode,
-            Exception::DoubleFault,
-            Exception::GeneralProtection,
-            Exception::PageFault,
-        ]
-        .iter()
-        {
-            let vec = InterruptVector::from(*exception);
+        for vec in 0..(Exception::MaxReserved as u8) {
+            let vec = InterruptVector(vec);
             let offset = asm_handle_exception(vec);
             if offset != 0 {
                 Self::register(vec, offset, PrivilegeLevel::Kernel);

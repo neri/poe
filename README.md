@@ -5,6 +5,7 @@ A hobby OS written in Rust, currently a subset of MYOS.
 ## Features
 
 - A hobby OS written in Rust
+- Not a POSIX clone system
 
 ## Requirements
 

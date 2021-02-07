@@ -1,5 +1,7 @@
 // Programmable Interrupt Controller
 
+use crate::task::scheduler::Scheduler;
+
 use super::cpu::{Cpu, InterruptDescriptorTable, InterruptVector, Selector};
 use core::num::NonZeroUsize;
 use toeboot::*;
@@ -197,6 +199,10 @@ pub unsafe extern "fastcall" fn pic_handle_irq(irq: Irq) {
         shared.write_cmd0(shared.chain_eoi);
     } else {
         shared.write_cmd0(0x60 + irq.local_number());
+    }
+
+    if irq == Irq(0) {
+        Scheduler::reschedule();
     }
 }
 

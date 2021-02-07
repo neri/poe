@@ -3,17 +3,67 @@
 [bits 32]
 [section .text]
 
-;     global memset
-; memset:
-;     push edi
-;     mov edi, [esp+8]
-;     mov al, [esp+12]
-;     mov ecx, [esp+16]
-;     mov edx, edi
-;     rep stosb
-;     mov eax, edx
-;     pop edi
-;     ret
+    ; fn asm_sch_switch_context(current: *mut u8, next: *mut u8);
+%define CTX_SP          0x10
+%define CTX_BP          0x14
+%define CTX_BX          0x18
+%define CTX_SI          0x1C
+%define CTX_DI          0x20
+%define CTX_TSS_SP0     0x24
+%define CTX_USER_CS     0x60
+%define CTX_USER_DS     0x68
+%define CTX_DS          0x70
+%define CTX_ES          0x74
+%define CTX_FS          0x78
+%define CTX_GS          0x7C
+%define CTX_GDT_TEMP    0xF0
+%define CTX_FPU_BASE    0x100
+    global asm_sch_switch_context
+asm_sch_switch_context:
+    mov [ecx + CTX_SP], esp
+    mov [ecx + CTX_BP], ebp
+    mov [ecx + CTX_BX], ebx
+    mov [ecx + CTX_SI], esi
+    mov [ecx + CTX_DI], edi
+
+    mov esp, [edx + CTX_SP]
+    mov ebp, [edx + CTX_BP]
+    mov ebx, [edx + CTX_BX]
+    mov esi, [edx + CTX_SI]
+    mov edi, [edx + CTX_DI]
+    xor eax, eax
+    xor ecx, ecx
+    xor edx, edx
+    ret
+
+
+    ; extern "C" fn asm_sch_make_new_thread(context: *mut u8, new_sp: *mut c_void, start: usize, arg: usize);
+    global asm_sch_make_new_thread
+asm_sch_make_new_thread:
+    mov ecx, [esp + 0x04]
+    mov edx, [esp + 0x08]
+    sub edx, byte 0x10
+    mov eax, _new_thread
+    mov [edx], eax
+    mov eax, [esp + 0x0C]
+    mov [edx + 0x04], eax
+    mov eax, [esp + 0x10]
+    mov [edx + 0x08], eax
+    mov [ecx + CTX_SP], edx
+    ret
+
+
+    extern sch_setup_new_thread
+_new_thread:
+    call sch_setup_new_thread
+    sti
+    pop eax
+    pop ecx
+    sub esp, byte 0x0C
+    push ecx
+    call eax
+    ud2
+
 
     ; pub unsafe extern "C" fn cpu_default_exception(ctx: &mut StackContext)
     extern cpu_default_exception

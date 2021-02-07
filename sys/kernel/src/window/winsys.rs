@@ -13,13 +13,12 @@ use alloc::vec::Vec;
 use bitflags::*;
 use core::cell::UnsafeCell;
 use core::cmp;
-use core::fmt::Write;
+// use core::fmt::Write;
 use core::num::NonZeroUsize;
-use core::sync::atomic::*;
 
 static mut WM: Option<Box<WindowManager>> = None;
 
-const MAX_WINDOWS: usize = 256;
+const MAX_WINDOWS: usize = 255;
 
 const WINDOW_TITLE_LENGTH: usize = 32;
 
@@ -147,19 +146,6 @@ impl WindowManager {
     #[inline]
     fn shared_opt() -> Option<&'static mut Box<Self>> {
         unsafe { WM.as_mut() }
-    }
-
-    fn next_window_handle() -> WindowHandle {
-        // static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
-        // WindowHandle::new(NEXT_ID.fetch_add(1, Ordering::SeqCst)).unwrap()
-        static mut NEXT_ID: usize = 1;
-        unsafe {
-            Cpu::without_interrupts(|| {
-                let result = NEXT_ID;
-                NEXT_ID = result + 1;
-                WindowHandle::new(result).unwrap()
-            })
-        }
     }
 
     fn add(window: Box<RawWindow>) {
@@ -498,11 +484,6 @@ impl RawWindow {
     }
 
     #[inline]
-    fn bounds(&self) -> Rect {
-        self.frame.size().into()
-    }
-
-    #[inline]
     fn is_visible(&self) -> bool {
         self.attributes.contains(WindowAttributes::VISIBLE)
     }
@@ -548,7 +529,7 @@ impl RawWindow {
     fn set_frame(&mut self, new_frame: Rect) {
         let old_frame = self.frame;
         if old_frame != new_frame {
-            let sized = old_frame.size() != new_frame.size();
+            // let sized = old_frame.size() != new_frame.size();
             self.frame = new_frame;
             if self.attributes.contains(WindowAttributes::VISIBLE) {
                 WindowManager::invalidate_screen(old_frame);
@@ -680,7 +661,7 @@ impl RawWindow {
 
         let shared = WindowManager::shared();
 
-        for (index, handle) in shared.window_orders.iter().enumerate() {
+        for handle in shared.window_orders.iter() {
             handle.update(|window| {
                 let coords2 = match Coordinates::from_rect(window.frame) {
                     Ok(v) => v,
@@ -850,7 +831,7 @@ impl WindowBuilder {
         //     _ => Some(ArrayQueue::new(self.queue_size)),
         // };
 
-        let handle = WindowManager::next_window_handle();
+        let handle = WindowHandle::next();
         let mut window = Box::new(RawWindow {
             handle,
             frame,
@@ -967,6 +948,13 @@ impl WindowHandle {
         self.0.get()
     }
 
+    /// Acquire the next window handle
+    #[inline]
+    fn next() -> Self {
+        static mut NEXT_ID: usize = 1;
+        Self::new(unsafe { Cpu::interlocked_increment(&mut NEXT_ID) }).unwrap()
+    }
+
     #[inline]
     fn get<'a>(&self) -> Option<&'a Box<RawWindow>> {
         let shared = WindowManager::shared();
@@ -1032,6 +1020,11 @@ impl WindowHandle {
         self.update(|window| {
             window.set_frame(rect);
         });
+    }
+
+    #[inline]
+    pub fn bounds(&self) -> Rect {
+        self.as_ref().frame.size().into()
     }
 
     #[inline]
