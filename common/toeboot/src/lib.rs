@@ -24,8 +24,7 @@ pub struct BootInfo {
     /// TBD
     _boot_flags: u16,
 
-    /// TODO: ACPI
-    pub acpi: u32,
+    pub acpi_rsdptr: u32,
 
     /// TODO: initrd
     pub initrd_base: u32,

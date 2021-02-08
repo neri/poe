@@ -101,7 +101,7 @@ impl Pc98 {
         } else {
             KeyEventFlags::empty()
         };
-        let usage = Usage(unsafe { *SCAN_TO_HID.get_unchecked(scancode) });
+        let usage = Usage(SCAN_TO_HID[scancode]);
         if usage >= Usage::MOD_MIN && usage < Usage::MOD_MAX {
             let bit_position =
                 unsafe { Modifier::from_bits_unchecked(1 << (usage.0 - Usage::MOD_MIN.0)) };

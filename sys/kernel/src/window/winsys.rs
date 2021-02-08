@@ -25,7 +25,7 @@ const WINDOW_TITLE_LENGTH: usize = 32;
 const WINDOW_BORDER_PADDING: isize = 1;
 const WINDOW_TITLE_HEIGHT: isize = 24;
 
-const WINDOW_BORDER_COLOR: IndexedColor = IndexedColor::from_rgb(0x333333);
+const WINDOW_BORDER_COLOR: IndexedColor = IndexedColor::from_rgb(0x666666);
 const WINDOW_DEFAULT_BGCOLOR: IndexedColor = IndexedColor::WHITE;
 const WINDOW_DEFAULT_KEY_COLOR: IndexedColor = IndexedColor::DEFAULT_KEY;
 const WINDOW_ACTIVE_TITLE_BG_COLOR: IndexedColor = IndexedColor::from_rgb(0xCCCCCC);

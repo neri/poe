@@ -7,6 +7,7 @@
 #![feature(const_fn)]
 #![feature(associated_type_bounds)]
 #![feature(option_result_contains)]
+#![feature(core_intrinsics)]
 
 use arch::cpu::Cpu;
 use core::fmt::Write;

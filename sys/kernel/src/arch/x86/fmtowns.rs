@@ -47,7 +47,7 @@ impl FmTowns {
             if leading.is_leading() {
                 shared.key_lead_data = leading;
             } else {
-                shared.process_keydata(data);
+                shared.process_key_data(data);
             }
         }
     }
@@ -58,8 +58,7 @@ impl FmTowns {
         shared.poll_mouse();
     }
 
-    #[inline]
-    fn process_keydata(&mut self, data: u8) {
+    fn process_key_data(&mut self, data: u8) {
         let leading = self.key_lead_data;
         if leading.contains(KbdLeadData::EXTEND) {
             return;
@@ -74,7 +73,7 @@ impl FmTowns {
             .set(Modifier::LCTRL, leading.contains(KbdLeadData::HAS_CTRL));
         self.key_modifier
             .set(Modifier::LSHIFT, leading.contains(KbdLeadData::HAS_SHIFT));
-        let usage = Usage(unsafe { *SCAN_TO_HID.get_unchecked(data as usize) });
+        let usage = Usage(SCAN_TO_HID[0x7F & data as usize]);
         if usage >= Usage::MOD_MIN && usage < Usage::MOD_MAX {
             let bit_position =
                 unsafe { Modifier::from_bits_unchecked(1 << (usage.0 - Usage::MOD_MIN.0)) };

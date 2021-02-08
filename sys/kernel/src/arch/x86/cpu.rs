@@ -4,6 +4,7 @@ use crate::*;
 use bitflags::*;
 use core::ffi::c_void;
 use core::fmt::Write;
+use core::intrinsics::*;
 use toeboot::Platform;
 
 extern "fastcall" {
@@ -22,30 +23,23 @@ impl Cpu {
     }
 
     #[inline]
-    pub unsafe fn switch_context(current: *mut u8, next: *mut u8) {
+    pub(crate) unsafe fn switch_context(current: *mut u8, next: *mut u8) {
         asm_sch_switch_context(current, next);
     }
 
     #[inline]
-    pub unsafe fn make_new_thread(context: *mut u8, new_sp: *mut c_void, start: usize, arg: usize) {
+    pub(crate) unsafe fn make_new_thread(
+        context: *mut u8,
+        new_sp: *mut c_void,
+        start: usize,
+        arg: usize,
+    ) {
         asm_sch_make_new_thread(context, new_sp, start, arg);
     }
 
     #[inline]
     pub fn interlocked_increment(p: &mut usize) -> usize {
-        unsafe {
-            Self::without_interrupts(|| {
-                let p = p as *mut usize;
-                let r;
-                let _t: usize;
-                asm!("
-                    mov {1}, [{0}]
-                    lea {2}, [{1} + 1]
-                    lock xchg {2}, [{0}]
-                    ", in(reg) p, out(reg) _t, out(reg) r);
-                r
-            })
-        }
+        Self::interlocked_add(p, 1)
     }
 
     #[inline]
@@ -53,11 +47,8 @@ impl Cpu {
         unsafe {
             Self::without_interrupts(|| {
                 let p = p as *mut usize;
-                let mut r = val + p.read_volatile();
-                asm!("
-                    lock xchg {1}, [{0}]
-                    ", in(reg) p, inout(reg) r);
-                r
+                let r = val + atomic_load(p);
+                atomic_xchg(p, r)
             })
         }
     }

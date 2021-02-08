@@ -57,9 +57,11 @@ impl Scheduler {
 
         SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
 
-        loop {
-            Cpu::halt();
-        }
+        Scheduler::yield_thread();
+        todo!();
+        // loop {
+        //     Cpu::halt();
+        // }
     }
 
     #[inline]

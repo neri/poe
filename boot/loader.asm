@@ -285,6 +285,28 @@ _end_mem_check:
 .kernel_ok:
 
 
+_find_rsdptr:
+    mov dx, 0xE000
+.loop:
+    mov es, dx
+    mov si, _RSDPtr
+    xor di, di
+    mov cx, 4
+    rep cmpsw
+    jz .found
+    inc dx
+    jnz .loop
+.not_found:
+    jmp short _no_acpi
+
+.found:
+    mov bx, es
+    movzx ebx, bx
+    shl ebx, 4
+    mov [_acpi_rsdptr], ebx
+_no_acpi:
+
+
 _set_video_mode:
     mov al, [_boot_arch]
     cmp al, ARCH_NEC98
@@ -616,6 +638,9 @@ no_mem_mes:
 bad_kernel_mes:
     db "BAD KERNEL MAGIC", 13, 10, 0
 
+_RSDPtr:
+    db "RSD PTR "
+
 
     alignb 16
 _boot_info:
@@ -628,7 +653,7 @@ _screen_width   dw 0
 _screen_height  dw 0
 _screen_stride  dw 0
 _boot_flags     dw 0
-_acpi           dd 0
+_acpi_rsdptr    dd 0
 _initrd_base    dd 0
 _initrd_size    dd 0
 

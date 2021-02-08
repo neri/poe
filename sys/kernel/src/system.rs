@@ -16,7 +16,7 @@ pub struct Version {
 }
 
 impl Version {
-    const SYSTEM_NAME: &'static str = "codename TOE";
+    const SYSTEM_NAME: &'static str = "TOE";
     const RELEASE: &'static str = "";
     const VERSION: Version = Version::new(0, 0, 1, Self::RELEASE);
 
@@ -66,7 +66,6 @@ pub struct System {
     cpu_ver: CpuVersion,
 }
 
-#[used]
 static mut SYSTEM: System = System::new();
 
 impl System {
@@ -84,6 +83,7 @@ impl System {
         let shared = Self::shared();
         shared.platform = info.platform;
         shared.cpu_ver = info.cpu_ver;
+        // shared.acpi_rsdptr = info.acpi_rsdptr as usize;
 
         let size = Size::new(info.screen_width as isize, info.screen_height as isize);
         let stride = info.screen_stride as usize;
@@ -160,6 +160,12 @@ impl System {
         let shared = Self::shared();
         &mut shared.em_console
     }
+
+    // TODO:
+    // pub fn acpi() -> usize {
+    //     let shared = Self::shared();
+    //     shared.acpi_rsdptr
+    // }
 
     // #[inline]
     // pub fn uarts<'a>() -> &'a [Box<dyn Uart>] {
