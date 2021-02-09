@@ -1,6 +1,7 @@
 // x86
 
 use crate::*;
+use _core::sync::atomic::AtomicUsize;
 use bitflags::*;
 use core::ffi::c_void;
 use core::fmt::Write;
@@ -50,6 +51,34 @@ impl Cpu {
                 let r = val + atomic_load(p);
                 atomic_xchg(p, r)
             })
+        }
+    }
+
+    #[inline]
+    pub fn interlocked_test_and_set(p: &AtomicUsize, val: usize) -> bool {
+        unsafe {
+            let p = p as *const _ as *mut usize;
+            let pos = val.trailing_zeros();
+            let r: usize;
+            asm!("
+                lock bts [{0}], {1}
+                sbb {2}, {2}
+                ", in(reg) p, in(reg) pos, lateout(reg) r);
+            r != 0
+        }
+    }
+
+    #[inline]
+    pub fn interlocked_test_and_clear(p: &AtomicUsize, val: usize) -> bool {
+        unsafe {
+            let p = p as *const _ as *mut usize;
+            let pos = val.trailing_zeros();
+            let r: usize;
+            asm!("
+                lock btr [{0}], {1}
+                sbb {2}, {2}
+                ", in(reg) p, in(reg) pos, lateout(reg) r);
+            r != 0
         }
     }
 

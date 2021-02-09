@@ -87,11 +87,10 @@ impl System {
 
         let size = Size::new(info.screen_width as isize, info.screen_height as isize);
         let stride = info.screen_stride as usize;
-        shared.main_screen = Some(Bitmap8::from_static(
-            info.vram_base as usize as *mut IndexedColor,
-            size,
-            stride,
-        ));
+        let mut screen =
+            Bitmap8::from_static(info.vram_base as usize as *mut IndexedColor, size, stride);
+        screen.fill_rect(screen.bounds(), IndexedColor::BLACK);
+        shared.main_screen = Some(screen);
 
         mem::mm::MemoryManager::init_first(&info);
         arch::Arch::init();
@@ -101,6 +100,7 @@ impl System {
 
     fn late_init(f: usize) {
         unsafe {
+            arch::Arch::late_init();
             window::WindowManager::init();
             io::hid::HidManager::init();
 

@@ -19,7 +19,10 @@ impl Arch {
         let platform = System::platform();
         pic::Pic::init(platform);
         pit::Pit::init(platform);
+    }
 
+    pub unsafe fn late_init() {
+        let platform = System::platform();
         match platform {
             Platform::PcCompatible => {
                 ps2::Ps2::init().expect("PS/2");
@@ -30,7 +33,7 @@ impl Arch {
             Platform::FmTowns => {
                 fmtowns::FmTowns::init();
             }
-            _ => (),
+            _ => unreachable!(),
         }
     }
 }

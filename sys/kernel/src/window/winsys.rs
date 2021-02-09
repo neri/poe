@@ -84,6 +84,7 @@ impl WindowManager {
                 .style(WindowStyle::NAKED)
                 .level(WindowLevel::ROOT)
                 .size(main_screen.size())
+                .bg_color(IndexedColor::BLACK)
                 .without_bitmap()
                 .without_message_queue()
                 .build_inner();
@@ -596,10 +597,14 @@ impl RawWindow {
                 let font = FontManager::fixed_system_font();
 
                 if let Some(s) = self.title() {
+                    let y = isize::max(
+                        0,
+                        (WINDOW_TITLE_HEIGHT - WINDOW_BORDER_PADDING - 1 - font.line_height()) / 2,
+                    );
                     font.write_str(
                         s,
                         &mut bitmap,
-                        Point::new(8, 4),
+                        Point::new(8, y),
                         if is_active {
                             WINDOW_ACTIVE_TITLE_FG_COLOR
                         } else {

@@ -1,8 +1,8 @@
 // Scheduler
 
-use crate::arch::cpu::Cpu;
 use crate::sync::atomicflags::AtomicBitflags;
-use _core::num::NonZeroUsize;
+use crate::window::winsys::*;
+use crate::{arch::cpu::Cpu, system::System};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::sync::Arc;
@@ -10,8 +10,13 @@ use alloc::vec::*;
 use bitflags::*;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
+use core::num::NonZeroUsize;
 use core::sync::atomic::*;
 use core::time::Duration;
+
+use crate::graphics::bitmap::*;
+use crate::graphics::color::*;
+use crate::graphics::coords::*;
 
 static mut SCHEDULER: Option<Box<Scheduler>> = None;
 
@@ -21,6 +26,9 @@ pub struct Scheduler {
     urgent: ThreadQueue,
     ready: ThreadQueue,
     pool: ThreadPool,
+
+    timer_events: Vec<TimerEvent>,
+    next_timer: Timer,
 
     idle: ThreadHandle,
     current: ThreadHandle,
@@ -48,20 +56,20 @@ impl Scheduler {
             pool,
             ready,
             urgent,
+            timer_events: Vec::with_capacity(100),
+            next_timer: Timer::JUST,
             idle,
             current: idle,
             retired: None,
         }));
 
-        SpawnOption::with_priority(Priority::Normal).spawn(f, args, "main");
+        SpawnOption::with_priority(Priority::Normal).spawn(f, args, "System");
 
         SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
 
-        Scheduler::yield_thread();
-        todo!();
-        // loop {
-        //     Cpu::halt();
-        // }
+        loop {
+            Cpu::halt();
+        }
     }
 
     #[inline]
@@ -98,6 +106,7 @@ impl Scheduler {
     pub(crate) unsafe fn reschedule() {
         if Self::is_enabled() {
             Cpu::without_interrupts(|| {
+                Self::process_timer_event();
                 let shared = Self::shared();
                 if shared.current.as_ref().priority != Priority::Realtime {
                     if shared.current.update(|current| current.quantum.consume()) {
@@ -111,7 +120,9 @@ impl Scheduler {
     pub fn sleep() {
         unsafe {
             Cpu::without_interrupts(|| {
-                // TODO:
+                let shared = Self::shared();
+                let current = shared.current;
+                current.as_ref().attribute.insert(ThreadAttributes::ASLEEP);
                 Self::switch_context();
             })
         }
@@ -125,11 +136,6 @@ impl Scheduler {
     fn next() -> Option<ThreadHandle> {
         let shared = Self::shared();
         // if shared.is_frozen.load(Ordering::SeqCst) {
-        //     return None;
-        // }
-        // if System::cpu(index.0).processor_type() != ProcessorCoreType::Physical
-        //     && sch.state < SchedulerState::FullThrottle
-        // {
         //     return None;
         // }
         // if !sch.next_timer.until() {
@@ -175,6 +181,38 @@ impl Scheduler {
             }
             shared.ready.enqueue(handle).unwrap();
         }
+    }
+
+    pub fn schedule_timer(event: TimerEvent) -> Result<(), TimerEvent> {
+        unsafe {
+            Cpu::without_interrupts(|| {
+                let shared = Self::shared();
+                shared.timer_events.push(event);
+                shared
+                    .timer_events
+                    .sort_by(|a, b| a.timer.deadline.cmp(&b.timer.deadline));
+            });
+            Self::process_timer_event();
+            Ok(())
+        }
+    }
+
+    unsafe fn process_timer_event() {
+        Cpu::without_interrupts(|| {
+            let shared = Self::shared();
+
+            while let Some(event) = shared.timer_events.first() {
+                if event.until() {
+                    break;
+                } else {
+                    shared.timer_events.remove(0).fire();
+                }
+            }
+
+            if let Some(event) = shared.timer_events.first() {
+                shared.next_timer = event.timer;
+            }
+        })
     }
 
     /// Returns whether or not the thread scheduler is working.
@@ -395,19 +433,23 @@ impl Timer {
 
     #[track_caller]
     pub fn sleep(duration: Duration) {
-        // TODO:
         if Scheduler::is_enabled() {
-            let deadline = Timer::new(duration);
-            while deadline.until() {
-                Scheduler::sleep();
-            }
-        } else {
-            let deadline = Timer::new(duration);
-            while deadline.until() {
-                unsafe {
-                    Cpu::halt();
+            let timer = Timer::new(duration);
+            let mut event = TimerEvent::one_shot(timer);
+            while timer.until() {
+                match Scheduler::schedule_timer(event) {
+                    Ok(()) => {
+                        Scheduler::sleep();
+                        return;
+                    }
+                    Err(e) => {
+                        event = e;
+                        Scheduler::yield_thread();
+                    }
                 }
             }
+        } else {
+            panic!("Scheduler unavailable");
         }
     }
 
@@ -429,6 +471,48 @@ impl Timer {
     #[inline]
     pub fn measure() -> u64 {
         Self::monotonic().as_micros() as u64
+    }
+}
+
+pub struct TimerEvent {
+    timer: Timer,
+    timer_type: TimerType,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum TimerType {
+    OneShot(ThreadHandle),
+    Window(WindowHandle, usize),
+}
+
+#[allow(dead_code)]
+impl TimerEvent {
+    pub fn one_shot(timer: Timer) -> Self {
+        Self {
+            timer,
+            timer_type: TimerType::OneShot(Scheduler::current_thread().unwrap()),
+        }
+    }
+
+    pub fn window(window: WindowHandle, timer_id: usize, timer: Timer) -> Self {
+        Self {
+            timer,
+            timer_type: TimerType::Window(window, timer_id),
+        }
+    }
+
+    pub fn until(&self) -> bool {
+        self.timer.until()
+    }
+
+    pub fn fire(self) {
+        match self.timer_type {
+            TimerType::OneShot(thread) => thread.wake(),
+            TimerType::Window(window, timer_id) => {
+                todo!()
+                // window.post(WindowMessage::Timer(timer_id)).unwrap()
+            }
+        }
     }
 }
 
@@ -709,9 +793,9 @@ impl RawThread {
         array[0] = i as u8 - 1;
     }
 
-    fn set_name(&mut self, name: &str) {
-        RawThread::set_name_array(&mut self.name, name);
-    }
+    // fn set_name(&mut self, name: &str) {
+    //     RawThread::set_name_array(&mut self.name, name);
+    // }
 
     fn name<'a>(&self) -> Option<&'a str> {
         let len = self.name[0] as usize;

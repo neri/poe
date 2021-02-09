@@ -68,7 +68,7 @@ impl Pit {
             ", in ("edx") shared.tmr_cnt0, in ("eax") shared.timer_div);
 
         Timer::set_timer(&PIT);
-        AudioManager::set_beep(&PIT);
+        AudioManager::set_beep_driver(&PIT);
         Cpu::enable_interrupt();
     }
 

@@ -36,8 +36,9 @@ impl Application {
     }
 
     fn main() {
-        WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
         WindowManager::set_pointer_visible(true);
+        Timer::sleep(Duration::from_millis(1000));
+        WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
 
         {
             let screen_size = System::main_screen().size();
@@ -103,9 +104,7 @@ impl Application {
                 }
             } else {
                 print!("\x7F\x08");
-                unsafe {
-                    Cpu::halt();
-                }
+                Timer::sleep(Duration::from_millis(50));
             }
         }
     }

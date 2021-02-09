@@ -8,7 +8,7 @@ pub struct AudioManager {
 
 impl AudioManager {
     #[inline]
-    pub(crate) unsafe fn set_beep(driver: &'static dyn BeepDriver) {
+    pub(crate) unsafe fn set_beep_driver(driver: &'static dyn BeepDriver) {
         BEEP_DRIVER = Some(driver);
     }
 
