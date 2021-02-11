@@ -3,6 +3,7 @@
 [bits 32]
 [section .text]
 
+
     ; fn asm_sch_switch_context(current: *mut u8, next: *mut u8);
 %define CTX_SP          0x10
 %define CTX_BP          0x14
@@ -12,10 +13,6 @@
 %define CTX_TSS_SP0     0x24
 %define CTX_USER_CS     0x60
 %define CTX_USER_DS     0x68
-%define CTX_DS          0x70
-%define CTX_ES          0x74
-%define CTX_FS          0x78
-%define CTX_GS          0x7C
 %define CTX_GDT_TEMP    0xF0
 %define CTX_FPU_BASE    0x100
     global asm_sch_switch_context
@@ -42,7 +39,7 @@ asm_sch_switch_context:
 asm_sch_make_new_thread:
     mov ecx, [esp + 0x04]
     mov edx, [esp + 0x08]
-    sub edx, byte 0x10
+    sub edx, byte 0x0C
     mov eax, _new_thread
     mov [edx], eax
     mov eax, [esp + 0x0C]

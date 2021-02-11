@@ -17,7 +17,7 @@ pub struct Pit {
 }
 
 impl Pit {
-    const TIMER_DIV: u64 = 10;
+    const TIMER_DIV: u64 = 1;
 
     const fn new() -> Self {
         Self {
@@ -36,21 +36,21 @@ impl Pit {
                 shared.tmr_cnt0 = 0x0040;
                 shared.beep_cnt0 = 0x0042;
                 shared.tmr_ctl = 0x0043;
-                shared.timer_div = 11932;
+                shared.timer_div = 1193;
                 Irq(0).register(Self::timer_irq_handler_pc).unwrap();
             }
             Platform::Nec98 => {
                 shared.tmr_cnt0 = 0x0071;
-                shared.beep_cnt0 = 0x0073;
+                shared.beep_cnt0 = 0x3fdb;
                 shared.tmr_ctl = 0x0077;
-                shared.timer_div = 24576;
+                shared.timer_div = 2457;
                 Irq(0).register(Self::timer_irq_handler_pc).unwrap();
             }
             Platform::FmTowns => {
                 shared.tmr_cnt0 = 0x0040;
                 shared.beep_cnt0 = 0x0044;
                 shared.tmr_ctl = 0x0046;
-                shared.timer_div = 3072;
+                shared.timer_div = 307;
                 Irq(0).register(Self::timer_irq_handler_fmt).unwrap();
                 asm!("
                     mov al, 0x81

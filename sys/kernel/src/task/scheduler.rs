@@ -1,8 +1,9 @@
 // Scheduler
 
+use crate::arch::cpu::Cpu;
 use crate::sync::atomicflags::AtomicBitflags;
+use crate::sync::fifo::*;
 use crate::window::winsys::*;
-use crate::{arch::cpu::Cpu, system::System};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::sync::Arc;
@@ -14,21 +15,18 @@ use core::num::NonZeroUsize;
 use core::sync::atomic::*;
 use core::time::Duration;
 
-use crate::graphics::bitmap::*;
-use crate::graphics::color::*;
-use crate::graphics::coords::*;
-
 static mut SCHEDULER: Option<Box<Scheduler>> = None;
 
 static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub struct Scheduler {
-    urgent: ThreadQueue,
-    ready: ThreadQueue,
+    queue_realtime: ThreadQueue,
+    queue_higher: ThreadQueue,
+    queue_normal: ThreadQueue,
+    queue_lower: ThreadQueue,
     pool: ThreadPool,
 
     timer_events: Vec<TimerEvent>,
-    next_timer: Timer,
 
     idle: ThreadHandle,
     current: ThreadHandle,
@@ -38,11 +36,13 @@ pub struct Scheduler {
 impl Scheduler {
     /// Start scheduler and sleep forever
     pub(crate) unsafe fn start(f: fn(usize) -> (), args: usize) -> ! {
-        const SIZE_OF_URGENT_QUEUE: usize = 100;
-        const SIZE_OF_MAIN_QUEUE: usize = 250;
+        const SIZE_OF_SUB_QUEUE: usize = 64;
+        const SIZE_OF_MAIN_QUEUE: usize = 256;
 
-        let urgent = ThreadQueue::with_capacity(SIZE_OF_URGENT_QUEUE);
-        let ready = ThreadQueue::with_capacity(SIZE_OF_MAIN_QUEUE);
+        let queue_realtime = ThreadQueue::with_capacity(SIZE_OF_SUB_QUEUE);
+        let queue_higher = ThreadQueue::with_capacity(SIZE_OF_SUB_QUEUE);
+        let queue_normal = ThreadQueue::with_capacity(SIZE_OF_MAIN_QUEUE);
+        let queue_lower = ThreadQueue::with_capacity(SIZE_OF_SUB_QUEUE);
 
         let mut pool = ThreadPool::default();
         let idle = {
@@ -54,10 +54,11 @@ impl Scheduler {
 
         SCHEDULER = Some(Box::new(Self {
             pool,
-            ready,
-            urgent,
+            queue_realtime,
+            queue_higher,
+            queue_normal,
+            queue_lower,
             timer_events: Vec::with_capacity(100),
-            next_timer: Timer::JUST,
             idle,
             current: idle,
             retired: None,
@@ -106,8 +107,8 @@ impl Scheduler {
     pub(crate) unsafe fn reschedule() {
         if Self::is_enabled() {
             Cpu::without_interrupts(|| {
-                Self::process_timer_event();
                 let shared = Self::shared();
+                Self::process_timer_event();
                 if shared.current.as_ref().priority != Priority::Realtime {
                     if shared.current.update(|current| current.quantum.consume()) {
                         Self::switch_context();
@@ -138,16 +139,29 @@ impl Scheduler {
         // if shared.is_frozen.load(Ordering::SeqCst) {
         //     return None;
         // }
-        // if !sch.next_timer.until() {
-        //     sch.sem_timer.signal();
-        // }
-        if let Some(next) = shared.urgent.dequeue() {
+        if let Some(next) = shared.queue_realtime.dequeue() {
             return Some(next);
         }
-        if let Some(next) = shared.ready.dequeue() {
+        if let Some(next) = shared.queue_higher.dequeue() {
+            return Some(next);
+        }
+        if let Some(next) = shared.queue_normal.dequeue() {
+            return Some(next);
+        }
+        if let Some(next) = shared.queue_lower.dequeue() {
             return Some(next);
         }
         None
+    }
+
+    fn enqueue(&mut self, handle: ThreadHandle) {
+        match handle.as_ref().priority {
+            Priority::Realtime => self.queue_realtime.enqueue(handle).unwrap(),
+            Priority::High => self.queue_higher.enqueue(handle).unwrap(),
+            Priority::Normal => self.queue_normal.enqueue(handle).unwrap(),
+            Priority::Low => self.queue_lower.enqueue(handle).unwrap(),
+            _ => unreachable!(),
+        }
     }
 
     fn retire(handle: ThreadHandle) {
@@ -159,11 +173,11 @@ impl Scheduler {
             ThreadPool::drop_thread(handle);
         } else if thread.attribute.test_and_clear(ThreadAttributes::AWAKE) {
             thread.attribute.remove(ThreadAttributes::ASLEEP);
-            shared.ready.enqueue(handle).unwrap();
+            shared.enqueue(handle);
         } else if thread.attribute.contains(ThreadAttributes::ASLEEP) {
             thread.attribute.remove(ThreadAttributes::QUEUED);
         } else {
-            shared.ready.enqueue(handle).unwrap();
+            shared.enqueue(handle);
         }
     }
 
@@ -179,7 +193,7 @@ impl Scheduler {
             if thread.attribute.test_and_clear(ThreadAttributes::AWAKE) {
                 thread.attribute.remove(ThreadAttributes::ASLEEP);
             }
-            shared.ready.enqueue(handle).unwrap();
+            shared.enqueue(thread.handle);
         }
     }
 
@@ -191,28 +205,24 @@ impl Scheduler {
                 shared
                     .timer_events
                     .sort_by(|a, b| a.timer.deadline.cmp(&b.timer.deadline));
+
+                // Self::process_timer_event();
             });
-            Self::process_timer_event();
             Ok(())
         }
     }
 
     unsafe fn process_timer_event() {
-        Cpu::without_interrupts(|| {
-            let shared = Self::shared();
+        Cpu::assert_without_interrupt();
 
-            while let Some(event) = shared.timer_events.first() {
-                if event.until() {
-                    break;
-                } else {
-                    shared.timer_events.remove(0).fire();
-                }
+        let shared = Self::shared();
+        while let Some(event) = shared.timer_events.first() {
+            if event.until() {
+                break;
+            } else {
+                shared.timer_events.remove(0).fire();
             }
-
-            if let Some(event) = shared.timer_events.first() {
-                shared.next_timer = event.timer;
-            }
-        })
+        }
     }
 
     /// Returns whether or not the thread scheduler is working.
@@ -260,7 +270,7 @@ impl Scheduler {
         options: SpawnOption,
     ) -> Option<ThreadHandle> {
         let pid = if options.raise_pid {
-            ProcessId::raise()
+            ProcessId::next()
         } else {
             Self::current_pid().unwrap_or(ProcessId(0))
         };
@@ -509,8 +519,7 @@ impl TimerEvent {
         match self.timer_type {
             TimerType::OneShot(thread) => thread.wake(),
             TimerType::Window(window, timer_id) => {
-                todo!()
-                // window.post(WindowMessage::Timer(timer_id)).unwrap()
+                window.post(WindowMessage::Timer(timer_id)).unwrap()
             }
         }
     }
@@ -521,9 +530,9 @@ pub struct ProcessId(usize);
 
 impl ProcessId {
     #[inline]
-    fn raise() -> Self {
-        static mut NEXT_ID: usize = 1;
-        Self(unsafe { Cpu::interlocked_increment(&mut NEXT_ID) })
+    fn next() -> Self {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+        Self(Cpu::interlocked_increment(&NEXT_ID))
     }
 }
 
@@ -532,15 +541,15 @@ pub struct ThreadHandle(NonZeroUsize);
 
 impl ThreadHandle {
     #[inline]
-    fn new(val: usize) -> Option<Self> {
+    pub fn new(val: usize) -> Option<Self> {
         NonZeroUsize::new(val).map(|x| Self(x))
     }
 
     /// Acquire the next thread ID
     #[inline]
     fn next() -> Self {
-        static mut NEXT_ID: usize = 1;
-        Self::new(unsafe { Cpu::interlocked_increment(&mut NEXT_ID) }).unwrap()
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+        Self::new(Cpu::interlocked_increment(&NEXT_ID)).unwrap()
     }
 
     #[inline]
@@ -576,7 +585,7 @@ impl ThreadHandle {
     }
 
     #[inline]
-    fn wake(&self) {
+    pub fn wake(&self) {
         self.as_ref().attribute.insert(ThreadAttributes::AWAKE);
         Scheduler::add(*self);
     }
@@ -642,9 +651,9 @@ impl Quantum {
 impl From<Priority> for Quantum {
     fn from(priority: Priority) -> Self {
         match priority {
-            Priority::High => Quantum::new(25),
-            Priority::Normal => Quantum::new(10),
-            Priority::Low => Quantum::new(5),
+            Priority::High => Quantum::new(10),
+            Priority::Normal => Quantum::new(5),
+            Priority::Low => Quantum::new(1),
             _ => Quantum::new(1),
         }
     }
@@ -807,35 +816,18 @@ impl RawThread {
     }
 }
 
-struct ThreadQueue {
-    vec: Vec<NonZeroUsize>,
-}
+struct ThreadQueue(Fifo<usize>);
 
 impl ThreadQueue {
     fn with_capacity(capacity: usize) -> Self {
-        Self {
-            vec: Vec::with_capacity(capacity),
-        }
+        Self(Fifo::new(capacity))
     }
 
     fn dequeue(&mut self) -> Option<ThreadHandle> {
-        unsafe {
-            Cpu::without_interrupts(|| {
-                if self.vec.len() > 0 {
-                    Some(ThreadHandle(self.vec.remove(0)))
-                } else {
-                    None
-                }
-            })
-        }
+        self.0.dequeue().and_then(|v| ThreadHandle::new(v))
     }
 
     fn enqueue(&mut self, data: ThreadHandle) -> Result<(), ()> {
-        unsafe {
-            Cpu::without_interrupts(|| {
-                self.vec.push(data.0);
-                Ok(())
-            })
-        }
+        self.0.enqueue(data.as_usize()).map_err(|_| ())
     }
 }

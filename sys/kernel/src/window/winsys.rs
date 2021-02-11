@@ -1,11 +1,15 @@
 // A Window System
 
+use crate::arch::cpu::Cpu;
+use crate::fonts::*;
 use crate::graphics::bitmap::*;
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
 use crate::sync::atomicflags::AtomicBitflags;
+use crate::sync::fifo::*;
+use crate::sync::semaphore::*;
+use crate::task::scheduler::*;
 use crate::*;
-use crate::{arch::cpu::Cpu, fonts::*};
 use crate::{io::hid::*, system::System};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
@@ -13,8 +17,10 @@ use alloc::vec::Vec;
 use bitflags::*;
 use core::cell::UnsafeCell;
 use core::cmp;
-// use core::fmt::Write;
 use core::num::NonZeroUsize;
+use core::sync::atomic::*;
+use core::time::Duration;
+// use core::fmt::Write;
 
 static mut WM: Option<Box<WindowManager>> = None;
 
@@ -54,27 +60,48 @@ const MOUSE_POINTER_SOURCE: [u8; MOUSE_POINTER_WIDTH * MOUSE_POINTER_HEIGHT] = [
 ];
 
 pub struct WindowManager {
-    last_key: Option<char>,
-    pointer_x: isize,
-    pointer_y: isize,
-
     main_screen: &'static mut Bitmap8<'static>,
     screen_insets: EdgeInsets,
 
     window_pool: BTreeMap<WindowHandle, Box<RawWindow>>,
     window_orders: Vec<WindowHandle>,
+    sem_winthread: Semaphore,
+    attributes: AtomicBitflags<WindowManagerAttributes>,
+
+    pointer_x: AtomicIsize,
+    pointer_y: AtomicIsize,
+    buttons: AtomicUsize,
+    buttons_down: AtomicUsize,
+    buttons_up: AtomicUsize,
+
+    root: WindowHandle,
+    pointer: WindowHandle,
 
     active: Option<WindowHandle>,
     captured: Option<WindowHandle>,
-    root: WindowHandle,
-    pointer: WindowHandle,
+    captured_origin: Point,
+    entered: Option<WindowHandle>,
+}
+
+bitflags! {
+    struct WindowManagerAttributes: usize {
+        const MOUSE_MOVE    = 0b0000_0001;
+        const NEEDS_REDRAW  = 0b0000_0010;
+        const MOVING        = 0b0000_0100;
+    }
+}
+
+impl Into<usize> for WindowManagerAttributes {
+    fn into(self) -> usize {
+        self.bits()
+    }
 }
 
 impl WindowManager {
     pub(crate) unsafe fn init() {
         let main_screen = System::main_screen();
-        let pointer_x = main_screen.width() as isize / 2;
-        let pointer_y = main_screen.height() as isize / 2;
+        let pointer_x = AtomicIsize::new(main_screen.width() as isize / 2);
+        let pointer_y = AtomicIsize::new(main_screen.height() as isize / 2);
 
         let mut window_pool = BTreeMap::new();
         let mut window_orders = Vec::with_capacity(MAX_WINDOWS);
@@ -119,18 +146,193 @@ impl WindowManager {
         window_orders.push(pointer);
 
         WM = Some(Box::new(Self {
-            last_key: None,
-            pointer_x,
-            pointer_y,
             screen_insets: EdgeInsets::default(),
             main_screen,
             window_pool,
             window_orders,
+            sem_winthread: Semaphore::new(0),
+            attributes: AtomicBitflags::EMPTY,
+            pointer_x,
+            pointer_y,
+            buttons: AtomicUsize::new(0),
+            buttons_down: AtomicUsize::new(0),
+            buttons_up: AtomicUsize::new(0),
             active: None,
             captured: None,
+            captured_origin: Point::default(),
+            entered: None,
             root,
             pointer,
         }));
+
+        SpawnOption::with_priority(Priority::High).spawn(Self::window_thread, 0, "Window Manager");
+    }
+
+    fn window_thread(_: usize) {
+        let shared = WindowManager::shared();
+        loop {
+            shared.sem_winthread.wait();
+
+            if shared
+                .attributes
+                .test_and_clear(WindowManagerAttributes::NEEDS_REDRAW)
+            {
+                let desktop = shared.root;
+                desktop.as_ref().draw_to_screen(desktop.frame());
+            }
+            if shared
+                .attributes
+                .test_and_clear(WindowManagerAttributes::MOUSE_MOVE)
+            {
+                let position = shared.pointer();
+                let current_buttons =
+                    MouseButton::from_bits_truncate(shared.buttons.load(Ordering::Acquire) as u8);
+                let buttons_down = MouseButton::from_bits_truncate(
+                    shared.buttons_down.swap(0, Ordering::SeqCst) as u8,
+                );
+                let buttons_up = MouseButton::from_bits_truncate(
+                    shared.buttons_up.swap(0, Ordering::SeqCst) as u8,
+                );
+
+                if let Some(captured) = shared.captured {
+                    if current_buttons.contains(MouseButton::LEFT) {
+                        if shared.attributes.contains(WindowManagerAttributes::MOVING) {
+                            let top = if captured.as_ref().level < WindowLevel::FLOATING {
+                                shared.screen_insets.top
+                            } else {
+                                0
+                            };
+                            let x = position.x - shared.captured_origin.x;
+                            let y = cmp::max(position.y - shared.captured_origin.y, top);
+                            captured.move_to(Point::new(x, y));
+                        } else {
+                            let _ = Self::make_mouse_events(
+                                captured,
+                                position,
+                                current_buttons,
+                                buttons_down,
+                                buttons_up,
+                            );
+                        }
+                    } else {
+                        let _ = Self::make_mouse_events(
+                            captured,
+                            position,
+                            current_buttons,
+                            buttons_down,
+                            buttons_up,
+                        );
+                        shared.captured = None;
+                        shared.attributes.remove(WindowManagerAttributes::MOVING);
+
+                        let target = Self::window_at_point(position);
+                        if let Some(entered) = shared.entered {
+                            if entered != target {
+                                let _ = Self::make_mouse_events(
+                                    captured,
+                                    position,
+                                    current_buttons,
+                                    MouseButton::empty(),
+                                    MouseButton::empty(),
+                                );
+                                let _ = entered.post(WindowMessage::MouseLeave);
+                                shared.entered = Some(target);
+                                let _ = target.post(WindowMessage::MouseEnter);
+                            }
+                        }
+                    }
+                } else {
+                    let target = Self::window_at_point(position);
+
+                    if buttons_down.contains(MouseButton::LEFT) {
+                        if let Some(active) = shared.active {
+                            if active != target {
+                                WindowManager::set_active(Some(target));
+                            }
+                        } else {
+                            WindowManager::set_active(Some(target));
+                        }
+                        let target_window = target.as_ref();
+                        if target_window.style.contains(WindowStyle::PINCHABLE) {
+                            shared.attributes.insert(WindowManagerAttributes::MOVING);
+                        } else {
+                            let mut title_frame = target_window.title_frame();
+                            title_frame.origin += target_window.frame.origin;
+                            if position.is_within(title_frame) {
+                                shared.attributes.insert(WindowManagerAttributes::MOVING);
+                            } else {
+                                let _ = Self::make_mouse_events(
+                                    target,
+                                    position,
+                                    current_buttons,
+                                    buttons_down,
+                                    buttons_up,
+                                );
+                            }
+                        }
+                        shared.captured = Some(target);
+                        shared.captured_origin = position - target_window.frame.origin;
+                    } else {
+                        let _ = Self::make_mouse_events(
+                            target,
+                            position,
+                            current_buttons,
+                            buttons_down,
+                            buttons_up,
+                        );
+                    }
+
+                    if let Some(entered) = shared.entered {
+                        if entered != target {
+                            let _ = entered.post(WindowMessage::MouseLeave);
+                            shared.entered = Some(target);
+                            let _ = target.post(WindowMessage::MouseEnter);
+                        }
+                    }
+                }
+
+                shared.pointer.move_to(position);
+            }
+        }
+    }
+
+    fn make_mouse_events(
+        target: WindowHandle,
+        position: Point,
+        buttons: MouseButton,
+        down: MouseButton,
+        up: MouseButton,
+    ) -> Result<(), WindowPostError> {
+        let window = target.as_ref();
+        let origin = window.frame.insets_by(window.content_insets).origin;
+        let point = Point::new(position.x - origin.x, position.y - origin.y);
+
+        if down.is_empty() && up.is_empty() {
+            return target.post(WindowMessage::MouseMove(MouseEvent::new(
+                point,
+                buttons,
+                MouseButton::empty(),
+            )));
+        }
+        let mut errors = None;
+        if !down.is_empty() {
+            match target.post(WindowMessage::MouseDown(MouseEvent::new(
+                point, buttons, down,
+            ))) {
+                Ok(_) => (),
+                Err(err) => errors = Some(err),
+            };
+        }
+        if !up.is_empty() {
+            match target.post(WindowMessage::MouseUp(MouseEvent::new(point, buttons, up))) {
+                Ok(_) => (),
+                Err(err) => errors = Some(err),
+            };
+        }
+        match errors {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 
     #[inline]
@@ -255,7 +457,7 @@ impl WindowManager {
         &mut shared.main_screen
     }
 
-    pub fn post_key_event(event: KeyEvent) {
+    pub(crate) fn post_key_event(event: KeyEvent) {
         let shared = match Self::shared_opt() {
             Some(v) => v,
             None => return,
@@ -267,10 +469,8 @@ impl WindowManager {
             unsafe {
                 System::reset();
             }
-        } else {
-            if let Some(event) = event.key_data() {
-                shared.last_key = Some(event.into_char());
-            }
+        } else if let Some(window) = shared.active {
+            let _ = window.post(WindowMessage::Key(event));
         }
     }
 
@@ -280,7 +480,7 @@ impl WindowManager {
             None => return,
         };
 
-        let screen = System::main_screen();
+        let screen_bounds = Self::main_screen_bounds();
 
         let mut pointer = Point::new(0, 0);
         core::mem::swap(&mut mouse_state.x, &mut pointer.x);
@@ -290,31 +490,37 @@ impl WindowManager {
         let button_up: MouseButton = button_changes & mouse_state.prev_buttons;
         let button_changed = !button_changes.is_empty();
 
-        let mut x = shared.pointer_x + pointer.x;
-        let mut y = shared.pointer_y + pointer.y;
-        if x < 0 {
-            x = 0;
-        } else if x >= screen.width() as isize {
-            x = screen.width() as isize - 1;
+        if button_changed {
+            shared.buttons.store(
+                mouse_state.current_buttons.bits() as usize,
+                Ordering::SeqCst,
+            );
+            shared
+                .buttons_down
+                .fetch_or(button_down.bits() as usize, Ordering::SeqCst);
+            shared
+                .buttons_up
+                .fetch_or(button_up.bits() as usize, Ordering::SeqCst);
         }
-        if y < 0 {
-            y = 0;
-        } else if y >= screen.height() as isize {
-            y = screen.height() as isize - 1;
+
+        let moved = Cpu::interlocked_add_within(
+            &shared.pointer_x,
+            pointer.x,
+            screen_bounds.x(),
+            screen_bounds.width() - 1,
+        ) | Cpu::interlocked_add_within(
+            &shared.pointer_y,
+            pointer.y,
+            screen_bounds.y(),
+            screen_bounds.height() - 1,
+        );
+
+        if button_changed | moved {
+            shared
+                .attributes
+                .insert(WindowManagerAttributes::MOUSE_MOVE);
+            shared.sem_winthread.signal();
         }
-        shared.pointer_x = x;
-        shared.pointer_y = y;
-
-        shared.pointer.update(|pointer| {
-            let mut frame = pointer.frame;
-            frame.origin = Point::new(x, y);
-            pointer.set_frame(frame);
-        });
-    }
-
-    pub fn get_key() -> Option<char> {
-        let shared = Self::shared();
-        core::mem::replace(&mut shared.last_key, None)
     }
 
     #[inline]
@@ -339,6 +545,29 @@ impl WindowManager {
             root.bitmap = bitmap;
             root.set_needs_display();
         });
+    }
+
+    fn window_at_point(point: Point) -> WindowHandle {
+        unsafe {
+            Cpu::without_interrupts(|| {
+                let shared = Self::shared();
+                for handle in shared.window_orders.iter().rev().skip(1) {
+                    let window = handle.as_ref();
+                    if point.is_within(window.frame) {
+                        return *handle;
+                    }
+                }
+                shared.root
+            })
+        }
+    }
+
+    #[inline]
+    fn pointer(&self) -> Point {
+        Point::new(
+            self.pointer_x.load(Ordering::Relaxed),
+            self.pointer_y.load(Ordering::Relaxed),
+        )
     }
 
     #[inline]
@@ -420,8 +649,10 @@ struct RawWindow {
 
     /// Window Title
     title: [u8; WINDOW_TITLE_LENGTH],
+
     // Messages and Events
-    // queue: Option<ArrayQueue<WindowMessage>>,
+    sem: Semaphore,
+    queue: Option<InterlockedFifo<WindowMessage>>,
 }
 
 bitflags! {
@@ -429,10 +660,9 @@ bitflags! {
         const BORDER        = 0b0000_0001;
         const TITLE         = 0b0000_0010;
         const NAKED         = 0b0000_0100;
-        const OPAQUE        = 0b0000_1000;
+        const TRANSPARENT        = 0b0000_1000;
         const PINCHABLE     = 0b0001_0000;
         const FLOATING      = 0b0010_0000;
-        const TRANSPARENT   = 0b0100_0000;
 
         const DEFAULT = Self::BORDER.bits | Self::TITLE.bits;
     }
@@ -501,18 +731,28 @@ impl RawWindow {
                 WindowManager::add_hierarchy(self.handle);
             })
         }
-        // WindowManager::invalidate_screen(window.frame);
-        self.set_needs_display();
+        WindowManager::invalidate_screen(self.frame);
+        // self.set_needs_display();
     }
 
     fn hide(&self) {
         let shared = WindowManager::shared();
         let frame = self.frame;
-        // let new_active = if shared.active.contains(self.handle) {
-        //     self.prev()
-        // } else {
-        //     None
-        // };
+        let handle = self.handle;
+        let new_active = if shared.active.contains(&handle) {
+            unsafe {
+                Cpu::without_interrupts(|| {
+                    shared
+                        .window_orders
+                        .iter()
+                        .position(|v| *v == handle)
+                        .and_then(|v| shared.window_orders.get(v - 1))
+                        .map(|v| *v)
+                })
+            }
+        } else {
+            None
+        };
         if shared.captured.contains(&self.handle) {
             shared.captured = None;
         }
@@ -522,20 +762,31 @@ impl RawWindow {
             });
         }
         WindowManager::invalidate_screen(frame);
-        // if new_active.is_some() {
-        //     WindowManager::set_active(new_active);
-        // }
+        WindowManager::set_active(new_active);
     }
 
     fn set_frame(&mut self, new_frame: Rect) {
         let old_frame = self.frame;
         if old_frame != new_frame {
-            // let sized = old_frame.size() != new_frame.size();
             self.frame = new_frame;
             if self.attributes.contains(WindowAttributes::VISIBLE) {
-                WindowManager::invalidate_screen(old_frame);
                 self.draw_frame();
-                self.set_needs_display();
+
+                let coords1 = match Coordinates::from_rect(old_frame) {
+                    Ok(v) => v,
+                    Err(_) => return,
+                };
+                let coords2 = match Coordinates::from_rect(new_frame) {
+                    Ok(v) => v,
+                    Err(_) => return,
+                };
+                let new_coords = Coordinates::new(
+                    isize::min(coords1.left, coords2.left),
+                    isize::min(coords1.top, coords2.top),
+                    isize::max(coords1.right, coords2.right),
+                    isize::max(coords1.bottom, coords2.bottom),
+                );
+                WindowManager::invalidate_screen(new_coords.into());
             }
         }
     }
@@ -718,9 +969,17 @@ impl RawWindow {
     }
 
     #[inline]
-    fn set_needs_display(&mut self) {
-        // TODO:
-        self.invalidate_rect(self.actual_bounds());
+    pub fn set_needs_display(&self) {
+        match self.handle.post(WindowMessage::Draw) {
+            Ok(()) => (),
+            Err(_) => {
+                let shared = WindowManager::shared();
+                shared
+                    .attributes
+                    .insert(WindowManagerAttributes::NEEDS_REDRAW);
+                shared.sem_winthread.signal();
+            }
+        }
     }
 
     #[inline]
@@ -751,7 +1010,7 @@ impl RawWindow {
     fn refresh_title(&mut self) {
         self.draw_frame();
         if self.style.contains(WindowStyle::TITLE) {
-            // self.invalidate_rect(self.title_frame());
+            self.invalidate_rect(self.title_frame());
         }
     }
 
@@ -785,7 +1044,7 @@ impl WindowBuilder {
             bg_color: WINDOW_DEFAULT_BGCOLOR,
             key_color: WINDOW_DEFAULT_KEY_COLOR,
             title: [0; WINDOW_TITLE_LENGTH],
-            queue_size: 100,
+            queue_size: 128,
             no_bitmap: false,
         };
         window.title(title).style(WindowStyle::DEFAULT)
@@ -831,10 +1090,10 @@ impl WindowBuilder {
             AtomicBitflags::empty()
         };
 
-        // let queue = match self.queue_size {
-        //     0 => None,
-        //     _ => Some(ArrayQueue::new(self.queue_size)),
-        // };
+        let queue = match self.queue_size {
+            0 => None,
+            _ => Some(InterlockedFifo::new(self.queue_size)),
+        };
 
         let handle = WindowHandle::next();
         let mut window = Box::new(RawWindow {
@@ -848,6 +1107,8 @@ impl WindowBuilder {
             bitmap: None,
             title: self.title,
             attributes,
+            queue,
+            sem: Semaphore::new(0),
         });
 
         if !self.no_bitmap {
@@ -956,8 +1217,8 @@ impl WindowHandle {
     /// Acquire the next window handle
     #[inline]
     fn next() -> Self {
-        static mut NEXT_ID: usize = 1;
-        Self::new(unsafe { Cpu::interlocked_increment(&mut NEXT_ID) }).unwrap()
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+        Self::new(Cpu::interlocked_increment(&NEXT_ID)).unwrap()
     }
 
     #[inline]
@@ -1091,7 +1352,7 @@ impl WindowHandle {
 
     #[inline]
     pub fn set_needs_display(&self) {
-        self.update(|window| window.set_needs_display());
+        self.as_ref().set_needs_display();
     }
 
     #[inline]
@@ -1101,9 +1362,13 @@ impl WindowHandle {
     {
         self.update(|window| {
             let rect = window.actual_bounds().insets_by(window.content_insets);
-            self.draw_in_rect(rect.size().into(), f).map(|_| {
-                window.invalidate_rect(rect);
-            })
+            match self.draw_in_rect(rect.size().into(), f) {
+                Ok(_) | Err(WindowDrawingError::NoBitmap) => {
+                    window.invalidate_rect(rect);
+                    Ok(())
+                }
+                Err(err) => Err(err),
+            }
         })
     }
 
@@ -1117,6 +1382,102 @@ impl WindowHandle {
     /// Draws the contents of the window on the screen as a bitmap.
     pub fn draw_into(&self, target_bitmap: &mut Bitmap8, rect: Rect) {
         self.as_ref().draw_into(target_bitmap, rect);
+    }
+
+    /// Post a window message.
+    pub fn post(&self, message: WindowMessage) -> Result<(), WindowPostError> {
+        match self.update_opt(|window| {
+            if let Some(queue) = window.queue.as_mut() {
+                match message {
+                    WindowMessage::Draw => {
+                        window.attributes.insert(WindowAttributes::NEEDS_REDRAW);
+                        // window.waker.wake();
+                        window.sem.signal();
+                        Ok(())
+                    }
+                    _ => queue
+                        .enqueue(message)
+                        .map_err(|_| WindowPostError::Full)
+                        .map(|_| {
+                            // window.waker.wake();
+                            window.sem.signal();
+                        }),
+                }
+            } else {
+                Err(WindowPostError::NotFound)
+            }
+        }) {
+            Some(v) => v,
+            None => Err(WindowPostError::NotFound),
+        }
+    }
+
+    /// Read a window message from the message queue.
+    pub fn read_message(&self) -> Option<WindowMessage> {
+        self.update_opt(|window| {
+            if let Some(queue) = window.queue.as_mut() {
+                match queue.dequeue() {
+                    Some(v) => Some(v),
+                    _ => {
+                        if window
+                            .attributes
+                            .test_and_clear(WindowAttributes::NEEDS_REDRAW)
+                        {
+                            Some(WindowMessage::Draw)
+                        } else {
+                            None
+                        }
+                    }
+                }
+            } else {
+                None
+            }
+        })
+        .and_then(|v| v)
+    }
+
+    /// Wait for window messages to be read.
+    pub fn wait_message(&self) -> Option<WindowMessage> {
+        loop {
+            let window = match self.get() {
+                Some(window) => window,
+                None => return None,
+            };
+            match self.read_message() {
+                Some(message) => return Some(message),
+                None => window.sem.wait(),
+            }
+        }
+    }
+
+    /// Process window messages that are not handled.
+    pub fn handle_default_message(&self, message: WindowMessage) {
+        match message {
+            WindowMessage::Draw => {
+                self.draw(|_bitmap| {}).unwrap();
+            }
+            WindowMessage::Key(key) => {
+                if let Some(c) = key.key_data().map(|v| v.into_char()) {
+                    let _ = self.post(WindowMessage::Char(c));
+                }
+            }
+            _ => (),
+        }
+    }
+
+    /// Create a timer associated with a window
+    pub fn create_timer(&self, timer_id: usize, duration: Duration) {
+        let mut event = TimerEvent::window(*self, timer_id, Timer::new(duration));
+        loop {
+            if event.until() {
+                match Scheduler::schedule_timer(event) {
+                    Ok(()) => break,
+                    Err(e) => event = e,
+                }
+            } else {
+                break event.fire();
+            }
+        }
     }
 }
 
@@ -1132,4 +1493,35 @@ pub enum WindowDrawingError {
 pub enum WindowPostError {
     NotFound,
     Full,
+}
+
+#[non_exhaustive]
+#[derive(Debug, Copy, Clone)]
+pub enum WindowMessage {
+    /// Dummy message
+    Nop,
+    /// Requested to close the window
+    Close,
+    /// Needs to be redrawn
+    Draw,
+    /// Raw keyboard event
+    Key(KeyEvent),
+    /// Unicode converted keyboard event
+    Char(char),
+    /// mouse events
+    MouseMove(MouseEvent),
+    MouseDown(MouseEvent),
+    MouseUp(MouseEvent),
+    MouseEnter,
+    MouseLeave,
+    /// Timer event
+    Timer(usize),
+    /// User Defined
+    User(usize),
+}
+
+impl Default for WindowMessage {
+    fn default() -> Self {
+        Self::Nop
+    }
 }

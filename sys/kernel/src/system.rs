@@ -16,29 +16,40 @@ pub struct Version {
 }
 
 impl Version {
-    const SYSTEM_NAME: &'static str = "TOE";
+    const SYSTEM_NAME: &'static str = "codename TOE";
+    const SYSTEM_SHORT_NAME: &'static str = "TOE";
     const RELEASE: &'static str = "";
     const VERSION: Version = Version::new(0, 0, 1, Self::RELEASE);
 
+    #[inline]
     const fn new(maj: u8, min: u8, patch: u16, rel: &'static str) -> Self {
         let versions = ((maj as u32) << 24) | ((min as u32) << 16) | (patch as u32);
         Version { versions, rel }
     }
 
+    #[inline]
     pub const fn as_u32(&self) -> u32 {
         self.versions
     }
 
+    #[inline]
     pub const fn maj(&self) -> usize {
         ((self.versions >> 24) & 0xFF) as usize
     }
 
+    #[inline]
     pub const fn min(&self) -> usize {
         ((self.versions >> 16) & 0xFF) as usize
     }
 
+    #[inline]
     pub const fn patch(&self) -> usize {
         (self.versions & 0xFFFF) as usize
+    }
+
+    #[inline]
+    pub const fn release(&self) -> &str {
+        self.rel
     }
 }
 
@@ -121,10 +132,22 @@ impl System {
         &Version::SYSTEM_NAME
     }
 
+    /// Returns abbreviated name of current system.
+    #[inline]
+    pub const fn short_name() -> &'static str {
+        &Version::SYSTEM_SHORT_NAME
+    }
+
     /// Returns the version of current system.
     #[inline]
     pub const fn version() -> &'static Version {
         &Version::VERSION
+    }
+
+    /// Returns the current system time.
+    #[inline]
+    pub fn system_time() -> SystemTime {
+        arch::Arch::system_time()
     }
 
     #[inline]

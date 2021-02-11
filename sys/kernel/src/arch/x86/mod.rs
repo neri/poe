@@ -6,6 +6,7 @@ pub mod pc98;
 pub mod pic;
 pub mod pit;
 pub mod ps2;
+pub mod rtc;
 
 use crate::system::*;
 use toeboot::Platform;
@@ -19,6 +20,7 @@ impl Arch {
         let platform = System::platform();
         pic::Pic::init(platform);
         pit::Pit::init(platform);
+        rtc::Rtc::init(platform);
     }
 
     pub unsafe fn late_init() {
@@ -35,5 +37,10 @@ impl Arch {
             }
             _ => unreachable!(),
         }
+    }
+
+    #[inline]
+    pub fn system_time() -> SystemTime {
+        rtc::Rtc::system_time()
     }
 }

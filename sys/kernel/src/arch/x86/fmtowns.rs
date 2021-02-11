@@ -4,6 +4,9 @@ use super::pic::*;
 use crate::io::hid::*;
 use bitflags::*;
 
+// use crate::*;
+// use core::fmt::Write;
+
 static mut TOWNS: FmTowns = FmTowns::new();
 
 pub struct FmTowns {
@@ -113,8 +116,8 @@ impl FmTowns {
             } else {
                 MouseButton::empty()
             };
-            let x = 0 - ((p0 << 4) | (p1 & 0x0F)) as i8;
-            let y = 0 - ((p2 << 4) | (p3 & 0x0F)) as i8;
+            let x = 0 - (((p0 & 0x0F) << 4) | (p1 & 0x0F)) as i8;
+            let y = 0 - (((p2 & 0x0F) << 4) | (p3 & 0x0F)) as i8;
             let report = MouseReport { buttons, x, y };
             self.mouse_state.process_mouse_report(report);
         }

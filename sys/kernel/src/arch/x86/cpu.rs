@@ -1,11 +1,11 @@
 // x86
 
 use crate::*;
-use _core::sync::atomic::AtomicUsize;
 use bitflags::*;
 use core::ffi::c_void;
 use core::fmt::Write;
 use core::intrinsics::*;
+use core::sync::atomic::*;
 use toeboot::Platform;
 
 extern "fastcall" {
@@ -38,19 +38,86 @@ impl Cpu {
         asm_sch_make_new_thread(context, new_sp, start, arg);
     }
 
+    /// SAFETY: Does not work in a multiprocessor environment
     #[inline]
-    pub fn interlocked_increment(p: &mut usize) -> usize {
+    pub fn interlocked_increment(p: &AtomicUsize) -> usize {
         Self::interlocked_add(p, 1)
     }
 
+    /// SAFETY: Does not work in a multiprocessor environment
     #[inline]
-    pub fn interlocked_add(p: &mut usize, val: usize) -> usize {
+    pub fn interlocked_add(p: &AtomicUsize, val: usize) -> usize {
         unsafe {
             Self::without_interrupts(|| {
-                let p = p as *mut usize;
+                let p = p as *const _ as *mut usize;
                 let r = val + atomic_load(p);
                 atomic_xchg(p, r)
             })
+        }
+    }
+
+    /// SAFETY: Does not work in a multiprocessor environment
+    #[inline]
+    pub fn interlocked_add_within(p: &AtomicIsize, delta: isize, min: isize, max: isize) -> bool {
+        unsafe {
+            Self::without_interrupts(|| {
+                let p = p as *const _ as *mut isize;
+                let r = isize::min(max, isize::max(min, delta + atomic_load(p)));
+                let s = atomic_xchg(p, r);
+                r != s
+            })
+        }
+    }
+
+    /// SAFETY: Does not work in a multiprocessor environment
+    #[inline]
+    pub fn interlocked_compare_and_swap(
+        p: &AtomicUsize,
+        expected: usize,
+        desired: usize,
+    ) -> (bool, usize) {
+        unsafe {
+            Self::without_interrupts(|| {
+                let p = p as *const _ as *mut usize;
+                let v = atomic_load(p);
+                if v == expected {
+                    let r = atomic_xchg(p, desired);
+                    (true, r)
+                } else {
+                    (false, v)
+                }
+            })
+        }
+    }
+
+    /// SAFETY: Does not work in a multiprocessor environment
+    #[inline]
+    pub fn interlocked_fetch_update<F>(p: &AtomicUsize, mut f: F) -> Result<usize, usize>
+    where
+        F: FnMut(usize) -> Option<usize>,
+    {
+        unsafe {
+            let _p = p;
+            let p = p as *const _ as *mut usize;
+            let mut expected = atomic_load(p);
+            loop {
+                let r = match f(expected) {
+                    Some(v) => v,
+                    None => break Err(expected),
+                };
+                match Self::interlocked_compare_and_swap(_p, expected, r) {
+                    (true, v) => break Ok(v),
+                    (false, v) => expected = v,
+                }
+            }
+        }
+    }
+
+    #[inline]
+    pub fn interlocked_swap(p: &AtomicUsize, val: usize) -> usize {
+        unsafe {
+            let p = p as *const _ as *mut usize;
+            atomic_xchg(p, val)
         }
     }
 
@@ -80,11 +147,6 @@ impl Cpu {
                 ", in(reg) p, in(reg) pos, lateout(reg) r);
             r != 0
         }
-    }
-
-    #[inline]
-    pub fn spin_loop_hint() {
-        unsafe { asm!("pause") };
     }
 
     #[inline]
