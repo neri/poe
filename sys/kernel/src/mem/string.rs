@@ -2,6 +2,7 @@
 
 use alloc::vec::Vec;
 use core::{fmt, slice, str};
+use fmt::Error;
 
 #[macro_export]
 macro_rules! sformat {
@@ -11,7 +12,7 @@ macro_rules! sformat {
     };
 }
 
-/// Small String Buffer
+/// Small String Buffer (NO MORE ALLOC)
 pub struct Sb255([u8; 256]);
 
 impl Sb255 {
@@ -49,6 +50,9 @@ impl fmt::Write for Sb255 {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         let mut iter = 1 + self.len();
         for c in s.bytes() {
+            if iter >= 255 {
+                return Err(Error);
+            }
             self.0[iter] = c;
             iter += 1;
         }

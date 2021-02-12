@@ -813,7 +813,7 @@ fn memset_colors8(slice: &mut [IndexedColor], cursor: usize, size: usize, color:
 }
 
 /// Fast copy
-#[inline]
+#[inline(never)]
 fn memcpy_colors8(
     dest: &mut [IndexedColor],
     dest_cursor: usize,
@@ -829,18 +829,20 @@ fn memcpy_colors8(
         let mut ptr_d: *mut u8 = transmute(dest);
         let mut ptr_s: *const u8 = transmute(src);
         let mut remain = size;
-        if ((ptr_d as usize) & 0x3) == ((ptr_s as usize) & 0x3) {
-            while (ptr_d as usize & 0x3) != 0 && remain > 0 {
+
+        if ((ptr_d as usize) & 0x7) == ((ptr_s as usize) & 0x7) {
+            let prologue = usize::min(ptr_d as usize & 0x07, remain);
+            remain -= prologue;
+            for _ in 0..prologue {
                 ptr_d.write_volatile(ptr_s.read_volatile());
                 ptr_d = ptr_d.add(1);
                 ptr_s = ptr_s.add(1);
-                remain -= 1;
             }
 
-            if remain > 4 {
-                let count = remain / 4;
-                let mut ptr2d = ptr_d as *mut u32;
-                let mut ptr2s = ptr_s as *const u32;
+            if remain > 8 {
+                let count = remain / 8;
+                let mut ptr2d = ptr_d as *mut u64;
+                let mut ptr2s = ptr_s as *const u64;
 
                 for _ in 0..count {
                     ptr2d.write_volatile(ptr2s.read_volatile());
@@ -850,7 +852,7 @@ fn memcpy_colors8(
 
                 ptr_d = ptr2d as *mut u8;
                 ptr_s = ptr2s as *const u8;
-                remain -= count * 4;
+                remain -= count * 8;
             }
 
             for _ in 0..remain {

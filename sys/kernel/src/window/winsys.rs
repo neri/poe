@@ -110,7 +110,7 @@ impl WindowManager {
             let window = WindowBuilder::new("Root")
                 .style(WindowStyle::NAKED)
                 .level(WindowLevel::ROOT)
-                .size(main_screen.size())
+                .frame(main_screen.bounds())
                 .bg_color(IndexedColor::BLACK)
                 .without_bitmap()
                 .without_message_queue()

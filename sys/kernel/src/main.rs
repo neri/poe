@@ -181,7 +181,9 @@ impl Application {
                     WindowMessage::Char(c) => {
                         match c {
                             '\x08' => sb.backspace(),
-                            _ => sb.write_char(c).unwrap(),
+                            _ => {
+                                let _ = sb.write_char(c);
+                            }
                         }
                         window.set_needs_display();
                     }

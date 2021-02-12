@@ -5,8 +5,6 @@ use crate::graphics::coords::*;
 
 include!("megh0816.rs");
 const SYSTEM_FONT: FixedFontDriver = FixedFontDriver::new(8, 16, &FONT_MEGH0816_DATA);
-// include!("megbtan.rs");
-// const SYSTEM_FONT: FixedFontDriver = FixedFontDriver::new(8, 16, &FONT_MEGBTAN_DATA);
 
 include!("megh0608.rs");
 const SMALL_FONT: FixedFontDriver = FixedFontDriver::new(6, 8, &FONT_MEGH0608_DATA);

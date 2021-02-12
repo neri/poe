@@ -144,12 +144,81 @@ impl N98Rtc {
     fn new() -> Option<Box<dyn RtcImpl>> {
         Some(Box::new(Self {}) as Box<dyn RtcImpl>)
     }
+
+    unsafe fn write_cmd(&self, cmd: u8) {
+        let mut cmd = cmd;
+        for _ in 0..4 {
+            let data = 0x07 | ((cmd & 0x01) << 5);
+            asm!("
+                out 0x5F, al
+                out 0x5F, al
+                out 0x20, al
+                xor al, 0x10
+                out 0x5F, al
+                out 0x5F, al
+                out 0x20, al
+                ", in("al") data);
+            cmd >>= 1;
+        }
+
+        asm!("
+            out 0x5F, al
+            out 0x5F, al
+            out 0x20, al
+            xor al, 0x08
+            out 0x5F, al
+            out 0x5F, al
+            out 0x20, al
+            xor al, 0x08
+            out 0x5F, al
+            out 0x5F, al
+            out 0x20, al
+            ", in("al") 0x07u8);
+    }
+
+    unsafe fn read_bcd(&self) -> usize {
+        let mut result: u8 = 0;
+        for _ in 0..8 {
+            let al: u8;
+            asm!("
+                out 0x5F, al
+                out 0x5F, al
+                in al, 0x33
+                ", out("al") al);
+
+            result >>= 1;
+            if (al & 0x01) != 0 {
+                result |= 0x80;
+            }
+
+            asm!("
+                out 0x5F, al
+                out 0x5F, al
+                out 0x20, al
+                xor al, 0x10
+                out 0x5F, al
+                out 0x5F, al
+                out 0x20, al
+                ", in("al") 0x17u8);
+        }
+        ((result & 0x0F) + (result / 16) * 10) as usize
+    }
 }
 
 impl RtcImpl for N98Rtc {
     unsafe fn read_time(&self) -> u64 {
-        // TODO:
-        0
+        self.write_cmd(0x03);
+        self.write_cmd(0x01);
+        for _ in 0..40 {
+            asm!("out 0x5F, al", options(nomem));
+        }
+        let sec = self.read_bcd();
+        let min = self.read_bcd();
+        let hour = self.read_bcd();
+        let _ = self.read_bcd();
+        let _ = self.read_bcd();
+        let _ = self.read_bcd();
+        (sec + min * 60 + hour * 3600) as u64
     }
 }
 
