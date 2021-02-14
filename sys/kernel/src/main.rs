@@ -42,20 +42,74 @@ impl Application {
 
         SpawnOption::new().spawn_f(Self::status_bar_thread, 0, "status");
 
-        loop {
-            Scheduler::sleep();
-            // Timer::sleep(Duration::from_millis(1000));
+        let bg_color = IndexedColor::WHITE;
+        let fg_color = IndexedColor::BLACK;
+
+        let window_rect = Rect::new(10, 30, 160, 32);
+        let window = WindowBuilder::new("Command Mode")
+            .style_add(WindowStyle::NAKED)
+            .frame(window_rect)
+            .bg_color(bg_color)
+            .build();
+        window.make_active();
+
+        let interval = 500;
+        window.create_timer(0, Duration::from_millis(0));
+        let mut sb = Sb255::new();
+        let mut cursor_phase = 0;
+        while let Some(message) = window.wait_message() {
+            match message {
+                WindowMessage::Timer(_timer) => {
+                    cursor_phase ^= 1;
+                    window.set_needs_display();
+                    window.create_timer(0, Duration::from_millis(interval));
+                }
+                WindowMessage::Char(c) => {
+                    match c {
+                        '\x08' => sb.backspace(),
+                        '\x0D' => sb.clear(),
+                        _ => {
+                            let _ = sb.write_char(c);
+                        }
+                    }
+                    window.set_needs_display();
+                }
+                WindowMessage::Draw => {
+                    window
+                        .draw(|bitmap| {
+                            let padding = EdgeInsets::new(4, 4, 4, 4);
+                            let font = FontManager::fixed_system_font();
+                            let rect = bitmap.bounds().insets_by(padding);
+                            bitmap.fill_rect(rect, bg_color);
+                            font.write_str(sb.as_str(), bitmap, rect, fg_color);
+                            if cursor_phase == 1 {
+                                bitmap.fill_rect(
+                                    Rect::new(
+                                        padding.left + font.width() * sb.len() as isize,
+                                        padding.top,
+                                        font.width(),
+                                        font.line_height(),
+                                    ),
+                                    fg_color,
+                                );
+                            }
+                        })
+                        .unwrap();
+                }
+                _ => window.handle_default_message(message),
+            }
         }
+        unimplemented!()
     }
 
     #[allow(dead_code)]
     fn about_thread(_: usize) {
         let window_size = Size::new(300, 160);
         let window = WindowBuilder::new("About").size(window_size).build();
-        window.make_active();
+        window.show();
 
         let mut sb = StringBuffer::new();
-        let interval = 1000;
+        let interval = 5000;
         window.create_timer(0, Duration::from_millis(0));
         while let Some(message) = window.wait_message() {
             match message {
@@ -81,12 +135,15 @@ impl Application {
                         .draw(|bitmap| {
                             bitmap.fill_rect(bitmap.bounds(), window.bg_color());
                             let font = FontManager::fixed_system_font();
+                            let mut rect = bitmap.bounds().insets_by(EdgeInsets::new(2, 4, 2, 4));
                             font.write_str(
                                 sb.as_str(),
                                 bitmap,
-                                bitmap.bounds().insets_by(EdgeInsets::new(2, 4, 2, 4)),
-                                IndexedColor::BLACK,
+                                rect,
+                                IndexedColor::from_rgb(0xCCCCCC),
                             );
+                            rect.origin += Point::new(-1, -1);
+                            font.write_str(sb.as_str(), bitmap, rect, IndexedColor::BLACK);
                         })
                         .unwrap();
                 }
@@ -125,13 +182,14 @@ impl Application {
 
         let mut sb = StringBuffer::new();
 
-        let interval = 500;
-        window.create_timer(0, Duration::from_millis(interval));
+        window.create_timer(0, Duration::from_millis(0));
         while let Some(message) = window.wait_message() {
             match message {
                 WindowMessage::Timer(_timer) => {
+                    let time = System::system_time();
+                    let interval = 1_000_000_000 - time.nanos as u64;
+                    window.create_timer(0, Duration::from_nanos(interval));
                     window.set_needs_display();
-                    window.create_timer(0, Duration::from_millis(interval));
                 }
                 WindowMessage::Draw => {
                     sb.clear();
@@ -160,7 +218,7 @@ impl Application {
                     );
                     window
                         .draw_in_rect(clock_rect, |bitmap| {
-                            bitmap.fill_rect(bitmap.bounds(), IndexedColor::WHITE);
+                            bitmap.fill_rect(bitmap.bounds(), window.bg_color());
                             font.write_str(
                                 sb.as_str(),
                                 bitmap,
