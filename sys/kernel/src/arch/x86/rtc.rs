@@ -201,7 +201,11 @@ impl N98Rtc {
                 out 0x20, al
                 ", in("al") 0x17u8);
         }
-        ((result & 0x0F) + (result / 16) * 10) as usize
+        if result != u8::MAX {
+            ((result & 0x0F) + (result / 16) * 10) as usize
+        } else {
+            0
+        }
     }
 }
 

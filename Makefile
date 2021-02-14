@@ -1,12 +1,14 @@
-.PHONY: love all clean install run test apps
+.PHONY: love all clean install full run test apps
 
 BIN			= bin/
-IMAGE		= $(BIN)boot.img
+BOOT_IMG	= $(BIN)boot.img
 IPLS		= $(BIN)fdboot.bin
 KERNEL_LD	= sys/target/i586-unknown-linux-gnu/release/kernel
 KERNEL_BIN	= $(BIN)kernel.bin
 KERNEL_SYS	= $(BIN)kernel.sys
 TARGETS		= $(IPLS) $(KERNEL_SYS)
+
+IMG_SOURCES	= $(KERNEL_SYS)
 
 all: $(BIN) $(TARGETS)
 
@@ -20,9 +22,6 @@ $(BIN):
 $(BIN)fdboot.bin: boot/fdboot.asm
 	nasm -f bin $< -o $@
 
-$(IMAGE): $(BIN) $(BIN)fdboot.bin
-	mformat -C -i $@ -f 1440 -B $(BIN)fdboot.bin
-
 $(BIN)loader.bin: boot/loader.asm
 	nasm -f bin -I boot $< -o $@
 
@@ -30,12 +29,18 @@ $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.
 	(cd sys; cargo build -Zbuild-std --release)
 
 $(KERNEL_BIN): tools/krnlconv/src/*.rs $(KERNEL_LD)
-	(cd tools/krnlconv; cargo run ../../$(KERNEL_LD) ../../$(KERNEL_BIN))
+	cargo run --manifest-path ./tools/krnlconv/Cargo.toml -- $(KERNEL_LD) $(KERNEL_BIN)
 
 $(KERNEL_SYS): $(BIN)loader.bin $(KERNEL_BIN)
 	cat $^ > $@
 
-install: $(IMAGE) $(KERNEL_SYS)
-	mcopy -D o -i $(IMAGE) $(KERNEL_SYS) ::
+$(BOOT_IMG): install
+
+install: tools/mkfdfs/src/*.rs $(BIN)fdboot.bin $(IMG_SOURCES)
+	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
+
+full: install
+	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 1232 $(BIN)boot.hdm $(IMG_SOURCES)
+	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 160 $(BIN)mini.img $(IMG_SOURCES)
 
 run: install

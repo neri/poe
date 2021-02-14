@@ -211,8 +211,11 @@ diskread:
     mov ax, si
     div word [0x0018]
     inc dx
+    cmp word [0x001A], 2
+    jnz .single_head
     shr ax, 1
     adc dh, 0
+.single_head:
     mov bx, [0x000B]
     cmp byte [arch_id], ARCH_NEC98
     jz short .nec98

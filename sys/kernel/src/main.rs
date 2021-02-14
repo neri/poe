@@ -38,44 +38,65 @@ impl Application {
     fn main() {
         WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
         WindowManager::set_pointer_visible(true);
+        Timer::sleep(Duration::from_millis(1000));
 
         SpawnOption::new().spawn_f(Self::status_bar_thread, 0, "status");
 
-        Timer::sleep(Duration::from_millis(1000));
-
-        SpawnOption::new().spawn(Self::key_thread, 0, "key");
-        for i in 1..5 {
-            SpawnOption::new().spawn(Self::thread_test, i, "test");
-        }
-        // Timer::sleep(Duration::from_millis(500));
-
-        {
-            let window_size = Size::new(240, 150);
-            let window = WindowBuilder::new("Hello").size(window_size).build();
-            window
-                .draw_in_rect(window_size.into(), |bitmap| {
-                    let font = FontManager::fixed_system_font();
-                    font.write_str("It works!", bitmap, Point::new(10, 10), IndexedColor::BLACK);
-                })
-                .unwrap();
-            window.make_active();
-        }
-
-        println!("\n\n");
-        println!("{} v{}", System::name(), System::version(),);
-        println!("Platform {}", System::platform(),);
-        println!("CPU ver {}", System::cpu_ver().0,);
-        println!(
-            "Memory {} KB Free, {} MB Total",
-            MemoryManager::free_memory_size() >> 10,
-            MemoryManager::total_memory_size() >> 20
-        );
-
         loop {
-            Timer::sleep(Duration::from_millis(1000));
+            Scheduler::sleep();
+            // Timer::sleep(Duration::from_millis(1000));
         }
     }
 
+    #[allow(dead_code)]
+    fn about_thread(_: usize) {
+        let window_size = Size::new(300, 160);
+        let window = WindowBuilder::new("About").size(window_size).build();
+        window.make_active();
+
+        let mut sb = StringBuffer::new();
+        let interval = 1000;
+        window.create_timer(0, Duration::from_millis(0));
+        while let Some(message) = window.wait_message() {
+            match message {
+                WindowMessage::Timer(_timer) => {
+                    window.set_needs_display();
+                    window.create_timer(0, Duration::from_millis(interval));
+                }
+                WindowMessage::Draw => {
+                    sb.clear();
+
+                    writeln!(sb, "{} v{}", System::name(), System::version(),).unwrap();
+                    writeln!(sb, "Platform {}", System::platform(),).unwrap();
+                    writeln!(sb, "CPU ver {}", System::cpu_ver().0,).unwrap();
+                    writeln!(
+                        sb,
+                        "Memory {} KB Free, {} MB Total",
+                        MemoryManager::free_memory_size() >> 10,
+                        MemoryManager::total_memory_size() >> 20
+                    )
+                    .unwrap();
+
+                    window
+                        .draw(|bitmap| {
+                            bitmap.fill_rect(bitmap.bounds(), window.bg_color());
+                            let font = FontManager::fixed_system_font();
+                            font.write_str(
+                                sb.as_str(),
+                                bitmap,
+                                bitmap.bounds().insets_by(EdgeInsets::new(2, 4, 2, 4)),
+                                IndexedColor::BLACK,
+                            );
+                        })
+                        .unwrap();
+                }
+                _ => window.handle_default_message(message),
+            }
+        }
+        unimplemented!()
+    }
+
+    #[allow(dead_code)]
     fn status_bar_thread(_: usize) {
         const STATUS_BAR_HEIGHT: isize = 24;
         let screen_size = System::main_screen().size();
@@ -88,10 +109,11 @@ impl Application {
         window
             .draw_in_rect(window_size.into(), |bitmap| {
                 let font = FontManager::fixed_system_font();
+                let s = System::short_name();
                 font.write_str(
-                    System::short_name(),
+                    s,
                     bitmap,
-                    Point::new(8, 2),
+                    Rect::new(8, 2, font.width() * s.len() as isize, font.line_height()),
                     IndexedColor::BLACK,
                 );
             })
@@ -99,139 +121,60 @@ impl Application {
         window.show();
         WindowManager::add_screen_insets(EdgeInsets::new(STATUS_BAR_HEIGHT, 0, 0, 0));
 
+        SpawnOption::new().spawn_f(Self::about_thread, 0, "About");
+
         let mut sb = StringBuffer::new();
 
         let interval = 500;
         window.create_timer(0, Duration::from_millis(interval));
-        loop {
-            if let Some(message) = window.wait_message() {
-                match message {
-                    WindowMessage::Timer(_timer) => {
-                        window.set_needs_display();
-                        window.create_timer(0, Duration::from_millis(interval));
-                    }
-                    WindowMessage::Draw => {
-                        sb.clear();
-                        let time = System::system_time();
-                        let tod = time.secs % 86400;
-                        let min = tod / 60 % 60;
-                        let hour = tod / 3600;
-                        if true {
-                            let sec = tod % 60;
-                            if sec % 2 == 0 {
-                                write!(sb, "{:2} {:02} {:02}", hour, min, sec).unwrap();
-                            } else {
-                                write!(sb, "{:2}:{:02}:{:02}", hour, min, sec).unwrap();
-                            };
+        while let Some(message) = window.wait_message() {
+            match message {
+                WindowMessage::Timer(_timer) => {
+                    window.set_needs_display();
+                    window.create_timer(0, Duration::from_millis(interval));
+                }
+                WindowMessage::Draw => {
+                    sb.clear();
+                    let time = System::system_time();
+                    let tod = time.secs % 86400;
+                    let min = tod / 60 % 60;
+                    let hour = tod / 3600;
+                    if true {
+                        let sec = tod % 60;
+                        if sec % 2 == 0 {
+                            write!(sb, "{:2} {:02} {:02}", hour, min, sec).unwrap();
                         } else {
-                            write!(sb, "{:2}:{:02}", hour, min).unwrap();
-                        }
-
-                        let font = FontManager::fixed_system_font();
-                        let clock_width = font.width() * 10;
-                        let clock_rect = Rect::new(
-                            window_size.width() - clock_width - 8,
-                            (window_size.height() - font.line_height()) / 2,
-                            clock_width,
-                            font.line_height(),
-                        );
-                        window
-                            .draw_in_rect(clock_rect, |bitmap| {
-                                bitmap.fill_rect(bitmap.bounds(), IndexedColor::WHITE);
-                                font.write_str(
-                                    sb.as_str(),
-                                    bitmap,
-                                    Point::default(),
-                                    IndexedColor::BLACK,
-                                );
-                            })
-                            .unwrap();
-                        window.invalidate_rect(clock_rect);
+                            write!(sb, "{:2}:{:02}:{:02}", hour, min, sec).unwrap();
+                        };
+                    } else {
+                        write!(sb, "{:2}:{:02}", hour, min).unwrap();
                     }
-                    _ => window.handle_default_message(message),
+
+                    let font = FontManager::fixed_system_font();
+                    let clock_width = font.width() * 10;
+                    let clock_rect = Rect::new(
+                        window_size.width() - clock_width - 8,
+                        (window_size.height() - font.line_height()) / 2,
+                        clock_width,
+                        font.line_height(),
+                    );
+                    window
+                        .draw_in_rect(clock_rect, |bitmap| {
+                            bitmap.fill_rect(bitmap.bounds(), IndexedColor::WHITE);
+                            font.write_str(
+                                sb.as_str(),
+                                bitmap,
+                                bitmap.bounds(),
+                                IndexedColor::BLACK,
+                            );
+                        })
+                        .unwrap();
+                    window.invalidate_rect(clock_rect);
                 }
+                _ => window.handle_default_message(message),
             }
         }
-    }
-
-    fn key_thread(_: usize) {
-        let window = WindowBuilder::new("Key Test")
-            .frame(Rect::new(-160, 40, 150, 50))
-            .build();
-        window.show();
-
-        let mut sb = Sb255::new();
-        loop {
-            if let Some(message) = window.wait_message() {
-                match message {
-                    WindowMessage::Draw => {
-                        window
-                            .draw(|bitmap| {
-                                bitmap.fill_rect(bitmap.bounds(), IndexedColor::WHITE);
-                                let font = FontManager::fixed_system_font();
-                                font.write_str(
-                                    sb.as_str(),
-                                    bitmap,
-                                    Point::new(10, 0),
-                                    IndexedColor::BLACK,
-                                );
-                            })
-                            .unwrap();
-                    }
-                    WindowMessage::Char(c) => {
-                        match c {
-                            '\x08' => sb.backspace(),
-                            _ => {
-                                let _ = sb.write_char(c);
-                            }
-                        }
-                        window.set_needs_display();
-                    }
-                    _ => window.handle_default_message(message),
-                }
-            }
-        }
-    }
-
-    fn thread_test(i: usize) {
-        let window = WindowBuilder::new("Thread Test")
-            .frame(Rect::new(-160, 40 + i as isize * 60, 150, 50))
-            .build();
-        window.show();
-
-        let mut sb = StringBuffer::new();
-        let mut counter = 0;
-        let interval = 100;
-        window.create_timer(0, Duration::from_millis(interval));
-        loop {
-            if let Some(message) = window.wait_message() {
-                match message {
-                    WindowMessage::Timer(_timer) => {
-                        window.set_needs_display();
-                        window.create_timer(0, Duration::from_millis(interval));
-                    }
-                    WindowMessage::Draw => {
-                        sformat!(sb, "{}", counter);
-
-                        window
-                            .draw(|bitmap| {
-                                bitmap.fill_rect(bitmap.bounds(), IndexedColor::WHITE);
-                                let font = FontManager::fixed_system_font();
-                                font.write_str(
-                                    sb.as_str(),
-                                    bitmap,
-                                    Point::new(10, 0),
-                                    IndexedColor::BLACK,
-                                );
-                            })
-                            .unwrap();
-
-                        counter += 1;
-                    }
-                    _ => window.handle_default_message(message),
-                }
-            }
-        }
+        unimplemented!()
     }
 }
 

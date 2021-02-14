@@ -1,4 +1,5 @@
 // Kernel file converter
+// Copyright (c) 2021 MEG-OS project
 
 // use byteorder::*;
 use core::mem::transmute;

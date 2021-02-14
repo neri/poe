@@ -1,4 +1,5 @@
-// x86
+// 386-cpu
+// SAFETY: Some functions do not work properly in multiprocessor environments.
 
 use crate::*;
 use bitflags::*;
@@ -38,13 +39,11 @@ impl Cpu {
         asm_sch_make_new_thread(context, new_sp, start, arg);
     }
 
-    /// SAFETY: Does not work in a multiprocessor environment
     #[inline]
     pub fn interlocked_increment(p: &AtomicUsize) -> usize {
         Self::interlocked_add(p, 1)
     }
 
-    /// SAFETY: Does not work in a multiprocessor environment
     #[inline]
     pub fn interlocked_add(p: &AtomicUsize, val: usize) -> usize {
         unsafe {
@@ -56,20 +55,18 @@ impl Cpu {
         }
     }
 
-    /// SAFETY: Does not work in a multiprocessor environment
     #[inline]
-    pub fn interlocked_add_within(p: &AtomicIsize, delta: isize, min: isize, max: isize) -> bool {
+    pub fn interlocked_add_clamp(p: &AtomicIsize, delta: isize, min: isize, max: isize) -> bool {
         unsafe {
             Self::without_interrupts(|| {
                 let p = p as *const _ as *mut isize;
-                let r = isize::min(max, isize::max(min, delta + atomic_load(p)));
+                let r = (delta + atomic_load(p)).clamp(min, max);
                 let s = atomic_xchg(p, r);
                 r != s
             })
         }
     }
 
-    /// SAFETY: Does not work in a multiprocessor environment
     #[inline]
     pub fn interlocked_compare_and_swap(
         p: &AtomicUsize,
@@ -90,7 +87,6 @@ impl Cpu {
         }
     }
 
-    /// SAFETY: Does not work in a multiprocessor environment
     #[inline]
     pub fn interlocked_fetch_update<F>(p: &AtomicUsize, mut f: F) -> Result<usize, usize>
     where

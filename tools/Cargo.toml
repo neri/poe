@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "krnlconv",
+  "mkfdfs",
 ]
 
 [profile.release]

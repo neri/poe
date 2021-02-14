@@ -503,12 +503,12 @@ impl WindowManager {
                 .fetch_or(button_up.bits() as usize, Ordering::SeqCst);
         }
 
-        let moved = Cpu::interlocked_add_within(
+        let moved = Cpu::interlocked_add_clamp(
             &shared.pointer_x,
             pointer.x,
             screen_bounds.x(),
             screen_bounds.width() - 1,
-        ) | Cpu::interlocked_add_within(
+        ) | Cpu::interlocked_add_clamp(
             &shared.pointer_y,
             pointer.y,
             screen_bounds.y(),
@@ -816,7 +816,7 @@ impl RawWindow {
                 WINDOW_BORDER_PADDING,
                 WINDOW_BORDER_PADDING,
                 self.frame.width() - WINDOW_BORDER_PADDING * 2,
-                WINDOW_TITLE_HEIGHT - WINDOW_BORDER_PADDING - 1,
+                WINDOW_TITLE_HEIGHT - WINDOW_BORDER_PADDING,
             )
         } else {
             Rect::new(0, 0, 0, 0)
@@ -841,21 +841,27 @@ impl RawWindow {
                     },
                 );
                 bitmap.draw_hline(
-                    Point::new(WINDOW_BORDER_PADDING, WINDOW_TITLE_HEIGHT - 1),
+                    Point::new(WINDOW_BORDER_PADDING, WINDOW_TITLE_HEIGHT),
                     title_rect.width(),
                     WINDOW_BORDER_COLOR,
                 );
                 let font = FontManager::fixed_system_font();
 
                 if let Some(s) = self.title() {
-                    let y = isize::max(
+                    let rect = title_rect.insets_by(EdgeInsets::new(
+                        isize::max(
+                            0,
+                            (WINDOW_TITLE_HEIGHT - WINDOW_BORDER_PADDING - 1 - font.line_height())
+                                / 2,
+                        ),
+                        8,
                         0,
-                        (WINDOW_TITLE_HEIGHT - WINDOW_BORDER_PADDING - 1 - font.line_height()) / 2,
-                    );
+                        8,
+                    ));
                     font.write_str(
                         s,
                         &mut bitmap,
-                        Point::new(8, y),
+                        rect,
                         if is_active {
                             WINDOW_ACTIVE_TITLE_FG_COLOR
                         } else {
@@ -1044,7 +1050,7 @@ impl WindowBuilder {
             bg_color: WINDOW_DEFAULT_BGCOLOR,
             key_color: WINDOW_DEFAULT_KEY_COLOR,
             title: [0; WINDOW_TITLE_LENGTH],
-            queue_size: 128,
+            queue_size: 32,
             no_bitmap: false,
         };
         window.title(title).style(WindowStyle::DEFAULT)
@@ -1353,6 +1359,19 @@ impl WindowHandle {
     #[inline]
     pub fn set_needs_display(&self) {
         self.as_ref().set_needs_display();
+    }
+
+    pub fn refresh_if_needed(&self) {
+        let window = match self.get() {
+            Some(v) => v,
+            None => return,
+        };
+        if window
+            .attributes
+            .test_and_clear(WindowAttributes::NEEDS_REDRAW)
+        {
+            let _ = self.draw(|_| {});
+        }
     }
 
     #[inline]

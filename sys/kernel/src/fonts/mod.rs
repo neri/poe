@@ -80,14 +80,33 @@ impl FixedFontDriver<'_> {
     }
 
     /// Write string to bitmap
-    pub fn write_str<T>(&self, s: &str, to: &mut T, origin: Point, color: T::PixelType)
+    pub fn write_str<T>(&self, s: &str, to: &mut T, rect: Rect, color: T::PixelType)
     where
         T: RasterFontWriter,
     {
-        let mut origin = origin;
+        let coords = match Coordinates::from_rect(rect) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let mut cursor = coords.left_top();
         for c in s.chars() {
-            self.write_char(c, to, origin, color);
-            origin.x += self.size.width();
+            if cursor.x + self.size.width() > coords.right {
+                cursor.x = coords.left;
+                cursor.y += self.line_height();
+            }
+            if cursor.y + self.line_height() > coords.bottom {
+                break;
+            }
+            match c {
+                '\n' => {
+                    cursor.x = coords.left;
+                    cursor.y += self.line_height();
+                }
+                _ => {
+                    self.write_char(c, to, cursor, color);
+                    cursor.x += self.size.width();
+                }
+            }
         }
     }
 }
