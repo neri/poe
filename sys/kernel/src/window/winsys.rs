@@ -11,6 +11,7 @@ use crate::sync::semaphore::*;
 use crate::task::scheduler::*;
 use crate::*;
 use crate::{io::hid::*, system::System};
+use _core::ops::Index;
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::vec::Vec;
@@ -29,7 +30,7 @@ const MAX_WINDOWS: usize = 255;
 const WINDOW_TITLE_LENGTH: usize = 32;
 
 const WINDOW_BORDER_PADDING: isize = 1;
-const WINDOW_TITLE_HEIGHT: isize = 24;
+const WINDOW_TITLE_HEIGHT: isize = 20;
 
 const WINDOW_BORDER_COLOR: IndexedColor = IndexedColor::from_rgb(0x666666);
 const WINDOW_DEFAULT_BGCOLOR: IndexedColor = IndexedColor::WHITE;
@@ -613,16 +614,15 @@ impl WindowManager {
     fn set_active(window: Option<WindowHandle>) {
         let shared = Self::shared();
         if let Some(old_active) = shared.active {
+            let _ = old_active.post(WindowMessage::Deactivated);
             shared.active = window;
             let _ = old_active.update_opt(|window| window.refresh_title());
-            if let Some(active) = window {
-                active.show();
-            }
         } else {
             shared.active = window;
-            if let Some(active) = window {
-                active.show();
-            }
+        }
+        if let Some(active) = window {
+            let _ = active.post(WindowMessage::Activated);
+            active.show();
         }
     }
 }
@@ -747,7 +747,7 @@ impl RawWindow {
                         .iter()
                         .position(|v| *v == handle)
                         .and_then(|v| shared.window_orders.get(v - 1))
-                        .map(|v| *v)
+                        .map(|&v| v)
                 })
             }
         } else {
@@ -845,15 +845,11 @@ impl RawWindow {
                     title_rect.width(),
                     WINDOW_BORDER_COLOR,
                 );
-                let font = FontManager::fixed_system_font();
+                let font = FontManager::fixed_ui_font();
 
                 if let Some(s) = self.title() {
                     let rect = title_rect.insets_by(EdgeInsets::new(
-                        isize::max(
-                            0,
-                            (WINDOW_TITLE_HEIGHT - WINDOW_BORDER_PADDING - 1 - font.line_height())
-                                / 2,
-                        ),
+                        isize::max(0, (WINDOW_TITLE_HEIGHT - font.line_height()) / 2),
                         8,
                         0,
                         8,
@@ -923,7 +919,17 @@ impl RawWindow {
 
         let shared = WindowManager::shared();
 
-        for handle in shared.window_orders.iter() {
+        let first_index = if self.style.contains(WindowStyle::TRANSPARENT) {
+            0
+        } else {
+            shared
+                .window_orders
+                .iter()
+                .position(|&v| v == self.handle)
+                .unwrap_or(0)
+        };
+
+        for handle in &shared.window_orders[first_index..] {
             handle.update(|window| {
                 let coords2 = match Coordinates::from_rect(window.frame) {
                     Ok(v) => v,
@@ -1261,6 +1267,11 @@ impl WindowHandle {
     // :-:-:-:-:
 
     #[inline]
+    pub fn is_active(&self) -> bool {
+        self.get().map(|v| v.is_active()).unwrap_or(false)
+    }
+
+    #[inline]
     pub fn set_title(&self, title: &str) {
         self.update(|window| {
             window.set_title(title);
@@ -1523,6 +1534,9 @@ pub enum WindowMessage {
     Close,
     /// Needs to be redrawn
     Draw,
+    /// Active
+    Activated,
+    Deactivated,
     /// Raw keyboard event
     Key(KeyEvent),
     /// Unicode converted keyboard event

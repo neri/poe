@@ -23,14 +23,14 @@ use window::WindowBuilder;
 // use kernel::audio::AudioManager;
 // use kernel::util::rng::XorShift32;
 
-entry!(Application::main);
+entry!(Shell::main);
 
 #[used]
-static mut MAIN: Application = Application::new();
+static mut MAIN: Shell = Shell::new();
 
-struct Application {}
+struct Shell {}
 
-impl Application {
+impl Shell {
     const fn new() -> Self {
         Self {}
     }
@@ -42,10 +42,23 @@ impl Application {
 
         SpawnOption::new().spawn_f(Self::status_bar_thread, 0, "status");
 
+        SpawnOption::new().spawn_f(Self::console_thread, 1, "console");
+        Self::console_thread(0);
+    }
+
+    fn console_thread(instance: usize) {
+        let padding_x = 4;
+        let padding_y = 4;
+        let font = FontManager::fixed_system_font();
         let bg_color = IndexedColor::WHITE;
         let fg_color = IndexedColor::BLACK;
 
-        let window_rect = Rect::new(10, 30, 160, 32);
+        let window_rect = Rect::new(
+            10 + 180 * instance as isize,
+            30 + instance as isize,
+            160,
+            font.line_height() + padding_y * 2,
+        );
         let window = WindowBuilder::new("Command Mode")
             .style_add(WindowStyle::NAKED)
             .frame(window_rect)
@@ -59,10 +72,15 @@ impl Application {
         let mut cursor_phase = 0;
         while let Some(message) = window.wait_message() {
             match message {
+                WindowMessage::Activated | WindowMessage::Deactivated => {
+                    window.set_needs_display();
+                }
                 WindowMessage::Timer(_timer) => {
                     cursor_phase ^= 1;
-                    window.set_needs_display();
                     window.create_timer(0, Duration::from_millis(interval));
+                    if window.is_active() {
+                        window.set_needs_display();
+                    }
                 }
                 WindowMessage::Char(c) => {
                     match c {
@@ -77,22 +95,33 @@ impl Application {
                 WindowMessage::Draw => {
                     window
                         .draw(|bitmap| {
-                            let padding = EdgeInsets::new(4, 4, 4, 4);
-                            let font = FontManager::fixed_system_font();
-                            let rect = bitmap.bounds().insets_by(padding);
-                            bitmap.fill_rect(rect, bg_color);
-                            font.write_str(sb.as_str(), bitmap, rect, fg_color);
-                            if cursor_phase == 1 {
-                                bitmap.fill_rect(
-                                    Rect::new(
-                                        padding.left + font.width() * sb.len() as isize,
-                                        padding.top,
-                                        font.width(),
-                                        font.line_height(),
-                                    ),
-                                    fg_color,
+                            let rect = Rect::new(
+                                padding_x,
+                                padding_y,
+                                bitmap.size().width() as isize - padding_x * 2,
+                                font.line_height(),
+                            );
+                            bitmap.view(rect, |bitmap| {
+                                bitmap.fill_rect(bitmap.bounds(), bg_color);
+                                font.write_str(
+                                    sb.as_str(),
+                                    bitmap,
+                                    bitmap.bounds() + Point::new(1, 1),
+                                    IndexedColor::from_rgb(0xCCCCCC),
                                 );
-                            }
+                                font.write_str(sb.as_str(), bitmap, bitmap.bounds(), fg_color);
+                                if window.is_active() && cursor_phase == 1 {
+                                    bitmap.fill_rect(
+                                        Rect::new(
+                                            font.width() * sb.len() as isize,
+                                            0,
+                                            font.width(),
+                                            font.line_height(),
+                                        ),
+                                        fg_color,
+                                    );
+                                }
+                            });
                         })
                         .unwrap();
                 }
@@ -104,7 +133,7 @@ impl Application {
 
     #[allow(dead_code)]
     fn about_thread(_: usize) {
-        let window_size = Size::new(300, 160);
+        let window_size = Size::new(300, 180);
         let window = WindowBuilder::new("About").size(window_size).build();
         window.show();
 
@@ -134,16 +163,20 @@ impl Application {
                     window
                         .draw(|bitmap| {
                             bitmap.fill_rect(bitmap.bounds(), window.bg_color());
-                            let font = FontManager::fixed_system_font();
-                            let mut rect = bitmap.bounds().insets_by(EdgeInsets::new(2, 4, 2, 4));
+                            let font = FontManager::fixed_ui_font();
+                            let rect = bitmap.bounds().insets_by(EdgeInsets::new(64, 8, 2, 8));
                             font.write_str(
                                 sb.as_str(),
                                 bitmap,
                                 rect,
                                 IndexedColor::from_rgb(0xCCCCCC),
                             );
-                            rect.origin += Point::new(-1, -1);
-                            font.write_str(sb.as_str(), bitmap, rect, IndexedColor::BLACK);
+                            font.write_str(
+                                sb.as_str(),
+                                bitmap,
+                                rect + Point::new(-1, -1),
+                                IndexedColor::BLACK,
+                            );
                         })
                         .unwrap();
                 }
@@ -162,15 +195,21 @@ impl Application {
         let window = WindowBuilder::new("Status")
             .style(WindowStyle::BORDER | WindowStyle::FLOATING)
             .frame(window_rect)
+            // .bg_color(IndexedColor::from_rgb(0xCCCCFF))
             .build();
         window
             .draw_in_rect(window_size.into(), |bitmap| {
-                let font = FontManager::fixed_system_font();
+                let font = FontManager::fixed_ui_font();
                 let s = System::short_name();
                 font.write_str(
                     s,
                     bitmap,
-                    Rect::new(8, 2, font.width() * s.len() as isize, font.line_height()),
+                    Rect::new(
+                        8,
+                        (STATUS_BAR_HEIGHT - font.line_height()) / 2,
+                        font.width() * s.len() as isize,
+                        font.line_height(),
+                    ),
                     IndexedColor::BLACK,
                 );
             })

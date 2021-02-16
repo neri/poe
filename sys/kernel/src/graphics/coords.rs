@@ -334,6 +334,69 @@ impl From<Size> for Rect {
     }
 }
 
+impl Add<Point> for Rect {
+    type Output = Self;
+    fn add(self, rhs: Point) -> Self::Output {
+        Self {
+            origin: self.origin + rhs,
+            size: self.size,
+        }
+    }
+}
+
+impl Sub<Point> for Rect {
+    type Output = Self;
+    fn sub(self, rhs: Point) -> Self::Output {
+        Self {
+            origin: self.origin - rhs,
+            size: self.size,
+        }
+    }
+}
+
+impl Add<Size> for Rect {
+    type Output = Self;
+    fn add(self, rhs: Size) -> Self::Output {
+        Self {
+            origin: self.origin,
+            size: self.size + rhs,
+        }
+    }
+}
+
+impl Sub<Size> for Rect {
+    type Output = Self;
+    fn sub(self, rhs: Size) -> Self::Output {
+        Self {
+            origin: self.origin,
+            size: self.size - rhs,
+        }
+    }
+}
+
+impl Add<EdgeInsets> for Rect {
+    type Output = Self;
+    fn add(self, rhs: EdgeInsets) -> Self::Output {
+        Rect {
+            origin: Point {
+                x: self.origin.x - rhs.left,
+                y: self.origin.y - rhs.top,
+            },
+            size: Size {
+                width: self.size.width + (rhs.left + rhs.right),
+                height: self.size.height + (rhs.top + rhs.bottom),
+            },
+        }
+    }
+}
+
+impl Sub<EdgeInsets> for Rect {
+    type Output = Self;
+    fn sub(self, rhs: EdgeInsets) -> Self::Output {
+        self.insets_by(rhs)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct Coordinates {
