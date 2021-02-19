@@ -1,6 +1,6 @@
 // Scheduler
 
-use crate::arch::cpu::Cpu;
+use crate::arch::cpu::{Cpu, CpuContextData};
 use crate::sync::atomicflags::AtomicBitflags;
 use crate::sync::fifo::*;
 use crate::window::winsys::*;
@@ -245,10 +245,10 @@ impl Scheduler {
             shared.current = next;
 
             //-//-//-//-//
-            Cpu::switch_context(
-                &current.as_ref().context as *const _ as *mut _,
-                &next.as_ref().context as *const _ as *mut _,
-            );
+            current.update(|current| {
+                let next = &next.as_ref().context;
+                current.context.switch(next);
+            });
             //-//-//-//-//
 
             let current = shared.current;
@@ -659,16 +659,14 @@ impl From<Priority> for Quantum {
     }
 }
 
-const SIZE_OF_CONTEXT: usize = 512;
-const SIZE_OF_STACK: usize = 0x10000;
 const THREAD_NAME_LENGTH: usize = 32;
 
 type ThreadStart = fn(usize) -> ();
 
 #[allow(dead_code)]
 struct RawThread {
-    /// Architectural context data
-    context: [u8; SIZE_OF_CONTEXT],
+    /// Architecture-specific context data
+    context: CpuContextData,
     stack: Option<Box<[u8]>>,
 
     // IDs
@@ -747,7 +745,7 @@ impl RawThread {
         Self::set_name_array(&mut name_array, name);
 
         let mut thread = Self {
-            context: [0; SIZE_OF_CONTEXT],
+            context: CpuContextData::new(),
             stack: None,
             pid,
             handle,
@@ -762,17 +760,15 @@ impl RawThread {
         };
         if let Some(start) = start {
             unsafe {
-                let mut stack = Vec::with_capacity(SIZE_OF_STACK);
-                stack.resize(SIZE_OF_STACK, 0);
+                let size_of_stack = CpuContextData::SIZE_OF_STACK;
+                let mut stack = Vec::with_capacity(size_of_stack);
+                stack.resize(size_of_stack, 0);
                 let stack = stack.into_boxed_slice();
                 thread.stack = Some(stack);
                 let stack = thread.stack.as_mut().unwrap().as_mut_ptr() as *mut c_void;
-                Cpu::make_new_thread(
-                    thread.context.as_mut_ptr(),
-                    stack.add(SIZE_OF_STACK),
-                    start as usize,
-                    arg,
-                );
+                thread
+                    .context
+                    .init(stack.add(size_of_stack), start as usize, arg);
             }
         }
         thread
@@ -824,10 +820,10 @@ impl ThreadQueue {
     }
 
     fn dequeue(&mut self) -> Option<ThreadHandle> {
-        self.0.dequeue().and_then(|v| ThreadHandle::new(v))
+        unsafe { self.0.dequeue().and_then(|v| ThreadHandle::new(v)) }
     }
 
     fn enqueue(&mut self, data: ThreadHandle) -> Result<(), ()> {
-        self.0.enqueue(data.as_usize()).map_err(|_| ())
+        unsafe { self.0.enqueue(data.as_usize()).map_err(|_| ()) }
     }
 }

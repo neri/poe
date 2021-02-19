@@ -34,13 +34,13 @@ pub struct BootInfo {
 }
 
 #[non_exhaustive]
-#[repr(i8)]
+#[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum Platform {
-    Unknown = -1,
-    Nec98 = 0,
-    PcCompatible = 1,
-    FmTowns = 2,
+    Unknown = 0,
+    Nec98 = 1,
+    PcCompatible = 2,
+    FmTowns = 3,
 }
 
 impl fmt::Display for Platform {

@@ -165,18 +165,13 @@ impl Shell {
                             bitmap.fill_rect(bitmap.bounds(), window.bg_color());
                             let font = FontManager::fixed_ui_font();
                             let rect = bitmap.bounds().insets_by(EdgeInsets::new(64, 8, 2, 8));
-                            font.write_str(
-                                sb.as_str(),
-                                bitmap,
-                                rect,
-                                IndexedColor::from_rgb(0xCCCCCC),
-                            );
-                            font.write_str(
-                                sb.as_str(),
-                                bitmap,
-                                rect + Point::new(-1, -1),
-                                IndexedColor::BLACK,
-                            );
+                            // font.write_str(
+                            //     sb.as_str(),
+                            //     bitmap,
+                            //     rect+ Point::new(1, 1),
+                            //     IndexedColor::from_rgb(0xCCCCCC),
+                            // );
+                            font.write_str(sb.as_str(), bitmap, rect, IndexedColor::BLACK);
                         })
                         .unwrap();
                 }

@@ -66,7 +66,7 @@ pub fn kernel_halt() {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
+    let _ = write!(System::em_console(), "{}", info);
     unsafe { Cpu::stop() };
 }
 

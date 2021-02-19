@@ -128,23 +128,23 @@ impl FixedFontDriver<'_> {
         let mut cursor = coords.left_top();
         for c in s.chars() {
             let width = self.width_for(c);
-            if c >= ' ' {
-                if cursor.x + width > coords.right {
-                    cursor.x = coords.left;
-                    cursor.y += self.line_height();
-                }
-                if cursor.y + self.line_height() > coords.bottom {
-                    break;
-                }
-            }
             match c {
                 '\n' => {
                     cursor.x = coords.left;
                     cursor.y += self.line_height();
                 }
                 _ => {
-                    self.write_char(c, to, cursor, color);
-                    cursor.x += width;
+                    if c >= ' ' {
+                        if cursor.x + width > coords.right {
+                            cursor.x = coords.left;
+                            cursor.y += self.line_height();
+                        }
+                        if cursor.y + self.line_height() > coords.bottom {
+                            break;
+                        }
+                        self.write_char(c, to, cursor, color);
+                        cursor.x += width;
+                    }
                 }
             }
         }

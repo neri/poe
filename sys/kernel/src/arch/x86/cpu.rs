@@ -11,7 +11,7 @@ use toeboot::Platform;
 
 extern "fastcall" {
     fn asm_handle_exception(_: InterruptVector) -> usize;
-    fn asm_sch_switch_context(current: *mut u8, next: *mut u8);
+    fn asm_sch_switch_context(current: *mut u8, next: *const u8);
 }
 extern "C" {
     fn asm_sch_make_new_thread(context: *mut u8, new_sp: *mut c_void, start: usize, arg: usize);
@@ -22,21 +22,6 @@ pub struct Cpu {}
 impl Cpu {
     pub(crate) unsafe fn init() {
         InterruptDescriptorTable::init();
-    }
-
-    #[inline]
-    pub(crate) unsafe fn switch_context(current: *mut u8, next: *mut u8) {
-        asm_sch_switch_context(current, next);
-    }
-
-    #[inline]
-    pub(crate) unsafe fn make_new_thread(
-        context: *mut u8,
-        new_sp: *mut c_void,
-        start: usize,
-        arg: usize,
-    ) {
-        asm_sch_make_new_thread(context, new_sp, start, arg);
     }
 
     #[inline]
@@ -271,6 +256,39 @@ impl Cpu {
         }
 
         result
+    }
+}
+
+/// Architecture-specific context data
+#[repr(C)]
+pub struct CpuContextData {
+    _data: [u8; Self::SIZE_OF_CONTEXT],
+}
+
+impl CpuContextData {
+    pub const SIZE_OF_CONTEXT: usize = 256;
+    pub const SIZE_OF_STACK: usize = 0x10000;
+
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            _data: [0; Self::SIZE_OF_CONTEXT],
+        }
+    }
+
+    #[inline]
+    pub unsafe fn switch(&mut self, other: &Self) {
+        let current = self as *const _ as *mut u8;
+        let other = other as *const _ as *const u8;
+        asm_sch_switch_context(current, other);
+    }
+
+    #[inline]
+    pub fn init(&mut self, new_sp: *mut c_void, start: usize, arg: usize) {
+        unsafe {
+            let context = self as *const _ as *mut u8;
+            asm_sch_make_new_thread(context, new_sp, start, arg);
+        }
     }
 }
 

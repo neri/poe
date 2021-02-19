@@ -2,8 +2,8 @@
 ;; License: PUBLIC DOMAIN
 
 %define IPL_SIGN    0x1eaf
-%define ARCH_PC     1
 %define ARCH_NEC98  0
+%define ARCH_PC     1
 %define ARCH_FMT    2
 
 [CPU 8086]

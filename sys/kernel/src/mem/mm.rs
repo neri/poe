@@ -75,7 +75,7 @@ impl MemoryManager {
     /// Allocate kernel memory
     pub unsafe fn zalloc(layout: Layout) -> Result<NonZeroUsize, AllocationError> {
         Cpu::without_interrupts(|| {
-            let shared = Self::shared();
+            // let shared = Self::shared();
             // if let Some(slab) = &shared.slab {
             //     match slab.alloc(layout) {
             //         Ok(result) => return Ok(result),

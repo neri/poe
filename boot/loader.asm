@@ -1,10 +1,10 @@
-;; MEG-OS TOE Loader
+;; MEG-OS Loader for TOE
 ;; Licenst: MIT (c) 2021 MEG-OS project
 
 %define IPL_SIGN            0x1eaf
-%define ARCH_NEC98          0   ; NEC PC-98 Series Computer
-%define ARCH_PC             1   ; IBM PC/AT Compatible
-%define ARCH_FMT            2   ; Fujitsu FM TOWNS
+%define PF_NEC98            1   ; NEC PC-98 Series Computer
+%define PF_PC               2   ; IBM PC/AT Compatible
+%define PF_FMT              3   ; Fujitsu FM TOWNS
 
 %define ORG_BASE            0x0800
 
@@ -68,10 +68,10 @@ _crt0:
     jmp 0:_init
 
 _puts:
-    mov al, [cs:_boot_arch]
-    cmp al, ARCH_NEC98
+    mov al, [cs:_platform]
+    cmp al, PF_NEC98
     jz _puts_nec98
-    cmp al, ARCH_FMT
+    cmp al, PF_FMT
     jz _puts_fmt
 .loop:
     lodsb
@@ -117,7 +117,8 @@ _init:
 
     pop es
     pop ax
-    mov [_boot_arch], ax
+    inc ax
+    mov [_platform], ax
     push es
 
     ;; check cpu
@@ -180,10 +181,10 @@ _check_cpu:
     mov [_cpu_ver], al
 
 _mem_check:
-    mov al, [_boot_arch]
-    cmp al, ARCH_PC
+    mov al, [_platform]
+    cmp al, PF_PC
     jz _memchk_pc
-    cmp al, ARCH_FMT
+    cmp al, PF_FMT
     jz _memchk_fmt
 
 _memchk_n98:
@@ -308,10 +309,10 @@ _no_acpi:
 
 
 _set_video_mode:
-    mov al, [_boot_arch]
-    cmp al, ARCH_NEC98
+    mov al, [_platform]
+    cmp al, PF_NEC98
     jz _vga_nec98
-    cmp al, ARCH_FMT
+    cmp al, PF_FMT
     jz _vga_fmt
     jmp _vesa
 
@@ -644,7 +645,7 @@ _RSDPtr:
 
     alignb 16
 _boot_info:
-_boot_arch      db 0
+_platform       db 0
 _boot_drive     db 0
 _cpu_ver        db 0
 _screen_bpp     db 8

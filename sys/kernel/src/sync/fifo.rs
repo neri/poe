@@ -2,14 +2,15 @@
 
 use crate::arch::cpu::Cpu;
 use alloc::vec::Vec;
+use core::sync::atomic::*;
 
 pub struct Fifo<T>
 where
     T: Sized + Copy,
 {
     vec: Vec<T>,
-    head: usize,
-    tail: usize,
+    head: AtomicUsize,
+    tail: AtomicUsize,
 }
 
 impl<T> Fifo<T>
@@ -29,8 +30,8 @@ where
 
         Self {
             vec,
-            head: 0,
-            tail: 0,
+            head: AtomicUsize::new(0),
+            tail: AtomicUsize::new(0),
         }
     }
 
@@ -40,33 +41,32 @@ where
     }
 
     #[inline]
-    pub const fn is_empty(&self) -> bool {
-        self.head == self.tail
+    pub fn is_empty(&self) -> bool {
+        self.head.load(Ordering::SeqCst) == self.tail.load(Ordering::SeqCst)
     }
 
-    pub fn enqueue(&mut self, data: T) -> Result<(), T> {
-        let old_tail = self.tail;
+    pub unsafe fn enqueue(&mut self, data: T) -> Result<(), T> {
+        let old_tail = self.tail.load(Ordering::SeqCst);
         let new_tail = (old_tail + 1) & self.mask();
-        if new_tail == self.head {
+        if new_tail == self.head.load(Ordering::SeqCst) {
             Err(data)
         } else {
-            unsafe {
-                *self.vec.get_unchecked_mut(old_tail) = data;
-                self.tail = new_tail;
-                Ok(())
-            }
+            let p = self.vec.get_unchecked_mut(old_tail) as *const T as *mut T;
+            p.write_volatile(data);
+            self.tail.store(new_tail, Ordering::SeqCst);
+            Ok(())
         }
     }
 
-    pub fn dequeue(&mut self) -> Option<T> {
+    pub unsafe fn dequeue(&mut self) -> Option<T> {
         if self.is_empty() {
             None
         } else {
-            unsafe {
-                let r = self.vec.get_unchecked(self.head);
-                self.head = (self.head + 1) & self.mask();
-                Some(*r)
-            }
+            let head = self.head.load(Ordering::SeqCst);
+            let p = self.vec.get_unchecked(head) as *const T;
+            let r = p.read_volatile();
+            self.head.store((head + 1) & self.mask(), Ordering::SeqCst);
+            Some(r)
         }
     }
 }
@@ -90,7 +90,7 @@ where
     }
 
     #[inline]
-    pub const fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.wrapped.is_empty()
     }
 

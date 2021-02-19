@@ -11,7 +11,6 @@ use crate::sync::semaphore::*;
 use crate::task::scheduler::*;
 use crate::*;
 use crate::{io::hid::*, system::System};
-use _core::ops::Index;
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::vec::Vec;
@@ -1164,14 +1163,8 @@ impl WindowBuilder {
     }
 
     #[inline]
-    pub const fn center(mut self) -> Self {
-        self.frame.origin = Point::new(isize::MIN, isize::MIN);
-        self
-    }
-
-    #[inline]
-    pub const fn origin(mut self, origin: Point) -> Self {
-        self.frame.origin = origin;
+    pub const fn position(mut self, position: Point) -> Self {
+        self.frame.origin = position;
         self
     }
 
