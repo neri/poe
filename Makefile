@@ -28,8 +28,8 @@ $(BIN)loader.bin: boot/loader.asm
 $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs
 	(cd sys; cargo build -Zbuild-std --release)
 
-$(KERNEL_BIN): tools/krnlconv/src/*.rs $(KERNEL_LD)
-	cargo run --manifest-path ./tools/krnlconv/Cargo.toml -- $(KERNEL_LD) $(KERNEL_BIN)
+$(KERNEL_BIN): tools/elf2ceef/src/*.rs $(KERNEL_LD)
+	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_BIN)
 
 $(KERNEL_SYS): $(BIN)loader.bin $(KERNEL_BIN)
 	cat $^ > $@

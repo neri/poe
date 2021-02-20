@@ -59,9 +59,9 @@ pub struct CeefSecHeader {
 }
 
 impl CeefSecHeader {
-    pub const fn new(attr: u8, vaddr: u32, filesz: u32, memsz: u32) -> Self {
+    pub const fn new(attr: u8, vaddr: u32, filesz: u32, memsz: u32, align: u8) -> Self {
         Self {
-            attr,
+            attr: (attr << 5) | (align & 31),
             _reserved: [0, 0, 0],
             vaddr,
             filesz,
@@ -71,5 +71,13 @@ impl CeefSecHeader {
 
     pub fn as_bytes(self) -> [u8; 16] {
         unsafe { transmute(self) }
+    }
+
+    pub const fn attr(&self) -> usize {
+        (self.attr >> 5) as usize
+    }
+
+    pub const fn align(&self) -> usize {
+        (self.attr & 31) as usize
     }
 }

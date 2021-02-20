@@ -601,7 +601,7 @@ _next32:
     add esi, ebx
 .loop:
     mov al, [ebx]
-    and al, 0x07
+    and al, 0xE0
     jz .no_load
 
     mov ecx, [ebx + CEEF_S_FILESZ]

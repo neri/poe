@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "krnlconv",
+  "elf2ceef",
   "mkfdfs",
 ]
 

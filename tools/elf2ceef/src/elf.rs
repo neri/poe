@@ -11,7 +11,7 @@ pub type Elf64Off = u64;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Elf32Hdr {
-    pub n_ident: [u8; 16],
+    pub e_ident: [u8; Self::EI_NIDENT],
     pub e_type: ElfType,
     pub e_machine: Machine,
     pub e_version: ElfWord,
@@ -28,13 +28,14 @@ pub struct Elf32Hdr {
 }
 
 impl Elf32Hdr {
+    pub const EI_NIDENT: usize = 16;
     pub const MAGIC: [u8; 4] = *b"\x7FELF";
 
     pub fn is_valid(&self) -> bool {
-        (self.n_ident[..4] == Self::MAGIC)
-            && (self.n_ident[4] == 1)
-            && (self.n_ident[5] == 1)
-            && (self.n_ident[6] == 1)
+        (self.e_ident[..4] == Self::MAGIC)
+            && (self.e_ident[4] == 1)
+            && (self.e_ident[5] == 1)
+            && (self.e_ident[6] == 1)
     }
 }
 
@@ -137,6 +138,9 @@ pub enum ElfSegmentType {
     PHDR = 6,
     TLS = 7,
     PT_LOOS = 0x6000_0000,
+    PT_GNU_EH_FRAME = 0x6474e550,
+    PT_GNU_STACK = 0x6474e551,
+    PT_SUNW_UNWIND = 0x6464e550,
     PT_HIOS = 0x6FFF_FFFF,
     PT_LOPROC = 0x7000_0000,
     PT_HIPROC = 0x7FFF_FFFF,

@@ -1,9 +1,9 @@
-// Kernel file converter
+// ELF to CEEF
 // Copyright (c) 2021 MEG-OS project
 
 // use byteorder::*;
 use core::mem::transmute;
-use krnlconv::{ceef::*, elf::*};
+use elf2ceef::{ceef::*, elf::*};
 use std::io::Write;
 use std::{cmp, env};
 use std::{fs::File, process};
@@ -50,15 +50,35 @@ fn main() {
     let n_segments = header.e_phnum as usize;
     let mut ceef_sec_hdr: Vec<CeefSecHeader> = Vec::with_capacity(n_segments);
 
-    println!("program header {}", n_segments);
+    println!("number of program headers {}", n_segments);
     for i in 0..n_segments {
         let phdr: &Elf32Phdr = unsafe {
             transmute(&blob[header.e_phoff as usize + (header.e_phentsize as usize) * i])
         };
 
+        let ceef_hdr = CeefSecHeader::new(
+            phdr.p_flags as u8,
+            phdr.p_vaddr,
+            phdr.p_filesz,
+            phdr.p_memsz,
+            if phdr.p_align != 0 {
+                phdr.p_align.trailing_zeros() as u8
+            } else {
+                0
+            },
+        );
+
         println!(
-            "Phdr #{} {:?} {} {} {} {:08x} {:08x}",
-            i, phdr.p_type, phdr.p_flags, phdr.p_offset, phdr.p_filesz, phdr.p_vaddr, phdr.p_memsz
+            "Phdr #{} {} {} {:08x} {:08x} {:x}({:?}) {} {}",
+            i,
+            ceef_hdr.attr(),
+            ceef_hdr.align(),
+            ceef_hdr.vaddr,
+            ceef_hdr.memsz,
+            phdr.p_type as usize,
+            phdr.p_type,
+            phdr.p_offset,
+            ceef_hdr.filesz,
         );
 
         if phdr.p_type == ElfSegmentType::LOAD {
@@ -71,12 +91,7 @@ fn main() {
                 let f_size = phdr.p_filesz as usize;
                 data.extend(blob[f_offset..f_offset + f_size].iter());
 
-                ceef_sec_hdr.push(CeefSecHeader::new(
-                    phdr.p_flags as u8,
-                    phdr.p_vaddr,
-                    phdr.p_filesz,
-                    phdr.p_memsz,
-                ));
+                ceef_sec_hdr.push(ceef_hdr);
             }
         }
     }

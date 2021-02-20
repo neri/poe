@@ -54,8 +54,8 @@ impl Shell {
         let fg_color = IndexedColor::BLACK;
 
         let window_rect = Rect::new(
-            10 + 180 * instance as isize,
-            30 + instance as isize,
+            8 + 168 * instance as isize,
+            30,
             160,
             font.line_height() + padding_y * 2,
         );
