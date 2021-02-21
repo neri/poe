@@ -35,12 +35,6 @@ A hobby OS written in Rust, currently a subset of MYOS.
 $ make
 ```
 
-### how to run
-
-```
-$ make run
-```
-
 ## History
 
 ### 2021-01-06

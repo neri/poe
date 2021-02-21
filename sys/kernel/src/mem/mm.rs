@@ -1,5 +1,6 @@
 // Memory Manager
 use crate::arch::cpu::Cpu;
+use bitflags::*;
 use core::alloc::Layout;
 use core::num::*;
 use toeboot::*;
@@ -24,7 +25,7 @@ impl MemoryManager {
         }
     }
 
-    pub(crate) unsafe fn init_first(info: &BootInfo) {
+    pub(crate) unsafe fn init(info: &BootInfo) {
         let shared = Self::shared();
 
         shared.total_memory_size = (info.smap.0 + info.smap.1) as usize;
@@ -50,8 +51,17 @@ impl MemoryManager {
     pub fn free_memory_size() -> usize {
         let shared = Self::shared();
         shared.pairs[..shared.n_free]
-            .into_iter()
+            .iter()
             .fold(0, |v, i| v + i.size)
+    }
+
+    #[inline]
+    pub unsafe fn direct_map(
+        base: usize,
+        _size: usize,
+        _prot: MProtect,
+    ) -> Result<NonZeroUsize, AllocationError> {
+        NonZeroUsize::new(base).ok_or(AllocationError::InvalidArgument)
     }
 
     /// Allocate static pages
@@ -119,6 +129,15 @@ struct MemFreePair {
 impl MemFreePair {
     const fn empty() -> Self {
         Self { base: 0, size: 0 }
+    }
+}
+
+bitflags! {
+    pub struct MProtect: usize {
+        const READ  = 0x1;
+        const WRITE = 0x2;
+        const EXEC  = 0x4;
+        const NONE  = 0x0;
     }
 }
 

@@ -1,4 +1,4 @@
-// TOE Boot Protocol
+// MEG-OS Boot Protocol for TOE
 #![no_std]
 
 use core::fmt;
@@ -8,11 +8,11 @@ pub struct BootInfo {
     pub platform: Platform,
     pub bios_boot_drive: u8,
 
-    /// CPU Version or Generation
+    /// CPU Version
     pub cpu_ver: CpuVersion,
 
     /// Screen bit per pixel
-    /// 0 or 8 means 8bpp, 32 means 32bpp
+    /// 0 or 8 means 8bpp, 32 means 32bpp, otherwise undefined
     pub screen_bpp: u8,
 
     /// Screen informations
@@ -30,6 +30,7 @@ pub struct BootInfo {
     pub initrd_base: u32,
     pub initrd_size: u32,
 
+    /// TODO: SMAP
     pub smap: (u32, u32),
 }
 

@@ -103,7 +103,7 @@ impl System {
         screen.fill_rect(screen.bounds(), IndexedColor::BLACK);
         shared.main_screen = Some(screen);
 
-        mem::mm::MemoryManager::init_first(&info);
+        mem::mm::MemoryManager::init(&info);
         arch::Arch::init();
 
         task::scheduler::Scheduler::start(Self::late_init, f as usize);
@@ -111,9 +111,9 @@ impl System {
 
     fn late_init(f: usize) {
         unsafe {
-            arch::Arch::late_init();
             window::WindowManager::init();
             io::hid::HidManager::init();
+            arch::Arch::late_init();
 
             let f: fn() -> () = core::mem::transmute(f);
             f();

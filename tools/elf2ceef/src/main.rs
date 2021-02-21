@@ -1,7 +1,6 @@
 // ELF to CEEF
 // Copyright (c) 2021 MEG-OS project
 
-// use byteorder::*;
 use core::mem::transmute;
 use elf2ceef::{ceef::*, elf::*};
 use std::io::Write;

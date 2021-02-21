@@ -4,7 +4,7 @@ use bitflags::*;
 use core::mem::transmute;
 
 #[repr(packed)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct DosBpb {
     pub bytes_per_sector: u16,
     pub sectors_per_cluster: u8,
@@ -19,7 +19,6 @@ pub struct DosBpb {
 }
 
 #[repr(packed)]
-#[derive(Debug, Clone, Copy)]
 pub struct DosExtendedBpb {
     pub bpb: DosBpb,
     pub hidden_sectors_count: u32,
@@ -98,7 +97,6 @@ impl Default for DosExtendedBpb {
 }
 
 #[repr(packed)]
-#[derive(Debug, Clone, Copy)]
 pub struct BootSector {
     pub jumps: [u8; 3],
     pub oem_name: [u8; 8],
@@ -115,7 +113,7 @@ impl BootSector {
         unsafe { transmute(bytes) }
     }
 
-    pub fn as_bytes(self) -> [u8; Self::PREFERRED_SIZE] {
+    pub fn as_bytes(&self) -> &[u8; Self::PREFERRED_SIZE] {
         unsafe { transmute(self) }
     }
 }
@@ -133,7 +131,7 @@ impl Default for BootSector {
 }
 
 #[repr(packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy)]
 pub struct DosDirEnt {
     pub name: [u8; 11],
     pub attr: DosAttributes,

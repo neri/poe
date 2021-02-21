@@ -262,7 +262,7 @@ impl Cpu {
 /// Architecture-specific context data
 #[repr(C)]
 pub struct CpuContextData {
-    _data: [u8; Self::SIZE_OF_CONTEXT],
+    _repr: [u8; Self::SIZE_OF_CONTEXT],
 }
 
 impl CpuContextData {
@@ -272,7 +272,7 @@ impl CpuContextData {
     #[inline]
     pub fn new() -> Self {
         Self {
-            _data: [0; Self::SIZE_OF_CONTEXT],
+            _repr: [0; Self::SIZE_OF_CONTEXT],
         }
     }
 

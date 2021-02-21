@@ -82,7 +82,7 @@ fn main() {
     }
 
     let mut fs = Fatfs::from_bpb(&boot_sector.ebpb);
-    let mut vd = VirtualDisk::new(boot_sector, fs.sector_size, fs.total_sectors);
+    let mut vd = VirtualDisk::new(&boot_sector, fs.sector_size, fs.total_sectors);
     fs.append_root_dir(root_dir.as_slice());
 
     unsafe {
@@ -284,7 +284,7 @@ pub struct VirtualDisk {
 }
 
 impl VirtualDisk {
-    pub fn new(boot_sector: BootSector, sector_size: usize, total_sector: usize) -> Self {
+    pub fn new(boot_sector: &BootSector, sector_size: usize, total_sector: usize) -> Self {
         let capacity = sector_size * total_sector;
         let mut vec = Vec::with_capacity(capacity);
         vec.extend(boot_sector.as_bytes().iter());
