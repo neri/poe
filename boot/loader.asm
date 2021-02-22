@@ -616,6 +616,7 @@ _next32:
 
     push byte 0
     popfd
+    sub esp, 12
     mov ecx, _boot_info
     push ecx
     call [ebp + CEEF_ENTRY]

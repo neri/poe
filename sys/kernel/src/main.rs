@@ -36,7 +36,9 @@ impl Shell {
     }
 
     fn main() {
-        WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
+        // 77 111 150
+        // WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
+        WindowManager::set_desktop_color(IndexedColor::from_rgb(0x426F96));
         WindowManager::set_pointer_visible(true);
         Timer::sleep(Duration::from_millis(1000));
 
