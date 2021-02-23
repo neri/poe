@@ -9,6 +9,7 @@ use crate::sync::atomicflags::AtomicBitflags;
 use crate::sync::fifo::*;
 use crate::sync::semaphore::*;
 use crate::task::scheduler::*;
+use crate::util::text::*;
 use crate::*;
 use crate::{io::hid::*, system::System};
 use alloc::boxed::Box;
@@ -847,21 +848,21 @@ impl RawWindow {
                 let font = FontManager::fixed_ui_font();
 
                 if let Some(s) = self.title() {
-                    let rect = title_rect.insets_by(EdgeInsets::new(
-                        isize::max(0, (WINDOW_TITLE_HEIGHT - font.line_height()) / 2),
-                        8,
-                        0,
-                        8,
-                    ));
-                    font.write_str(
-                        s,
+                    let rect = title_rect.insets_by(EdgeInsets::new(0, 8, 0, 8));
+                    TextProcessing::draw_text(
                         &mut bitmap,
+                        s,
+                        font,
                         rect,
                         if is_active {
                             WINDOW_ACTIVE_TITLE_FG_COLOR
                         } else {
                             WINDOW_INACTIVE_TITLE_FG_COLOR
                         },
+                        1,
+                        LineBreakMode::TrancatingTail,
+                        TextAlignment::Center,
+                        VerticalAlignment::Center,
                     );
                 }
             }

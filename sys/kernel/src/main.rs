@@ -15,6 +15,7 @@ use kernel::graphics::coords::*;
 use kernel::mem::mm::MemoryManager;
 use kernel::system::System;
 use kernel::task::scheduler::Timer;
+use kernel::util::text::*;
 use kernel::window::*;
 use kernel::*;
 use mem::string::*;
@@ -36,11 +37,10 @@ impl Shell {
     }
 
     fn main() {
-        // 77 111 150
-        // WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
-        WindowManager::set_desktop_color(IndexedColor::from_rgb(0x426F96));
+        WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
+        // WindowManager::set_desktop_color(IndexedColor::from_rgb(0x426F96));
         WindowManager::set_pointer_visible(true);
-        Timer::sleep(Duration::from_millis(1000));
+        Timer::sleep(Duration::from_millis(100));
 
         SpawnOption::new().spawn_f(Self::status_bar_thread, 0, "status");
 
@@ -56,9 +56,9 @@ impl Shell {
         let fg_color = IndexedColor::BLACK;
 
         let window_rect = Rect::new(
-            8 + 168 * instance as isize,
+            8 + 136 * instance as isize,
             30,
-            160,
+            128,
             font.line_height() + padding_y * 2,
         );
         let window = WindowBuilder::new("Command Mode")
@@ -105,13 +105,20 @@ impl Shell {
                             );
                             bitmap.view(rect, |bitmap| {
                                 bitmap.fill_rect(bitmap.bounds(), bg_color);
-                                font.write_str(
-                                    sb.as_str(),
+                                TextProcessing::write_str(
                                     bitmap,
-                                    bitmap.bounds() + Point::new(1, 1),
+                                    sb.as_str(),
+                                    font,
+                                    Point::new(1, 1),
                                     IndexedColor::from_rgb(0xCCCCCC),
                                 );
-                                font.write_str(sb.as_str(), bitmap, bitmap.bounds(), fg_color);
+                                TextProcessing::write_str(
+                                    bitmap,
+                                    sb.as_str(),
+                                    font,
+                                    Point::new(0, 0),
+                                    fg_color,
+                                );
                                 if window.is_active() && cursor_phase == 1 {
                                     bitmap.fill_rect(
                                         Rect::new(
@@ -135,12 +142,12 @@ impl Shell {
 
     #[allow(dead_code)]
     fn about_thread(_: usize) {
-        let window_size = Size::new(300, 180);
+        let window_size = Size::new(320, 180);
         let window = WindowBuilder::new("About").size(window_size).build();
         window.show();
 
         let mut sb = StringBuffer::new();
-        let interval = 5000;
+        let interval = 500;
         window.create_timer(0, Duration::from_millis(0));
         while let Some(message) = window.wait_message() {
             match message {
@@ -149,6 +156,7 @@ impl Shell {
                     window.create_timer(0, Duration::from_millis(interval));
                 }
                 WindowMessage::Draw => {
+                    let font = FontManager::fixed_ui_font();
                     sb.clear();
 
                     writeln!(sb, "{} v{}", System::name(), System::version(),).unwrap();
@@ -156,24 +164,31 @@ impl Shell {
                     writeln!(sb, "CPU ver {}", System::cpu_ver().0,).unwrap();
                     writeln!(
                         sb,
-                        "Memory {} KB Free, {} MB Total",
+                        "Memory {} MB Total {} KB Free {} KB Used",
+                        MemoryManager::total_memory_size() >> 20,
                         MemoryManager::free_memory_size() >> 10,
-                        MemoryManager::total_memory_size() >> 20
+                        (MemoryManager::total_memory_size()
+                            - MemoryManager::free_memory_size()
+                            - 0x100000)
+                            >> 10,
                     )
                     .unwrap();
 
                     window
                         .draw(|bitmap| {
                             bitmap.fill_rect(bitmap.bounds(), window.bg_color());
-                            let font = FontManager::fixed_ui_font();
-                            let rect = bitmap.bounds().insets_by(EdgeInsets::new(64, 8, 2, 8));
-                            // font.write_str(
-                            //     sb.as_str(),
-                            //     bitmap,
-                            //     rect+ Point::new(1, 1),
-                            //     IndexedColor::from_rgb(0xCCCCCC),
-                            // );
-                            font.write_str(sb.as_str(), bitmap, rect, IndexedColor::BLACK);
+                            let rect = bitmap.bounds().insets_by(EdgeInsets::new(0, 8, 2, 8));
+                            TextProcessing::draw_text(
+                                bitmap,
+                                sb.as_str(),
+                                font,
+                                rect,
+                                IndexedColor::BLACK,
+                                0,
+                                LineBreakMode::default(),
+                                TextAlignment::Center,
+                                util::text::VerticalAlignment::Bottom,
+                            );
                         })
                         .unwrap();
                 }
@@ -198,15 +213,11 @@ impl Shell {
             .draw_in_rect(window_size.into(), |bitmap| {
                 let font = FontManager::fixed_ui_font();
                 let s = System::short_name();
-                font.write_str(
-                    s,
+                TextProcessing::write_str(
                     bitmap,
-                    Rect::new(
-                        8,
-                        (STATUS_BAR_HEIGHT - font.line_height()) / 2,
-                        font.width() * s.len() as isize,
-                        font.line_height(),
-                    ),
+                    s,
+                    font,
+                    Point::new(9, (STATUS_BAR_HEIGHT - font.line_height()) / 2),
                     IndexedColor::BLACK,
                 );
             })
@@ -255,10 +266,11 @@ impl Shell {
                     window
                         .draw_in_rect(clock_rect, |bitmap| {
                             bitmap.fill_rect(bitmap.bounds(), window.bg_color());
-                            font.write_str(
-                                sb.as_str(),
+                            TextProcessing::write_str(
                                 bitmap,
-                                bitmap.bounds(),
+                                sb.as_str(),
+                                font,
+                                Point::default(),
                                 IndexedColor::BLACK,
                             );
                         })

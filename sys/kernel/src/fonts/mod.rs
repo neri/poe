@@ -93,6 +93,12 @@ impl FixedFontDriver<'_> {
         }
     }
 
+    #[inline]
+    pub fn height_for(&self, character: char) -> isize {
+        let _ = character;
+        self.size.height
+    }
+
     /// Glyph Data for Rasterized Font
     pub fn glyph_for(&self, character: char) -> Option<&[u8]> {
         let c = character as usize;
@@ -113,40 +119,6 @@ impl FixedFontDriver<'_> {
             let origin = Point::new(origin.x, origin.y + self.leading);
             let size = Size::new(self.width_for(character), self.size.height());
             to.draw_font(font, size, origin, color);
-        }
-    }
-
-    /// Write string to bitmap
-    pub fn write_str<T>(&self, s: &str, to: &mut T, rect: Rect, color: T::PixelType)
-    where
-        T: RasterFontWriter,
-    {
-        let coords = match Coordinates::from_rect(rect) {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-        let mut cursor = coords.left_top();
-        for c in s.chars() {
-            let width = self.width_for(c);
-            match c {
-                '\n' => {
-                    cursor.x = coords.left;
-                    cursor.y += self.line_height();
-                }
-                _ => {
-                    if c >= ' ' {
-                        if cursor.x + width > coords.right {
-                            cursor.x = coords.left;
-                            cursor.y += self.line_height();
-                        }
-                        if cursor.y + self.line_height() > coords.bottom {
-                            break;
-                        }
-                        self.write_char(c, to, cursor, color);
-                        cursor.x += width;
-                    }
-                }
-            }
         }
     }
 }

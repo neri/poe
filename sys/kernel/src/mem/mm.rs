@@ -1,5 +1,9 @@
 // Memory Manager
+
+use super::slab::SlabAllocator;
+use super::string::*;
 use crate::arch::cpu::Cpu;
+use crate::*;
 use bitflags::*;
 use core::alloc::Layout;
 use core::num::*;
@@ -11,17 +15,19 @@ pub struct MemoryManager {
     total_memory_size: usize,
     n_free: usize,
     pairs: [MemFreePair; Self::MAX_FREE_PAIRS],
+    slab: Option<SlabAllocator>,
 }
 
 impl MemoryManager {
-    const MAX_FREE_PAIRS: usize = 4096;
-    const PAGE_SIZE_MIN: usize = 0x1000;
+    const MAX_FREE_PAIRS: usize = 1024;
+    pub const PAGE_SIZE_MIN: usize = 0x1000;
 
     const fn new() -> Self {
         Self {
             total_memory_size: 0,
             n_free: 0,
             pairs: [MemFreePair::empty(); Self::MAX_FREE_PAIRS],
+            slab: None,
         }
     }
 
@@ -34,6 +40,10 @@ impl MemoryManager {
             size: info.smap.1 as usize,
         };
         shared.n_free = 1;
+
+        shared.slab = Some(SlabAllocator::new());
+
+        // todo!();
     }
 
     #[inline]
@@ -50,9 +60,15 @@ impl MemoryManager {
     #[inline]
     pub fn free_memory_size() -> usize {
         let shared = Self::shared();
-        shared.pairs[..shared.n_free]
-            .iter()
-            .fold(0, |v, i| v + i.size)
+        let size_slab = shared
+            .slab
+            .as_ref()
+            .map(|v| v.free_memory_size())
+            .unwrap_or(0);
+        size_slab
+            + shared.pairs[..shared.n_free]
+                .iter()
+                .fold(0, |v, i| v + i.size)
     }
 
     #[inline]
@@ -85,14 +101,18 @@ impl MemoryManager {
     /// Allocate kernel memory
     pub unsafe fn zalloc(layout: Layout) -> Result<NonZeroUsize, AllocationError> {
         Cpu::without_interrupts(|| {
-            // let shared = Self::shared();
-            // if let Some(slab) = &shared.slab {
-            //     match slab.alloc(layout) {
-            //         Ok(result) => return Ok(result),
-            //         Err(AllocationError::Unsupported) => (),
-            //         Err(err) => return Err(err),
-            //     }
-            // }
+            let shared = Self::shared();
+            if let Some(slab) = &shared.slab {
+                let r = slab.alloc(layout);
+                // match r {
+                //     Ok(v) => println!("ALLOC_OK {:?} => {:08x}", layout, v),
+                //     Err(err) => println!("ALLOC_NG {:?} => {:?}", layout, err),
+                // }
+                match r {
+                    Err(AllocationError::Unsupported) => (),
+                    _ => return r,
+                }
+            }
             Self::static_alloc(layout)
         })
     }
@@ -107,17 +127,25 @@ impl MemoryManager {
                 let ptr = base.get() as *mut u8;
                 ptr.write_bytes(0xCC, layout.size());
 
-                // let shared = Self::shared();
-                // if let Some(slab) = &shared.slab {
-                //     match slab.free(base, layout) {
-                //         Ok(_) => (),
-                //         Err(err) => return Err(err),
-                //     }
-                // }
+                let shared = Self::shared();
+                if let Some(slab) = &shared.slab {
+                    slab.free(base, layout)
+                } else {
+                    Ok(())
+                }
             })
+        } else {
+            Ok(())
         }
-        Ok(())
     }
+
+    // pub fn statistics_slab(sb: &mut StringBuffer) {
+    //     let shared = Self::shared();
+    //     // sb.clear();
+    //     for slab in shared.slab.as_ref().unwrap().statistics() {
+    //         writeln!(sb, "Slab {:4}: {:3} / {:3}", slab.0, slab.1, slab.2).unwrap();
+    //     }
+    // }
 }
 
 #[derive(Debug, Clone, Copy)]

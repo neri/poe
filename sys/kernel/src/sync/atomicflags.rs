@@ -76,11 +76,11 @@ impl<T: Into<usize>> AtomicBitflags<T> {
 
     #[inline]
     pub fn test_and_set(&self, bits: T) -> bool {
-        Cpu::interlocked_test_and_set(&self.repr, bits.into())
+        Cpu::interlocked_test_and_set(&self.repr, bits.into().trailing_zeros())
     }
 
     #[inline]
     pub fn test_and_clear(&self, bits: T) -> bool {
-        Cpu::interlocked_test_and_clear(&self.repr, bits.into())
+        Cpu::interlocked_test_and_clear(&self.repr, bits.into().trailing_zeros())
     }
 }
