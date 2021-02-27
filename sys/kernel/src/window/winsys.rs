@@ -144,7 +144,6 @@ impl WindowManager {
             window_pool.insert(handle, window);
             handle
         };
-        window_orders.push(pointer);
 
         WM = Some(Box::new(Self {
             screen_insets: EdgeInsets::default(),
@@ -170,7 +169,7 @@ impl WindowManager {
     }
 
     fn window_thread(_: usize) {
-        let shared = WindowManager::shared();
+        let shared = unsafe { WM.as_mut().unwrap() };
         loop {
             shared.sem_winthread.wait();
 
@@ -343,19 +342,25 @@ impl WindowManager {
 
     #[inline]
     #[track_caller]
-    fn shared() -> &'static mut Self {
+    fn shared() -> &'static Self {
+        unsafe { WM.as_ref().unwrap() }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn shared_mut() -> &'static mut Self {
         unsafe { WM.as_mut().unwrap() }
     }
 
     #[inline]
-    fn shared_opt() -> Option<&'static mut Box<Self>> {
-        unsafe { WM.as_mut() }
+    fn shared_opt() -> Option<&'static Box<Self>> {
+        unsafe { WM.as_ref() }
     }
 
     fn add(window: Box<RawWindow>) {
         unsafe {
             Cpu::without_interrupts(|| {
-                let shared = Self::shared();
+                let shared = Self::shared_mut();
                 shared.window_pool.insert(window.handle, window);
             })
         }
@@ -383,7 +388,7 @@ impl WindowManager {
             None => return,
         };
 
-        let shared = WindowManager::shared();
+        let shared = WindowManager::shared_mut();
         Self::remove_hierarchy(window.handle);
 
         let mut insert_position = None;
@@ -411,7 +416,7 @@ impl WindowManager {
 
         window.attributes.remove(WindowAttributes::VISIBLE);
 
-        let shared = WindowManager::shared();
+        let shared = WindowManager::shared_mut();
         let mut remove_position = None;
         for (index, lhs) in shared.window_orders.iter().enumerate() {
             if *lhs == window.handle {
@@ -448,14 +453,13 @@ impl WindowManager {
 
     #[inline]
     pub fn add_screen_insets(insets: EdgeInsets) {
-        let shared = Self::shared();
+        let shared = Self::shared_mut();
         shared.screen_insets += insets;
     }
 
     #[inline]
     pub fn main_screen<'a>(&self) -> &'a mut Bitmap8<'static> {
-        let shared = Self::shared();
-        &mut shared.main_screen
+        &mut Self::shared_mut().main_screen
     }
 
     pub(crate) fn post_key_event(event: KeyEvent) {
@@ -612,7 +616,7 @@ impl WindowManager {
     }
 
     fn set_active(window: Option<WindowHandle>) {
-        let shared = Self::shared();
+        let shared = Self::shared_mut();
         if let Some(old_active) = shared.active {
             let _ = old_active.post(WindowMessage::Deactivated);
             shared.active = window;
@@ -736,7 +740,7 @@ impl RawWindow {
     }
 
     fn hide(&self) {
-        let shared = WindowManager::shared();
+        let shared = WindowManager::shared_mut();
         let frame = self.frame;
         let handle = self.handle;
         let new_active = if shared.active.contains(&handle) {
@@ -1244,8 +1248,7 @@ impl WindowHandle {
     where
         F: FnOnce(&mut RawWindow) -> R,
     {
-        let shared = WindowManager::shared();
-        let window = shared.get_mut(self);
+        let window = WindowManager::shared_mut().get_mut(self);
         window.map(|v| f(v))
     }
 

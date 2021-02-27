@@ -59,15 +59,15 @@ impl Modifier {
     }
 }
 
-bitflags! {
-    pub struct KeyEventFlags: u8 {
-        const BREAK = 0b1000_0000;
-    }
-}
-
 impl Default for Modifier {
     fn default() -> Self {
         Self::empty()
+    }
+}
+
+bitflags! {
+    pub struct KeyEventFlags: u8 {
+        const BREAK = 0b1000_0000;
     }
 }
 

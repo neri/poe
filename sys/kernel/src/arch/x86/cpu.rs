@@ -103,27 +103,27 @@ impl Cpu {
     }
 
     #[inline]
-    pub fn interlocked_test_and_set(p: &AtomicUsize, val: u32) -> bool {
+    pub fn interlocked_test_and_set(p: &AtomicUsize, position: u32) -> bool {
         unsafe {
             let p = p as *const _ as *mut usize;
             let r: usize;
             asm!("
                 lock bts [{0}], {1}
                 sbb {2}, {2}
-                ", in(reg) p, in(reg) val, lateout(reg) r);
+                ", in(reg) p, in(reg) position, lateout(reg) r);
             r != 0
         }
     }
 
     #[inline]
-    pub fn interlocked_test_and_clear(p: &AtomicUsize, val: u32) -> bool {
+    pub fn interlocked_test_and_clear(p: &AtomicUsize, position: u32) -> bool {
         unsafe {
             let p = p as *const _ as *mut usize;
             let r: usize;
             asm!("
                 lock btr [{0}], {1}
                 sbb {2}, {2}
-                ", in(reg) p, in(reg) val, lateout(reg) r);
+                ", in(reg) p, in(reg) position, lateout(reg) r);
             r != 0
         }
     }

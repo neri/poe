@@ -1,5 +1,7 @@
 // Random Number Generator
 
+use core::num::{NonZeroU32, NonZeroU64};
+
 pub trait Rng {
     type Output;
     fn rand(&mut self) -> Result<Self::Output, ()>;
@@ -10,8 +12,8 @@ pub struct XorShift64 {
 }
 
 impl XorShift64 {
-    pub const fn new(seed: u64) -> Self {
-        Self { seed }
+    pub const fn new(seed: NonZeroU64) -> Self {
+        Self { seed: seed.get() }
     }
 
     pub fn next(&mut self) -> u64 {
@@ -25,7 +27,9 @@ impl XorShift64 {
 
 impl Default for XorShift64 {
     fn default() -> Self {
-        Self::new(88172645463325252)
+        Self {
+            seed: 88172645463325252,
+        }
     }
 }
 
@@ -41,8 +45,8 @@ pub struct XorShift32 {
 }
 
 impl XorShift32 {
-    pub const fn new(seed: u32) -> Self {
-        Self { seed }
+    pub const fn new(seed: NonZeroU32) -> Self {
+        Self { seed: seed.get() }
     }
 
     pub fn next(&mut self) -> u32 {
@@ -57,7 +61,7 @@ impl XorShift32 {
 
 impl Default for XorShift32 {
     fn default() -> Self {
-        Self::new(2463534242)
+        Self { seed: 2463534242 }
     }
 }
 

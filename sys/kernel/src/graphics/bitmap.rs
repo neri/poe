@@ -701,37 +701,8 @@ impl VecBitmap8 {
     where
         F: FnOnce(&mut Bitmap8) -> R,
     {
-        let coords = match Coordinates::try_from(rect) {
-            Ok(v) => v,
-            Err(_) => return None,
-        };
-        let width = self.width as isize;
-        let height = self.height as isize;
-        let stride = self.stride;
-
-        if coords.left < 0
-            || coords.left >= width
-            || coords.right > width
-            || coords.top < 0
-            || coords.top >= height
-            || coords.bottom > height
-        {
-            return None;
-        }
-
-        let offset = rect.x() as usize + rect.y() as usize * stride;
-        let new_len = rect.height() as usize * stride;
-        let r = {
-            let slice = self.slice_mut();
-            let mut view = Bitmap8 {
-                width: rect.width() as usize,
-                height: rect.height() as usize,
-                stride,
-                slice: UnsafeCell::new(&mut slice[offset..offset + new_len]),
-            };
-            f(&mut view)
-        };
-        Some(r)
+        let mut bitmap = Bitmap8::from(self);
+        bitmap.view(rect, f)
     }
 }
 
