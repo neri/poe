@@ -57,7 +57,11 @@ full: install
 
 iso: $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 	cp -r $(BIN)cdboot.bin $(IMG_SOURCES) $(ISO_SRC)
-	mkisofs -iso-level 2 -r -T -hide boot.cat -hide-joliet boot.catalog -hide-joliet-trans-tbl -J -V "MEG-OS" -no-emul-boot -b cdboot.bin -o $(TARGET_ISO) $(ISO_SRC)
+	mkisofs -iso-level 2 -V "MEG-OS" \
+		-hide-joliet boot.catalog -hide-joliet-trans-tbl -J \
+		-r -T \
+		-hide boot.catalog -no-emul-boot -b cdboot.bin \
+		-o $(TARGET_ISO) $(ISO_SRC)
 	dd conv=notrunc if=$(BIN)fmcdboot.bin of=$(TARGET_ISO)
 
 run: install

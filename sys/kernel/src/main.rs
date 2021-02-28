@@ -42,9 +42,10 @@ impl Shell {
         WindowManager::set_pointer_visible(true);
         Timer::sleep(Duration::from_millis(100));
 
-        SpawnOption::new().spawn_f(Self::status_bar_thread, 0, "status");
+        SpawnOption::new().spawn_f(Self::status_bar_thread, 0, "Status Bar");
+        SpawnOption::new().spawn_f(Self::actmon_thread, 0, "Activity Monitor");
 
-        SpawnOption::new().spawn_f(Self::console_thread, 1, "console");
+        // SpawnOption::new().spawn_f(Self::console_thread, 1, "Command Mode 2");
         Self::console_thread(0);
     }
 
@@ -141,13 +142,80 @@ impl Shell {
     }
 
     #[allow(dead_code)]
+    fn actmon_thread(_: usize) {
+        let window_size = Size::new(280, 160);
+        let bg_color = IndexedColor::BLACK;
+        let fg_color = IndexedColor::YELLOW;
+
+        let window = WindowBuilder::new("Activity Monitor")
+            // .style_add(WindowStyle::FLOATING)
+            .frame(Rect::new(
+                -window_size.width - 8,
+                -window_size.height - 8,
+                window_size.width,
+                window_size.height,
+            ))
+            .bg_color(bg_color)
+            .build();
+        window.show();
+
+        let mut sb = StringBuffer::new();
+        let interval = 1000;
+        window.create_timer(0, Duration::from_millis(0));
+        while let Some(message) = window.wait_message() {
+            match message {
+                WindowMessage::Timer(_timer) => {
+                    window.set_needs_display();
+                    window.create_timer(0, Duration::from_millis(interval));
+                }
+                WindowMessage::Draw => {
+                    let font = FontManager::fixed_small_font();
+                    sb.clear();
+                    writeln!(
+                        sb,
+                        "Memory {} MB, {} KB Free, {} KB Used",
+                        MemoryManager::total_memory_size() >> 20,
+                        MemoryManager::free_memory_size() >> 10,
+                        (MemoryManager::total_memory_size()
+                            - MemoryManager::free_memory_size()
+                            - 0x100000)
+                            >> 10,
+                    )
+                    .unwrap();
+                    Scheduler::print_statistics(&mut sb, false);
+
+                    window
+                        .draw(|bitmap| {
+                            bitmap.fill_rect(bitmap.bounds(), window.bg_color());
+                            let rect = bitmap.bounds().insets_by(EdgeInsets::new(4, 4, 4, 4));
+                            TextProcessing::draw_text(
+                                bitmap,
+                                sb.as_str(),
+                                font,
+                                rect,
+                                fg_color,
+                                0,
+                                LineBreakMode::default(),
+                                TextAlignment::Left,
+                                util::text::VerticalAlignment::Top,
+                            );
+                        })
+                        .unwrap();
+                }
+                _ => window.handle_default_message(message),
+            }
+        }
+        unimplemented!()
+    }
+
+    #[allow(dead_code)]
     fn about_thread(_: usize) {
-        let window_size = Size::new(320, 180);
+        let window_size = Size::new(320, 160);
         let window = WindowBuilder::new("About").size(window_size).build();
         window.show();
 
         let mut sb = StringBuffer::new();
-        let interval = 500;
+        let interval = 5000;
         window.create_timer(0, Duration::from_millis(0));
         while let Some(message) = window.wait_message() {
             match message {
@@ -162,17 +230,8 @@ impl Shell {
                     writeln!(sb, "{} v{}", System::name(), System::version(),).unwrap();
                     writeln!(sb, "Platform {}", System::platform(),).unwrap();
                     writeln!(sb, "CPU ver {}", System::cpu_ver().0,).unwrap();
-                    writeln!(
-                        sb,
-                        "Memory {} MB Total {} KB Free {} KB Used",
-                        MemoryManager::total_memory_size() >> 20,
-                        MemoryManager::free_memory_size() >> 10,
-                        (MemoryManager::total_memory_size()
-                            - MemoryManager::free_memory_size()
-                            - 0x100000)
-                            >> 10,
-                    )
-                    .unwrap();
+                    writeln!(sb, "Memory {} MB", MemoryManager::total_memory_size() >> 20,)
+                        .unwrap();
 
                     window
                         .draw(|bitmap| {
@@ -256,7 +315,7 @@ impl Shell {
                     }
 
                     let font = FontManager::fixed_system_font();
-                    let clock_width = font.width() * 10;
+                    let clock_width = font.width() * 8;
                     let clock_rect = Rect::new(
                         window_size.width() - clock_width - 8,
                         (window_size.height() - font.line_height()) / 2,

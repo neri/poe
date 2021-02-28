@@ -1,6 +1,7 @@
 // Scheduler
 
 use crate::arch::cpu::{Cpu, CpuContextData};
+use crate::mem::string::StringBuffer;
 use crate::sync::atomicflags::AtomicBitflags;
 use crate::sync::fifo::*;
 use crate::window::winsys::*;
@@ -11,7 +12,9 @@ use alloc::vec::*;
 use bitflags::*;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
+use core::fmt::Write;
 use core::num::NonZeroUsize;
+use core::ops::Add;
 use core::sync::atomic::*;
 use core::time::Duration;
 
@@ -25,6 +28,8 @@ pub struct Scheduler {
     queue_normal: ThreadQueue,
     queue_lower: ThreadQueue,
     pool: ThreadPool,
+
+    usage: AtomicUsize,
 
     timer_events: Vec<TimerEvent>,
 
@@ -62,9 +67,12 @@ impl Scheduler {
             idle,
             current: idle,
             retired: None,
+            usage: AtomicUsize::new(0),
         }));
 
         SpawnOption::with_priority(Priority::Normal).spawn(f, args, "System");
+
+        SpawnOption::new().spawn(Self::statistics_thread, 0, "Statistics");
 
         SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
 
@@ -77,6 +85,79 @@ impl Scheduler {
     #[track_caller]
     fn shared<'a>() -> &'a mut Self {
         unsafe { SCHEDULER.as_mut().unwrap() }
+    }
+
+    /// Measuring Statistics
+    fn statistics_thread(_: usize) {
+        let shared = Self::shared();
+
+        let expect = 1_000_000;
+        let interval = Duration::from_micros(expect as u64);
+        let mut measure = Timer::measure().0;
+        loop {
+            Timer::sleep(interval);
+
+            let now = Timer::measure().0;
+            let actual = now - measure;
+            let actual1000 = actual as usize * 1000;
+
+            let mut usage = 0;
+            for thread in shared.pool.data.values() {
+                let thread = thread.clone();
+                let thread = unsafe { &mut (*thread.get()) };
+                let load0 = thread.load0.swap(0, Ordering::SeqCst);
+                let load = usize::min(load0 as usize * expect as usize / actual1000, 1000);
+                thread.load.store(load as u32, Ordering::SeqCst);
+                if thread.priority != Priority::Idle {
+                    usage += load;
+                }
+            }
+
+            shared
+                .usage
+                .store(usize::min(usage, 1000), Ordering::SeqCst);
+
+            measure = now;
+        }
+    }
+
+    pub fn print_statistics(sb: &mut StringBuffer, exclude_idle: bool) {
+        let sch = Self::shared();
+        writeln!(sb, "PID PRI %CPU TIME     NAME").unwrap();
+        for thread in sch.pool.data.values() {
+            let thread = thread.clone();
+            let thread = unsafe { &(*thread.get()) };
+            if exclude_idle && thread.priority == Priority::Idle {
+                continue;
+            }
+
+            let load = u32::min(thread.load.load(Ordering::Relaxed), 999);
+            let load0 = load % 10;
+            let load1 = load / 10;
+            write!(
+                sb,
+                "{:3} {} {} {:2}.{:1}",
+                thread.pid.0, thread.priority as usize, thread.attribute, load1, load0,
+            )
+            .unwrap();
+
+            let time = Duration::from(TimeSpec(thread.cpu_time.load(Ordering::Relaxed)));
+            let secs = time.as_secs() as usize;
+            let sec = secs % 60;
+            let min = secs / 60 % 60;
+            let hour = secs / 3600;
+            if hour > 0 {
+                write!(sb, " {:02}:{:02}:{:02}", hour, min, sec,).unwrap();
+            } else {
+                let dsec = time.subsec_nanos() / 10_000_000;
+                write!(sb, " {:02}:{:02}.{:02}", min, sec, dsec,).unwrap();
+            }
+
+            match thread.name() {
+                Some(name) => writeln!(sb, " {}", name,).unwrap(),
+                None => writeln!(sb, " ({})", thread.handle.as_usize(),).unwrap(),
+            }
+        }
     }
 
     /// Get the current process if possible
@@ -237,9 +318,13 @@ impl Scheduler {
         let shared = Self::shared();
         let current = shared.current;
         let next = Self::next().unwrap_or(shared.idle);
-        // current.update(|thread| {
-        //     // TODO: update statistics
-        // });
+        current.update(|thread| {
+            let now = Timer::measure().0;
+            let diff = now - thread.measure.load(Ordering::SeqCst);
+            thread.cpu_time.fetch_add(diff, Ordering::SeqCst);
+            thread.load0.fetch_add(diff as u32, Ordering::SeqCst);
+            thread.measure.store(now, Ordering::SeqCst);
+        });
         if current != next {
             shared.retired = Some(current);
             shared.current = next;
@@ -255,7 +340,7 @@ impl Scheduler {
             current.update(|thread| {
                 thread.attribute.remove(ThreadAttributes::AWAKE);
                 thread.attribute.remove(ThreadAttributes::ASLEEP);
-                // thread.measure.store(Timer::measure(), Ordering::SeqCst);
+                thread.measure.store(Timer::measure().0, Ordering::SeqCst);
             });
             let retired = shared.retired.unwrap();
             shared.retired = None;
@@ -288,10 +373,10 @@ impl Scheduler {
 #[no_mangle]
 pub unsafe extern "C" fn sch_setup_new_thread() {
     let shared = Scheduler::shared();
-    // let current = shared.current;
-    // current.update(|thread| {
-    //     thread.measure.store(Timer::measure(), Ordering::SeqCst);
-    // });
+    let current = shared.current;
+    current.update(|thread| {
+        thread.measure.store(Timer::measure().0, Ordering::SeqCst);
+    });
     if let Some(retired) = shared.retired {
         shared.retired = None;
         Scheduler::retire(retired);
@@ -392,17 +477,17 @@ impl SpawnOption {
 
 static mut TIMER_SOURCE: Option<&'static dyn TimerSource> = None;
 
-pub type TimeSpec = u64;
-
 pub trait TimerSource {
     /// Create timer object from duration
-    fn create(&self, duration: Duration) -> TimeSpec;
+    fn create(&self, duration: TimeSpec) -> TimeSpec;
 
     /// Is that a timer before the deadline?
     fn until(&self, deadline: TimeSpec) -> bool;
 
-    /// Get the value of the monotonic timer in microseconds
-    fn monotonic(&self) -> Duration;
+    fn measure(&self) -> TimeSpec;
+
+    fn from_duration(&self, val: Duration) -> TimeSpec;
+    fn to_duration(&self, val: TimeSpec) -> Duration;
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -411,19 +496,21 @@ pub struct Timer {
 }
 
 impl Timer {
-    pub const JUST: Timer = Timer { deadline: 0 };
+    pub const JUST: Timer = Timer {
+        deadline: TimeSpec(0),
+    };
 
     #[inline]
     pub fn new(duration: Duration) -> Self {
         let timer = unsafe { TIMER_SOURCE.as_ref().unwrap() };
         Timer {
-            deadline: timer.create(duration),
+            deadline: timer.create(duration.into()),
         }
     }
 
     #[inline]
     pub const fn is_just(&self) -> bool {
-        self.deadline == 0
+        self.deadline.0 == 0
     }
 
     #[inline]
@@ -474,13 +561,49 @@ impl Timer {
     }
 
     #[inline]
-    pub fn monotonic() -> Duration {
-        unsafe { TIMER_SOURCE.as_ref() }.unwrap().monotonic()
+    pub fn measure() -> TimeSpec {
+        unsafe { TIMER_SOURCE.as_ref() }.unwrap().measure()
     }
 
     #[inline]
-    pub fn measure() -> u64 {
-        Self::monotonic().as_micros() as u64
+    pub fn monotonic() -> Duration {
+        Self::measure().into()
+    }
+
+    #[inline]
+    fn timespec_to_duration(val: TimeSpec) -> Duration {
+        unsafe { TIMER_SOURCE.as_ref() }.unwrap().to_duration(val)
+    }
+
+    #[inline]
+    fn duration_to_timespec(val: Duration) -> TimeSpec {
+        unsafe { TIMER_SOURCE.as_ref() }.unwrap().from_duration(val)
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TimeSpec(pub usize);
+
+impl Add<TimeSpec> for TimeSpec {
+    type Output = Self;
+    #[inline]
+    fn add(self, rhs: TimeSpec) -> Self::Output {
+        TimeSpec(self.0 + rhs.0)
+    }
+}
+
+impl From<TimeSpec> for Duration {
+    #[inline]
+    fn from(val: TimeSpec) -> Duration {
+        Timer::timespec_to_duration(val)
+    }
+}
+
+impl From<Duration> for TimeSpec {
+    #[inline]
+    fn from(val: Duration) -> TimeSpec {
+        Timer::duration_to_timespec(val)
     }
 }
 
@@ -681,10 +804,10 @@ struct RawThread {
     quantum: Quantum,
 
     // Statistics
-    // measure: AtomicU64,
-    // cpu_time: AtomicU64,
-    // load0: AtomicU32,
-    // load: AtomicU32,
+    measure: AtomicUsize,
+    cpu_time: AtomicUsize,
+    load0: AtomicU32,
+    load: AtomicU32,
 
     // Executor
     // executor: Option<Executor>,
@@ -752,10 +875,10 @@ impl RawThread {
             attribute: AtomicBitflags::empty(),
             priority,
             quantum: Quantum::from(priority),
-            // measure: AtomicU64::new(0),
-            // cpu_time: AtomicU64::new(0),
-            // load0: AtomicU32::new(0),
-            // load: AtomicU32::new(0),
+            measure: AtomicUsize::new(0),
+            cpu_time: AtomicUsize::new(0),
+            load0: AtomicU32::new(0),
+            load: AtomicU32::new(0),
             name: name_array,
         };
         if let Some(start) = start {

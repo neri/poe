@@ -12,7 +12,6 @@
 use arch::cpu::Cpu;
 use core::fmt::Write;
 use core::panic::PanicInfo;
-use graphics::emcon::EmConsole;
 use system::System;
 
 pub mod arch;
@@ -32,7 +31,7 @@ extern crate alloc;
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {
-        write!(stdout(), $($arg)*).unwrap()
+        write!(System::stdout(), $($arg)*).unwrap()
     };
 }
 
@@ -68,9 +67,4 @@ pub fn kernel_halt() {
 fn panic(info: &PanicInfo) -> ! {
     let _ = write!(System::em_console(), "{}", info);
     unsafe { Cpu::stop() };
-}
-
-#[inline]
-pub fn stdout<'a>() -> &'a mut EmConsole {
-    System::em_console()
 }

@@ -13,11 +13,11 @@ pub struct Pit {
     tmr_cnt0: u32,
     beep_cnt0: u32,
     tmr_ctl: u32,
-    timer_div: usize,
+    timer_val: usize,
 }
 
 impl Pit {
-    const TIMER_DIV: u64 = 1;
+    const TIMER_RES: u64 = 1;
 
     const fn new() -> Self {
         Self {
@@ -25,7 +25,7 @@ impl Pit {
             tmr_cnt0: 0,
             beep_cnt0: 0,
             tmr_ctl: 0,
-            timer_div: 0,
+            timer_val: 0,
         }
     }
 
@@ -36,21 +36,21 @@ impl Pit {
                 shared.tmr_cnt0 = 0x0040;
                 shared.beep_cnt0 = 0x0042;
                 shared.tmr_ctl = 0x0043;
-                shared.timer_div = 1193;
+                shared.timer_val = 1193;
                 Irq(0).register(Self::timer_irq_handler_pc).unwrap();
             }
             Platform::Nec98 => {
                 shared.tmr_cnt0 = 0x0071;
                 shared.beep_cnt0 = 0x3fdb;
                 shared.tmr_ctl = 0x0077;
-                shared.timer_div = 2457;
+                shared.timer_val = 2457;
                 Irq(0).register(Self::timer_irq_handler_pc).unwrap();
             }
             Platform::FmTowns => {
                 shared.tmr_cnt0 = 0x0040;
                 shared.beep_cnt0 = 0x0044;
                 shared.tmr_ctl = 0x0046;
-                shared.timer_div = 307;
+                shared.timer_val = 307;
                 Irq(0).register(Self::timer_irq_handler_fmt).unwrap();
                 asm!("
                     mov al, 0x81
@@ -65,7 +65,7 @@ impl Pit {
             out dx, al
             mov al, ah
             out dx, al
-            ", in ("edx") shared.tmr_cnt0, in ("eax") shared.timer_div);
+            ", in ("edx") shared.tmr_cnt0, in ("eax") shared.timer_val);
 
         Timer::set_timer(&PIT);
         AudioManager::set_beep_driver(&PIT);
@@ -80,13 +80,13 @@ impl Pit {
     /// Timer IRQ handler for IBM PC and NEC PC98
     fn timer_irq_handler_pc(_irq: Irq) {
         let shared = Self::shared();
-        shared.monotonic += Self::TIMER_DIV;
+        shared.monotonic += Self::TIMER_RES;
     }
 
     /// Timer IRQ handler for FM TOWNS
     fn timer_irq_handler_fmt(_irq: Irq) {
         let shared = Self::shared();
-        shared.monotonic += Self::TIMER_DIV;
+        shared.monotonic += Self::TIMER_RES;
         unsafe {
             asm!("
             in al, 0x60
@@ -95,42 +95,28 @@ impl Pit {
             ", out ("al") _);
         }
     }
-
-    fn measure(&self) -> TimeSpec {
-        let shared = Self::shared();
-        loop {
-            unsafe {
-                let h: u32;
-                let l: u32;
-                let check: u32;
-                asm!("
-                    mov {1}, [{0}]
-                    mov {2}, [{0}+4]
-                    mov {3}, [{0}]
-                ", in (reg) &shared.monotonic,
-                    out (reg) l,
-                    out (reg) h,
-                    out (reg) check,
-                );
-                if l == check {
-                    break ((h as u64) << 32) + (l as u64);
-                }
-            }
-        }
-    }
 }
 
 impl TimerSource for Pit {
-    fn create(&self, duration: Duration) -> TimeSpec {
-        self.measure() + duration.as_millis() as TimeSpec
+    fn create(&self, duration: TimeSpec) -> TimeSpec {
+        self.measure() + duration
     }
 
     fn until(&self, deadline: TimeSpec) -> bool {
         deadline > self.measure()
     }
 
-    fn monotonic(&self) -> Duration {
-        Duration::from_millis(self.measure())
+    fn measure(&self) -> TimeSpec {
+        let shared = Self::shared();
+        TimeSpec(shared.monotonic as usize)
+    }
+
+    fn from_duration(&self, val: Duration) -> TimeSpec {
+        TimeSpec((val.as_millis() as u64 / Self::TIMER_RES) as usize)
+    }
+
+    fn to_duration(&self, val: TimeSpec) -> Duration {
+        Duration::from_millis(val.0 as u64 * Self::TIMER_RES)
     }
 }
 

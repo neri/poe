@@ -1,5 +1,5 @@
 ;; El Torito Boot Sector for MEG-OS
-;; Licenst: MIT (c) 2009, 2021 MEG-OS project
+;; License: MIT (c) 2009, 2021 MEG-OS project
 
 %define IPL_SIGN    0x1eaf
 %define ARCH_NEC98  0
@@ -213,9 +213,9 @@ _puts:
 
 
 no_file_msg:
-    db "Missing loader.", 13, 10, 0
+    db "Missing system.", 13, 10, 0
 disk_error_msg:
-    db "_read error.", 13, 10, 0
+    db "Disk read error.", 13, 10, 0
 halt_msg:
     db "  [Press any key...]", 13, 10, 0
 

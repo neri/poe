@@ -1,5 +1,5 @@
 ;; MEG-OS Loader for TOE
-;; Licenst: MIT (c) 2021 MEG-OS project
+;; License: MIT (c) 2021 MEG-OS project
 
 %define IPL_SIGN            0x1eaf
 %define PF_NEC98            1   ; NEC PC-98 Series Computer

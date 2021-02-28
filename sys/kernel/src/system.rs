@@ -184,6 +184,11 @@ impl System {
         &mut shared.em_console
     }
 
+    /// Get standard output
+    pub fn stdout<'a>() -> &'a mut dyn Write {
+        Self::em_console()
+    }
+
     // TODO:
     // pub fn acpi() -> usize {
     //     let shared = Self::shared();

@@ -1,5 +1,5 @@
 ;; MEG-OS CD Boot Sector for FM TOWNS
-;; Licenst: MIT (c) 2021 MEG-OS project
+;; License: MIT (c) 2021 MEG-OS project
 
 %define IPL_SIGN    0x1eaf
 %define ARCH_NEC98  0
@@ -45,13 +45,6 @@ _next:
     mov [drive_number], al
 
     call _progress
-
-    ; mov al, [drive_number]
-    ; mov ah, 0x03
-    ; call 0xFFFB:0x0014
-    ; or ah, ah
-    ; jnz _readerror
-    ; call _progress
 
     ;; read dir
     mov eax, 16
@@ -136,6 +129,10 @@ _read:
     push ds
     push es
     pop ds
+
+    ; mov al, [drive_number]
+    ; mov ah, 0x03
+    ; call 0xFFFB:0x0014
 
     mov edx, eax
     add ecx, 0x7FF
@@ -239,7 +236,7 @@ dir_size        dd 0
 arch_id         db ARCH_FMT
 drive_number    db 0xC0
 
-    times 0x1FE - ($-$$) db 0
-    db 0x55, 0xAA
+    times 0x200 - ($-$$) db 0
+    ; db 0x55, 0xAA
 
 _END:
