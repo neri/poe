@@ -100,7 +100,7 @@ impl TextProcessing {
                 }
                 _ => {
                     current_line.end_position = index;
-                    let current_width = font.width_for(c);
+                    let current_width = font.width_of(c);
                     let new_width = current_line.width + current_width;
                     if current_line.width > 0 && new_width > size.width {
                         current_height += current_line.height;
@@ -216,7 +216,7 @@ impl TextProcessing {
                 for _ in line.start_position..line.end_position {
                     let c = chars.next().unwrap();
                     font.write_char(c, to, cursor, color);
-                    cursor.x += font.width_for(c);
+                    cursor.x += font.width_of(c);
                 }
             }
 

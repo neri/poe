@@ -4,7 +4,6 @@
 use crate::*;
 use bitflags::*;
 use core::ffi::c_void;
-use core::fmt::Write;
 use core::intrinsics::*;
 use core::sync::atomic::*;
 use toeboot::Platform;
@@ -30,11 +29,34 @@ impl Cpu {
     }
 
     #[inline]
+    pub fn interlocked_increment_u64(p: &AtomicU64) -> u64 {
+        unsafe {
+            Self::without_interrupts(|| {
+                let p = p as *const _ as *mut u64;
+                let r = p.read_volatile();
+                p.write_volatile(r + 1);
+                r
+            })
+        }
+    }
+
+    #[inline]
     pub fn interlocked_add(p: &AtomicUsize, val: usize) -> usize {
         unsafe {
             Self::without_interrupts(|| {
                 let p = p as *const _ as *mut usize;
                 let r = val + atomic_load(p);
+                atomic_xchg(p, r)
+            })
+        }
+    }
+
+    #[inline]
+    pub fn interlocked_or(p: &AtomicUsize, val: usize) -> usize {
+        unsafe {
+            Self::without_interrupts(|| {
+                let p = p as *const _ as *mut usize;
+                let r = val | atomic_load(p);
                 atomic_xchg(p, r)
             })
         }
@@ -255,6 +277,14 @@ impl Cpu {
 
         result
     }
+
+    #[inline]
+    pub unsafe fn rdtsc() -> u64 {
+        let eax: u32;
+        let edx: u32;
+        asm!("rdtsc", lateout("edx") edx, lateout("eax") eax);
+        eax as u64 + edx as u64 * 0x10000_0000
+    }
 }
 
 /// Architecture-specific context data
@@ -265,7 +295,7 @@ pub struct CpuContextData {
 
 impl CpuContextData {
     pub const SIZE_OF_CONTEXT: usize = 256;
-    pub const SIZE_OF_STACK: usize = 0x10000;
+    pub const SIZE_OF_STACK: usize = 0x4000;
 
     #[inline]
     pub fn new() -> Self {

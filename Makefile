@@ -51,7 +51,7 @@ $(BOOT_IMG): install
 install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES)
 	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
 
-full: install
+full: install iso
 	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 1232 $(BIN)boot.hdm $(IMG_SOURCES)
 	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 160 $(BIN)mini.img $(IMG_SOURCES)
 
@@ -64,4 +64,4 @@ iso: $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 		-o $(TARGET_ISO) $(ISO_SRC)
 	dd conv=notrunc if=$(BIN)fmcdboot.bin of=$(TARGET_ISO)
 
-run: install
+# run: install

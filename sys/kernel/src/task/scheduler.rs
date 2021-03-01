@@ -1,9 +1,12 @@
 // Scheduler
 
+use super::executor::Executor;
+use super::*;
 use crate::arch::cpu::{Cpu, CpuContextData};
 use crate::mem::string::StringBuffer;
 use crate::sync::atomicflags::AtomicBitflags;
 use crate::sync::fifo::*;
+use crate::sync::semaphore::Semaphore;
 use crate::window::winsys::*;
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
@@ -39,6 +42,8 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
+    const MAX_STATISTICS: usize = 1000;
+
     /// Start scheduler and sleep forever
     pub(crate) unsafe fn start(f: fn(usize) -> (), args: usize) -> ! {
         const SIZE_OF_SUB_QUEUE: usize = 64;
@@ -87,6 +92,17 @@ impl Scheduler {
         unsafe { SCHEDULER.as_mut().unwrap() }
     }
 
+    #[inline]
+    pub fn usage_per_cpu() -> usize {
+        let shared = Self::shared();
+        shared.usage.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn usage_total() -> usize {
+        Self::usage_per_cpu()
+    }
+
     /// Measuring Statistics
     fn statistics_thread(_: usize) {
         let shared = Self::shared();
@@ -99,14 +115,17 @@ impl Scheduler {
 
             let now = Timer::measure().0;
             let actual = now - measure;
-            let actual1000 = actual as usize * 1000;
+            let actual1000 = actual as usize * Self::MAX_STATISTICS;
 
             let mut usage = 0;
             for thread in shared.pool.data.values() {
                 let thread = thread.clone();
                 let thread = unsafe { &mut (*thread.get()) };
                 let load0 = thread.load0.swap(0, Ordering::SeqCst);
-                let load = usize::min(load0 as usize * expect as usize / actual1000, 1000);
+                let load = usize::min(
+                    load0 as usize * expect as usize / actual1000,
+                    Self::MAX_STATISTICS,
+                );
                 thread.load.store(load as u32, Ordering::SeqCst);
                 if thread.priority != Priority::Idle {
                     usage += load;
@@ -115,7 +134,7 @@ impl Scheduler {
 
             shared
                 .usage
-                .store(usize::min(usage, 1000), Ordering::SeqCst);
+                .store(usize::min(usage, Self::MAX_STATISTICS), Ordering::SeqCst);
 
             measure = now;
         }
@@ -212,6 +231,29 @@ impl Scheduler {
 
     pub fn yield_thread() {
         unsafe { Cpu::without_interrupts(|| Self::switch_context()) }
+    }
+
+    /// Spawning asynchronous tasks
+    pub fn spawn_async(task: Task) {
+        Self::current_thread().unwrap().update(|thread| {
+            if thread.executor.is_none() {
+                thread.executor = Some(Executor::new());
+            }
+            thread.executor.as_mut().unwrap().spawn(task);
+        });
+    }
+
+    /// Performing Asynchronous Tasks
+    pub fn perform_tasks() -> ! {
+        Self::current_thread().unwrap().update(|thread| {
+            thread.executor.as_mut().map(|v| v.run());
+        });
+        Self::exit();
+    }
+
+    pub fn exit() -> ! {
+        Self::current_thread().unwrap().update(|t| t.exit());
+        unreachable!()
     }
 
     /// Get the next executable thread from the thread queue
@@ -797,7 +839,7 @@ struct RawThread {
     handle: ThreadHandle,
 
     // Properties
-    // sem: Semaphore,
+    sem: Semaphore,
     // personality: Option<Box<dyn Personality>>,
     attribute: AtomicBitflags<ThreadAttributes>,
     priority: Priority,
@@ -810,7 +852,7 @@ struct RawThread {
     load: AtomicU32,
 
     // Executor
-    // executor: Option<Executor>,
+    executor: Option<Executor>,
 
     // Thread Name
     name: [u8; THREAD_NAME_LENGTH],
@@ -872,6 +914,7 @@ impl RawThread {
             stack: None,
             pid,
             handle,
+            sem: Semaphore::new(0),
             attribute: AtomicBitflags::empty(),
             priority,
             quantum: Quantum::from(priority),
@@ -879,6 +922,7 @@ impl RawThread {
             cpu_time: AtomicUsize::new(0),
             load0: AtomicU32::new(0),
             load: AtomicU32::new(0),
+            executor: None,
             name: name_array,
         };
         if let Some(start) = start {

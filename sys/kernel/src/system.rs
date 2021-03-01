@@ -1,10 +1,10 @@
 // A Computer System
 
-use crate::graphics::bitmap::*;
 use crate::graphics::color::*;
 use crate::graphics::coords::*;
 use crate::graphics::emcon::*;
 use crate::*;
+use crate::{fonts::FontManager, graphics::bitmap::*};
 use arch::cpu::Cpu;
 use core::fmt;
 use toeboot::*;
@@ -111,6 +111,7 @@ impl System {
 
     fn late_init(f: usize) {
         unsafe {
+            FontManager::init();
             window::WindowManager::init();
             io::hid::HidManager::init();
             arch::Arch::late_init();

@@ -2,6 +2,8 @@
 
 use super::graphics::bitmap::*;
 use crate::graphics::coords::*;
+use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
 
 include!("megh0816.rs");
 const SYSTEM_FONT: FixedFontDriver = FixedFontDriver::new(8, 16, &FONT_MEGH0816_DATA, None);
@@ -19,9 +21,43 @@ const SYSTEM_UI_WIDTH_TABLE: [u8; 96] = [
     3, 6, 6, 6, 6, 6, 5, 6, 6, 5, 5, 6, 5, 8, 6, 6, 6, 6, 5, 6, 5, 6, 6, 8, 6, 6, 6, 4, 2, 4, 6, 6,
 ];
 
-pub struct FontManager {}
+static mut FONT_MANAGER: FontManager = FontManager::new();
+
+pub struct FontManager {
+    fonts: Option<BTreeMap<FontFamily, Box<dyn FontDriver>>>,
+}
 
 impl FontManager {
+    const fn new() -> Self {
+        Self { fonts: None }
+    }
+
+    #[inline]
+    fn shared<'a>() -> &'a mut Self {
+        unsafe { &mut FONT_MANAGER }
+    }
+
+    pub(crate) fn init() {
+        let shared = Self::shared();
+
+        let mut fonts: BTreeMap<FontFamily, Box<dyn FontDriver>> = BTreeMap::new();
+
+        fonts.insert(FontFamily::FixedSystem, Box::new(SYSTEM_FONT));
+        fonts.insert(FontFamily::SmallFixed, Box::new(SMALL_FONT));
+        fonts.insert(FontFamily::SystemUI, Box::new(SYSTEM_UI_FONT));
+
+        shared.fonts = Some(fonts);
+    }
+
+    fn driver_for(family: FontFamily) -> Option<&'static dyn FontDriver> {
+        let shared = Self::shared();
+        shared
+            .fonts
+            .as_ref()
+            .and_then(|v| v.get(&family))
+            .map(|v| v.as_ref())
+    }
+
     #[inline]
     pub const fn fixed_system_font() -> &'static FixedFontDriver<'static> {
         &SYSTEM_FONT
@@ -36,6 +72,102 @@ impl FontManager {
     pub const fn fixed_small_font() -> &'static FixedFontDriver<'static> {
         &SMALL_FONT
     }
+
+    #[inline]
+    pub fn system_font() -> FontDescriptor {
+        FontDescriptor::new(FontFamily::FixedSystem, 0).unwrap()
+    }
+
+    #[inline]
+    pub fn title_font() -> FontDescriptor {
+        FontDescriptor::new(FontFamily::SystemUI, 0).unwrap_or(Self::system_font())
+    }
+
+    #[inline]
+    pub fn label_font() -> FontDescriptor {
+        FontDescriptor::new(FontFamily::SystemUI, 0).unwrap_or(Self::system_font())
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FontFamily {
+    SystemUI,
+    FixedSystem,
+    SmallFixed,
+}
+
+#[derive(Copy, Clone)]
+pub struct FontDescriptor {
+    driver: &'static dyn FontDriver,
+    point: i32,
+    line_height: i32,
+}
+
+impl FontDescriptor {
+    pub fn new(family: FontFamily, point: isize) -> Option<Self> {
+        FontManager::driver_for(family).map(|driver| {
+            if driver.is_scalable() {
+                Self {
+                    driver,
+                    point: point as i32,
+                    line_height: (driver.preferred_line_height() * point / driver.base_height())
+                        as i32,
+                }
+            } else {
+                Self {
+                    driver,
+                    point: driver.base_height() as i32,
+                    line_height: driver.preferred_line_height() as i32,
+                }
+            }
+        })
+    }
+
+    #[inline]
+    pub const fn point(&self) -> isize {
+        self.point as isize
+    }
+
+    #[inline]
+    pub const fn line_height(&self) -> isize {
+        self.line_height as isize
+    }
+
+    #[inline]
+    pub fn width_of(&self, character: char) -> isize {
+        if self.point() == self.driver.base_height() {
+            self.driver.width_of(character)
+        } else {
+            self.driver.width_of(character) * self.point() / self.driver.base_height()
+        }
+    }
+
+    #[inline]
+    pub fn is_scalable(&self) -> bool {
+        self.driver.is_scalable()
+    }
+
+    // #[inline]
+    // pub fn draw_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::PixelType)
+    // where
+    //     T: RasterFontWriter,
+    // {
+    //     self.driver
+    //         .draw_char(character, bitmap, origin, self.point(), color)
+    // }
+}
+
+pub trait FontDriver {
+    fn is_scalable(&self) -> bool;
+
+    fn base_height(&self) -> isize;
+
+    fn preferred_line_height(&self) -> isize;
+
+    fn width_of(&self, character: char) -> isize;
+
+    fn height_of(&self, character: char) -> isize;
 }
 
 pub struct FixedFontDriver<'a> {
@@ -80,20 +212,6 @@ impl FixedFontDriver<'_> {
     }
 
     #[inline]
-    pub fn width_for(&self, character: char) -> isize {
-        if let Some(width_table) = self.width_table {
-            let c = character as usize;
-            if c >= 0x20 && c < 0x80 {
-                width_table[c - 0x20] as isize
-            } else {
-                self.width()
-            }
-        } else {
-            self.width()
-        }
-    }
-
-    #[inline]
     pub fn height_for(&self, character: char) -> isize {
         let _ = character;
         self.size.height
@@ -110,15 +228,51 @@ impl FixedFontDriver<'_> {
         }
     }
 
-    /// Write character to bitmap
-    pub fn write_char<T>(&self, character: char, to: &mut T, origin: Point, color: T::PixelType)
+    pub fn write_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::PixelType)
     where
         T: RasterFontWriter,
     {
         if let Some(font) = self.glyph_for(character) {
             let origin = Point::new(origin.x, origin.y + self.leading);
-            let size = Size::new(self.width_for(character), self.size.height());
-            to.draw_font(font, size, origin, color);
+            let size = Size::new(self.width_of(character), self.size.height());
+            bitmap.draw_font(font, size, origin, color);
         }
+    }
+}
+
+impl FontDriver for FixedFontDriver<'_> {
+    #[inline]
+    fn is_scalable(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    fn base_height(&self) -> isize {
+        self.size.height
+    }
+
+    #[inline]
+    fn preferred_line_height(&self) -> isize {
+        self.line_height
+    }
+
+    #[inline]
+    fn width_of(&self, character: char) -> isize {
+        if let Some(width_table) = self.width_table {
+            let c = character as usize;
+            if c >= 0x20 && c < 0x80 {
+                width_table[c - 0x20] as isize
+            } else {
+                self.width()
+            }
+        } else {
+            self.width()
+        }
+    }
+
+    #[inline]
+    fn height_of(&self, character: char) -> isize {
+        let _ = character;
+        self.size.height
     }
 }

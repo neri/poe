@@ -9,3 +9,4 @@ version = "0.1.0"
 [dependencies]
 bitflags = "1.2.1"
 toeboot = {path = "../../common/toeboot/"}
+# futures-util = {default-features = false, features = ["alloc"], version = "0.3"}

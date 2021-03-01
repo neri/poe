@@ -5,6 +5,8 @@
 #![no_main]
 #![feature(asm)]
 
+use crate::task::*;
+use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::arch::cpu::Cpu;
@@ -14,15 +16,16 @@ use kernel::graphics::color::*;
 use kernel::graphics::coords::*;
 use kernel::mem::mm::MemoryManager;
 use kernel::system::System;
-use kernel::task::scheduler::Timer;
+use kernel::task::scheduler::*;
 use kernel::util::text::*;
 use kernel::window::*;
 use kernel::*;
 use mem::string::*;
-use task::scheduler::{Scheduler, SpawnOption};
 use window::WindowBuilder;
 // use kernel::audio::AudioManager;
 // use kernel::util::rng::XorShift32;
+
+extern crate alloc;
 
 entry!(Shell::main);
 
@@ -40,28 +43,32 @@ impl Shell {
         WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
         // WindowManager::set_desktop_color(IndexedColor::from_rgb(0x426F96));
         WindowManager::set_pointer_visible(true);
-        Timer::sleep(Duration::from_millis(100));
+        // Timer::sleep(Duration::from_millis(100));
 
-        SpawnOption::new().spawn_f(Self::status_bar_thread, 0, "Status Bar");
-        SpawnOption::new().spawn_f(Self::actmon_thread, 0, "Activity Monitor");
+        // SpawnOption::new().spawn_f(Self::test_thread, 0, "Test");
 
-        // SpawnOption::new().spawn_f(Self::console_thread, 1, "Command Mode 2");
-        Self::console_thread(0);
+        Scheduler::spawn_async(Task::new(Self::status_bar_main()));
+        Scheduler::spawn_async(Task::new(Self::activity_monitor_main()));
+        Scheduler::spawn_async(Task::new(Self::console_main()));
+        // Scheduler::spawn_async(Task::new(Self::about_main()));
+        Scheduler::perform_tasks();
     }
 
-    fn console_thread(instance: usize) {
+    #[allow(dead_code)]
+    fn test_thread(_: usize) {
+        loop {
+            Cpu::noop();
+        }
+    }
+
+    async fn console_main() {
         let padding_x = 4;
         let padding_y = 4;
         let font = FontManager::fixed_system_font();
         let bg_color = IndexedColor::WHITE;
         let fg_color = IndexedColor::BLACK;
 
-        let window_rect = Rect::new(
-            8 + 136 * instance as isize,
-            30,
-            128,
-            font.line_height() + padding_y * 2,
-        );
+        let window_rect = Rect::new(8, 30, 128, font.line_height() + padding_y * 2);
         let window = WindowBuilder::new("Command Mode")
             .style_add(WindowStyle::NAKED)
             .frame(window_rect)
@@ -73,7 +80,7 @@ impl Shell {
         window.create_timer(0, Duration::from_millis(0));
         let mut sb = Sb255::new();
         let mut cursor_phase = 0;
-        while let Some(message) = window.wait_message() {
+        while let Some(message) = window.get_message().await {
             match message {
                 WindowMessage::Activated | WindowMessage::Deactivated => {
                     window.set_needs_display();
@@ -142,12 +149,16 @@ impl Shell {
     }
 
     #[allow(dead_code)]
-    fn actmon_thread(_: usize) {
+    async fn activity_monitor_main() {
         let window_size = Size::new(280, 160);
         let bg_color = IndexedColor::BLACK;
         let fg_color = IndexedColor::YELLOW;
+        let graph_sub_color = IndexedColor::LIGHT_GREEN;
+        let graph_main_color = IndexedColor::YELLOW;
+        let graph_border_color = IndexedColor::LIGHT_GRAY;
 
         let window = WindowBuilder::new("Activity Monitor")
+            .style_add(WindowStyle::PINCHABLE)
             // .style_add(WindowStyle::FLOATING)
             .frame(Rect::new(
                 -window_size.width - 8,
@@ -159,10 +170,19 @@ impl Shell {
             .build();
         window.show();
 
-        let mut sb = StringBuffer::new();
+        let n_items = 64;
+        let mut usage_cursor = 0;
+        let mut usage_history = {
+            let mut vec = Vec::with_capacity(n_items);
+            vec.resize(n_items, u8::MAX);
+            vec
+        };
+
+        let mut sb = StringBuffer::with_capacity(0x1000);
+
         let interval = 1000;
-        window.create_timer(0, Duration::from_millis(0));
-        while let Some(message) = window.wait_message() {
+        window.create_timer(0, Duration::from_millis(interval));
+        while let Some(message) = window.get_message().await {
             match message {
                 WindowMessage::Timer(_timer) => {
                     window.set_needs_display();
@@ -171,6 +191,13 @@ impl Shell {
                 WindowMessage::Draw => {
                     let font = FontManager::fixed_small_font();
                     sb.clear();
+
+                    let max_value = 1000;
+                    let usage = Scheduler::usage_total();
+                    usage_history[usage_cursor] =
+                        (254 * usize::min(max_value, max_value - usage) / max_value) as u8;
+                    usage_cursor = (usage_cursor + 1) % n_items;
+
                     writeln!(
                         sb,
                         "Memory {} MB, {} KB Free, {} KB Used",
@@ -182,12 +209,61 @@ impl Shell {
                             >> 10,
                     )
                     .unwrap();
-                    Scheduler::print_statistics(&mut sb, false);
+                    Scheduler::print_statistics(&mut sb, true);
 
                     window
                         .draw(|bitmap| {
                             bitmap.fill_rect(bitmap.bounds(), window.bg_color());
-                            let rect = bitmap.bounds().insets_by(EdgeInsets::new(4, 4, 4, 4));
+
+                            {
+                                let padding = 4;
+                                let item_size = Size::new(n_items as isize, 32);
+                                let rect =
+                                    Rect::new(padding, padding, item_size.width, item_size.height);
+                                // let cursor = rect.x() + rect.width() + padding;
+
+                                let h_lines = 4;
+                                let v_lines = 4;
+                                for i in 1..h_lines {
+                                    let point = Point::new(
+                                        rect.x(),
+                                        rect.y() + i * item_size.height / h_lines,
+                                    );
+                                    bitmap.draw_hline(point, item_size.width, graph_sub_color);
+                                }
+                                for i in 1..v_lines {
+                                    let point = Point::new(
+                                        rect.x() + i * item_size.width / v_lines,
+                                        rect.y(),
+                                    );
+                                    bitmap.draw_vline(point, item_size.height, graph_sub_color);
+                                }
+
+                                let limit = item_size.width as usize - 2;
+                                for i in 0..limit {
+                                    let scale = item_size.height - 2;
+                                    let value1 = usage_history
+                                        [((usage_cursor + i - limit) % n_items)]
+                                        as isize
+                                        * scale
+                                        / 255;
+                                    let value2 = usage_history
+                                        [((usage_cursor + i - 1 - limit) % n_items)]
+                                        as isize
+                                        * scale
+                                        / 255;
+                                    let c0 = Point::new(
+                                        rect.x() + i as isize + 1,
+                                        rect.y() + 1 + value1,
+                                    );
+                                    let c1 =
+                                        Point::new(rect.x() + i as isize, rect.y() + 1 + value2);
+                                    bitmap.draw_line(c0, c1, graph_main_color);
+                                }
+                                bitmap.draw_rect(rect, graph_border_color);
+                            }
+
+                            let rect = bitmap.bounds().insets_by(EdgeInsets::new(40, 4, 4, 4));
                             TextProcessing::draw_text(
                                 bitmap,
                                 sb.as_str(),
@@ -209,7 +285,7 @@ impl Shell {
     }
 
     #[allow(dead_code)]
-    fn about_thread(_: usize) {
+    async fn about_main() {
         let window_size = Size::new(320, 160);
         let window = WindowBuilder::new("About").size(window_size).build();
         window.show();
@@ -217,7 +293,7 @@ impl Shell {
         let mut sb = StringBuffer::new();
         let interval = 5000;
         window.create_timer(0, Duration::from_millis(0));
-        while let Some(message) = window.wait_message() {
+        while let Some(message) = window.get_message().await {
             match message {
                 WindowMessage::Timer(_timer) => {
                     window.set_needs_display();
@@ -258,7 +334,7 @@ impl Shell {
     }
 
     #[allow(dead_code)]
-    fn status_bar_thread(_: usize) {
+    async fn status_bar_main() {
         const STATUS_BAR_HEIGHT: isize = 24;
         let screen_size = System::main_screen().size();
         let window_size = Size::new(screen_size.width(), STATUS_BAR_HEIGHT);
@@ -284,12 +360,10 @@ impl Shell {
         window.show();
         WindowManager::add_screen_insets(EdgeInsets::new(STATUS_BAR_HEIGHT, 0, 0, 0));
 
-        SpawnOption::new().spawn_f(Self::about_thread, 0, "About");
-
         let mut sb = StringBuffer::new();
 
         window.create_timer(0, Duration::from_millis(0));
-        while let Some(message) = window.wait_message() {
+        while let Some(message) = window.get_message().await {
             match message {
                 WindowMessage::Timer(_timer) => {
                     let time = System::system_time();

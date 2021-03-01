@@ -9,6 +9,7 @@ use crate::sync::atomicflags::AtomicBitflags;
 use crate::sync::fifo::*;
 use crate::sync::semaphore::*;
 use crate::task::scheduler::*;
+use crate::task::AtomicWaker;
 use crate::util::text::*;
 use crate::*;
 use crate::{io::hid::*, system::System};
@@ -18,9 +19,13 @@ use alloc::vec::Vec;
 use bitflags::*;
 use core::cell::UnsafeCell;
 use core::cmp;
+use core::future::Future;
 use core::num::NonZeroUsize;
+use core::pin::Pin;
 use core::sync::atomic::*;
+use core::task::{Context, Poll};
 use core::time::Duration;
+
 // use core::fmt::Write;
 
 static mut WM: Option<Box<WindowManager>> = None;
@@ -655,6 +660,7 @@ struct RawWindow {
     title: [u8; WINDOW_TITLE_LENGTH],
 
     // Messages and Events
+    waker: AtomicWaker,
     sem: Semaphore,
     queue: Option<InterlockedFifo<WindowMessage>>,
 }
@@ -1125,6 +1131,7 @@ impl WindowBuilder {
             attributes,
             queue,
             sem: Semaphore::new(0),
+            waker: AtomicWaker::new(),
         });
 
         if !self.no_bitmap {
@@ -1418,7 +1425,7 @@ impl WindowHandle {
                 match message {
                     WindowMessage::Draw => {
                         window.attributes.insert(WindowAttributes::NEEDS_REDRAW);
-                        // window.waker.wake();
+                        window.waker.wake();
                         window.sem.signal();
                         Ok(())
                     }
@@ -1426,7 +1433,7 @@ impl WindowHandle {
                         .enqueue(message)
                         .map_err(|_| WindowPostError::Full)
                         .map(|_| {
-                            // window.waker.wake();
+                            window.waker.wake();
                             window.sem.signal();
                         }),
                 }
@@ -1477,6 +1484,20 @@ impl WindowHandle {
         }
     }
 
+    /// Supports asynchronous reading of window messages.
+    pub fn poll_message(&self, cx: &mut Context<'_>) -> Option<WindowMessage> {
+        self.as_ref().waker.register(cx.waker());
+        self.read_message().map(|message| {
+            self.as_ref().waker.take();
+            message
+        })
+    }
+
+    /// Get the window message asynchronously.
+    pub fn get_message(&self) -> Pin<Box<dyn Future<Output = Option<WindowMessage>>>> {
+        Box::pin(WindowMessageConsumer { handle: *self })
+    }
+
     /// Process window messages that are not handled.
     pub fn handle_default_message(&self, message: WindowMessage) {
         match message {
@@ -1504,6 +1525,21 @@ impl WindowHandle {
             } else {
                 break event.fire();
             }
+        }
+    }
+}
+
+struct WindowMessageConsumer {
+    handle: WindowHandle,
+}
+
+impl Future for WindowMessageConsumer {
+    type Output = Option<WindowMessage>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.handle.poll_message(cx) {
+            Some(v) => Poll::Ready(Some(v)),
+            None => Poll::Pending,
         }
     }
 }

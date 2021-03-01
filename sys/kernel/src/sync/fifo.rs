@@ -2,13 +2,14 @@
 
 use crate::arch::cpu::Cpu;
 use alloc::vec::Vec;
+use core::cell::UnsafeCell;
 use core::sync::atomic::*;
 
 pub struct Fifo<T>
 where
     T: Sized + Copy,
 {
-    vec: Vec<T>,
+    vec: Vec<UnsafeCell<T>>,
     head: AtomicUsize,
     tail: AtomicUsize,
 }
@@ -26,7 +27,7 @@ where
             );
         }
         let mut vec = Vec::with_capacity(capacity);
-        vec.resize(capacity, T::default());
+        vec.resize_with(capacity, || UnsafeCell::new(T::default()));
 
         Self {
             vec,
@@ -45,25 +46,25 @@ where
         self.head.load(Ordering::SeqCst) == self.tail.load(Ordering::SeqCst)
     }
 
-    pub unsafe fn enqueue(&mut self, data: T) -> Result<(), T> {
+    pub unsafe fn enqueue(&self, data: T) -> Result<(), T> {
         let old_tail = self.tail.load(Ordering::SeqCst);
         let new_tail = (old_tail + 1) & self.mask();
         if new_tail == self.head.load(Ordering::SeqCst) {
             Err(data)
         } else {
-            let p = self.vec.get_unchecked_mut(old_tail) as *const T as *mut T;
+            let p = self.vec.get_unchecked(old_tail).get();
             p.write_volatile(data);
             self.tail.store(new_tail, Ordering::SeqCst);
             Ok(())
         }
     }
 
-    pub unsafe fn dequeue(&mut self) -> Option<T> {
+    pub unsafe fn dequeue(&self) -> Option<T> {
         if self.is_empty() {
             None
         } else {
             let head = self.head.load(Ordering::SeqCst);
-            let p = self.vec.get_unchecked(head) as *const T;
+            let p = self.vec.get_unchecked(head).get();
             let r = p.read_volatile();
             self.head.store((head + 1) & self.mask(), Ordering::SeqCst);
             Some(r)
@@ -94,11 +95,15 @@ where
         self.wrapped.is_empty()
     }
 
-    pub fn enqueue(&mut self, data: T) -> Result<(), T> {
+    pub fn enqueue(&self, data: T) -> Result<(), T> {
         unsafe { Cpu::without_interrupts(|| self.wrapped.enqueue(data)) }
     }
 
-    pub fn dequeue(&mut self) -> Option<T> {
+    pub fn dequeue(&self) -> Option<T> {
         unsafe { Cpu::without_interrupts(|| self.wrapped.dequeue()) }
     }
 }
+
+unsafe impl<T: Copy> Send for InterlockedFifo<T> {}
+
+unsafe impl<T: Copy> Sync for InterlockedFifo<T> {}

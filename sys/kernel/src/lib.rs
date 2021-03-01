@@ -57,12 +57,6 @@ macro_rules! entry {
     };
 }
 
-pub fn kernel_halt() {
-    unsafe {
-        asm!("hlt");
-    }
-}
-
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     let _ = write!(System::em_console(), "{}", info);
