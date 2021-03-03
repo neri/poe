@@ -323,6 +323,13 @@ impl Rect {
 
         cl.left < cr.right && cr.left < cl.right && cl.top < cr.bottom && cr.top < cl.bottom
     }
+
+    pub fn center(&self) -> Point {
+        Point::new(
+            self.origin.x + self.size.width / 2,
+            self.origin.y + self.size.height / 2,
+        )
+    }
 }
 
 impl From<Size> for Rect {

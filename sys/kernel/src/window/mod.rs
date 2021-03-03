@@ -1,3 +1,3 @@
 // pub mod menu;
-pub mod winsys;
-pub use winsys::*;
+pub mod wm;
+pub use wm::*;

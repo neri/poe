@@ -14,7 +14,7 @@ use kernel::fonts::FontManager;
 use kernel::graphics::bitmap::*;
 use kernel::graphics::color::*;
 use kernel::graphics::coords::*;
-use kernel::mem::mm::MemoryManager;
+use kernel::mem::MemoryManager;
 use kernel::system::System;
 use kernel::task::scheduler::*;
 use kernel::util::text::*;

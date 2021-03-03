@@ -1,5 +1,5 @@
 // Allocator
-use super::mm::*;
+use super::*;
 use core::alloc::{GlobalAlloc, Layout};
 use core::num::NonZeroUsize;
 

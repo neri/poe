@@ -125,7 +125,7 @@ impl Cpu {
     }
 
     #[inline]
-    pub fn interlocked_test_and_set(p: &AtomicUsize, position: u32) -> bool {
+    pub fn interlocked_test_and_set(p: &AtomicUsize, position: usize) -> bool {
         unsafe {
             let p = p as *const _ as *mut usize;
             let r: usize;
@@ -138,7 +138,7 @@ impl Cpu {
     }
 
     #[inline]
-    pub fn interlocked_test_and_clear(p: &AtomicUsize, position: u32) -> bool {
+    pub fn interlocked_test_and_clear(p: &AtomicUsize, position: usize) -> bool {
         unsafe {
             let p = p as *const _ as *mut usize;
             let r: usize;
@@ -201,7 +201,6 @@ impl Cpu {
             _ => unreachable!(),
         }
 
-        Self::halt();
         Self::stop();
     }
 

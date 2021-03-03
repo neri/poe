@@ -103,7 +103,7 @@ impl System {
         screen.fill_rect(screen.bounds(), IndexedColor::BLACK);
         shared.main_screen = Some(screen);
 
-        mem::mm::MemoryManager::init(&info);
+        mem::MemoryManager::init(&info);
         arch::Arch::init();
 
         task::scheduler::Scheduler::start(Self::late_init, f as usize);
@@ -194,11 +194,6 @@ impl System {
     // pub fn acpi() -> usize {
     //     let shared = Self::shared();
     //     shared.acpi_rsdptr
-    // }
-
-    // #[inline]
-    // pub fn uarts<'a>() -> &'a [Box<dyn Uart>] {
-    //     arch::Arch::uarts()
     // }
 }
 

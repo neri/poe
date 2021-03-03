@@ -7,7 +7,7 @@ use crate::mem::string::StringBuffer;
 use crate::sync::atomicflags::AtomicBitflags;
 use crate::sync::fifo::*;
 use crate::sync::semaphore::Semaphore;
-use crate::window::winsys::*;
+use crate::window::*;
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::sync::Arc;
@@ -77,7 +77,7 @@ impl Scheduler {
 
         SpawnOption::with_priority(Priority::Normal).spawn(f, args, "System");
 
-        SpawnOption::new().spawn(Self::statistics_thread, 0, "Statistics");
+        SpawnOption::with_priority(Priority::High).spawn(Self::statistics_thread, 0, "Statistics");
 
         SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
 

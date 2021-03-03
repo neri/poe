@@ -1,9 +1,8 @@
 // Slab Allocator
 
-use super::mm::*;
+use super::*;
 use crate::arch::cpu::Cpu;
-use crate::*;
-use alloc::vec::*;
+use ::alloc::vec::Vec;
 use core::sync::atomic::*;
 use core::{alloc::Layout, mem::transmute};
 use core::{mem::size_of, num::*};
@@ -54,11 +53,13 @@ impl SlabAllocator {
         Err(DeallocationError::Unsupported)
     }
 
+    #[allow(dead_code)]
     pub(super) fn free_memory_size(&self) -> usize {
         self.vec.iter().fold(0, |v, i| v + i.free_memory_size())
     }
 
-    pub fn statistics(&self) -> Vec<(usize, usize, usize)> {
+    #[allow(dead_code)]
+    pub(super) fn statistics(&self) -> Vec<(usize, usize, usize)> {
         let mut vec = Vec::with_capacity(self.vec.len());
         for item in &self.vec {
             vec.push((
@@ -204,7 +205,7 @@ impl SlabChunkHeader {
     fn alloc(&self) -> Option<usize> {
         let limit = 8 * size_of::<usize>();
         for i in 0..limit {
-            if Cpu::interlocked_test_and_clear(&self.bitmap, i as u32) {
+            if Cpu::interlocked_test_and_clear(&self.bitmap, i) {
                 return Some(i);
             }
         }
@@ -213,6 +214,6 @@ impl SlabChunkHeader {
 
     #[inline]
     fn free(&self, position: usize) {
-        Cpu::interlocked_test_and_set(&self.bitmap, position as u32);
+        Cpu::interlocked_test_and_set(&self.bitmap, position);
     }
 }
