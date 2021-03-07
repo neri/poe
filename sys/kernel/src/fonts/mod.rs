@@ -149,7 +149,7 @@ impl FontDescriptor {
     }
 
     // #[inline]
-    // pub fn draw_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::PixelType)
+    // pub fn draw_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::ColorType)
     // where
     //     T: RasterFontWriter,
     // {
@@ -228,7 +228,7 @@ impl FixedFontDriver<'_> {
         }
     }
 
-    pub fn write_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::PixelType)
+    pub fn write_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::ColorType)
     where
         T: RasterFontWriter,
     {

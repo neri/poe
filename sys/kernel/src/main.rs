@@ -40,8 +40,7 @@ impl Shell {
     }
 
     fn main() {
-        WindowManager::set_desktop_color(IndexedColor::from_rgb(0x2196F3));
-        // WindowManager::set_desktop_color(IndexedColor::from_rgb(0x426F96));
+        WindowManager::set_desktop_color(TrueColor::from_rgb(0x2196F3).into());
         WindowManager::set_pointer_visible(true);
         // Timer::sleep(Duration::from_millis(100));
 
@@ -65,14 +64,14 @@ impl Shell {
         let padding_x = 4;
         let padding_y = 4;
         let font = FontManager::fixed_system_font();
-        let bg_color = IndexedColor::WHITE;
-        let fg_color = IndexedColor::BLACK;
+        let bg_color = AmbiguousColor::from(IndexedColor::WHITE);
+        let fg_color = AmbiguousColor::from(IndexedColor::BLACK);
 
         let window_rect = Rect::new(8, 30, 128, font.line_height() + padding_y * 2);
-        let window = WindowBuilder::new("Command Mode")
+        let window = WindowBuilder::new("Terminal")
             .style_add(WindowStyle::NAKED)
             .frame(window_rect)
-            .bg_color(bg_color)
+            .bg_color(bg_color.into())
             .build();
         window.make_active();
 
@@ -111,34 +110,25 @@ impl Shell {
                                 bitmap.size().width() as isize - padding_x * 2,
                                 font.line_height(),
                             );
-                            bitmap.view(rect, |bitmap| {
-                                bitmap.fill_rect(bitmap.bounds(), bg_color);
-                                TextProcessing::write_str(
-                                    bitmap,
-                                    sb.as_str(),
-                                    font,
-                                    Point::new(1, 1),
-                                    IndexedColor::from_rgb(0xCCCCCC),
-                                );
-                                TextProcessing::write_str(
-                                    bitmap,
-                                    sb.as_str(),
-                                    font,
-                                    Point::new(0, 0),
+                            bitmap.fill_rect(rect, bg_color.into());
+                            TextProcessing::write_str(
+                                bitmap,
+                                sb.as_str(),
+                                font,
+                                Point::new(rect.x(), rect.y()),
+                                fg_color.into(),
+                            );
+                            if window.is_active() && cursor_phase == 1 {
+                                bitmap.fill_rect(
+                                    Rect::new(
+                                        rect.x() + font.width() * sb.len() as isize,
+                                        rect.y(),
+                                        font.width(),
+                                        font.line_height(),
+                                    ),
                                     fg_color,
                                 );
-                                if window.is_active() && cursor_phase == 1 {
-                                    bitmap.fill_rect(
-                                        Rect::new(
-                                            font.width() * sb.len() as isize,
-                                            0,
-                                            font.width(),
-                                            font.line_height(),
-                                        ),
-                                        fg_color,
-                                    );
-                                }
-                            });
+                            }
                         })
                         .unwrap();
                 }
@@ -151,11 +141,11 @@ impl Shell {
     #[allow(dead_code)]
     async fn activity_monitor_main() {
         let window_size = Size::new(280, 160);
-        let bg_color = IndexedColor::BLACK;
-        let fg_color = IndexedColor::YELLOW;
-        let graph_sub_color = IndexedColor::LIGHT_GREEN;
-        let graph_main_color = IndexedColor::YELLOW;
-        let graph_border_color = IndexedColor::LIGHT_GRAY;
+        let bg_color = AmbiguousColor::from(IndexedColor::BLACK);
+        let fg_color = AmbiguousColor::from(IndexedColor::YELLOW);
+        let graph_sub_color = AmbiguousColor::from(IndexedColor::LIGHT_GREEN);
+        let graph_main_color = AmbiguousColor::from(IndexedColor::YELLOW);
+        let graph_border_color = AmbiguousColor::from(IndexedColor::LIGHT_GRAY);
 
         let window = WindowBuilder::new("Activity Monitor")
             .style_add(WindowStyle::PINCHABLE)
@@ -181,7 +171,7 @@ impl Shell {
         let mut sb = StringBuffer::with_capacity(0x1000);
 
         let interval = 1000;
-        window.create_timer(0, Duration::from_millis(interval));
+        window.create_timer(0, Duration::from_millis(0));
         while let Some(message) = window.get_message().await {
             match message {
                 WindowMessage::Timer(_timer) => {
@@ -213,7 +203,7 @@ impl Shell {
 
                     window
                         .draw(|bitmap| {
-                            bitmap.fill_rect(bitmap.bounds(), window.bg_color());
+                            bitmap.fill_rect(bitmap.bounds(), window.bg_color().into());
 
                             {
                                 let padding = 4;
@@ -269,7 +259,7 @@ impl Shell {
                                 sb.as_str(),
                                 font,
                                 rect,
-                                fg_color,
+                                fg_color.into(),
                                 0,
                                 LineBreakMode::default(),
                                 TextAlignment::Left,
@@ -318,7 +308,7 @@ impl Shell {
                                 sb.as_str(),
                                 font,
                                 rect,
-                                IndexedColor::BLACK,
+                                IndexedColor::BLACK.into(),
                                 0,
                                 LineBreakMode::default(),
                                 TextAlignment::Center,
@@ -348,13 +338,15 @@ impl Shell {
             .draw_in_rect(window_size.into(), |bitmap| {
                 let font = FontManager::fixed_ui_font();
                 let s = System::short_name();
-                TextProcessing::write_str(
-                    bitmap,
-                    s,
-                    font,
-                    Point::new(9, (STATUS_BAR_HEIGHT - font.line_height()) / 2),
-                    IndexedColor::BLACK,
-                );
+                {
+                    TextProcessing::write_str(
+                        bitmap,
+                        s,
+                        font,
+                        Point::new(9, (STATUS_BAR_HEIGHT - font.line_height()) / 2),
+                        IndexedColor::BLACK.into(),
+                    );
+                }
             })
             .unwrap();
         window.show();
@@ -404,7 +396,7 @@ impl Shell {
                                 sb.as_str(),
                                 font,
                                 Point::default(),
-                                IndexedColor::BLACK,
+                                IndexedColor::BLACK.into(),
                             );
                         })
                         .unwrap();

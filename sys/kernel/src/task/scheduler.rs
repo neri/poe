@@ -367,27 +367,31 @@ impl Scheduler {
             thread.load0.fetch_add(diff as u32, Ordering::SeqCst);
             thread.measure.store(now, Ordering::SeqCst);
         });
-        if current != next {
-            shared.retired = Some(current);
-            shared.current = next;
-
-            //-//-//-//-//
-            current.update(|current| {
-                let next = &next.as_ref().context;
-                current.context.switch(next);
-            });
-            //-//-//-//-//
-
-            let current = shared.current;
-            current.update(|thread| {
-                thread.attribute.remove(ThreadAttributes::AWAKE);
-                thread.attribute.remove(ThreadAttributes::ASLEEP);
-                thread.measure.store(Timer::measure().0, Ordering::SeqCst);
-            });
-            let retired = shared.retired.unwrap();
-            shared.retired = None;
-            Scheduler::retire(retired);
+        if current == next {
+            return;
         }
+
+        //-//-//-//-//
+        shared.retired = Some(current);
+        shared.current = next;
+
+        current.update(|current| {
+            let next = &next.as_ref().context;
+            current.context.switch(next);
+        });
+
+        let current = shared.current;
+        //-//-//-//-//
+
+        current.update(|thread| {
+            thread.attribute.remove(ThreadAttributes::AWAKE);
+            thread.attribute.remove(ThreadAttributes::ASLEEP);
+            thread.measure.store(Timer::measure().0, Ordering::SeqCst);
+        });
+
+        let retired = shared.retired.unwrap();
+        shared.retired = None;
+        Scheduler::retire(retired);
     }
 
     fn spawn_f(

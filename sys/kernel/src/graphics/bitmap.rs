@@ -1,19 +1,22 @@
-// Bitmap Drawing
+// Bitmap
 
 use super::color::*;
 use super::coords::*;
 use alloc::vec::Vec;
+use bitflags::*;
 use core::cell::UnsafeCell;
 use core::convert::TryFrom;
+// use core::mem::swap;
 use core::mem::transmute;
 
-pub trait ImageTrait
+pub trait Drawable
 where
-    Self::PixelType: Sized + Copy + Clone,
+    Self::ColorType: ColorTrait,
 {
-    type PixelType;
+    type ColorType;
 
     fn width(&self) -> usize;
+
     fn height(&self) -> usize;
 
     fn size(&self) -> Size {
@@ -25,22 +28,41 @@ where
     }
 }
 
-pub trait RasterImage: ImageTrait {
-    fn stride(&self) -> usize {
-        self.width()
-    }
-    fn slice(&self) -> &[Self::PixelType];
+pub trait GetPixel: Drawable {
+    unsafe fn get_pixel_unchecked(&self, point: Point) -> Self::ColorType;
 
-    fn get_pixel(&self, point: Point) -> Option<Self::PixelType> {
+    fn get_pixel(&self, point: Point) -> Option<Self::ColorType> {
         if point.is_within(Rect::from(self.size())) {
             Some(unsafe { self.get_pixel_unchecked(point) })
         } else {
             None
         }
     }
+}
 
+pub trait SetPixel: Drawable {
+    unsafe fn set_pixel_unchecked(&mut self, point: Point, pixel: Self::ColorType);
+
+    fn set_pixel(&mut self, point: Point, pixel: Self::ColorType) {
+        if point.is_within(Rect::from(self.size())) {
+            unsafe {
+                self.set_pixel_unchecked(point, pixel);
+            }
+        }
+    }
+}
+
+pub trait RasterImage: GetPixel {
+    fn slice(&self) -> &[Self::ColorType];
+
+    fn stride(&self) -> usize {
+        self.width()
+    }
+}
+
+impl<T: RasterImage> GetPixel for T {
     /// SAFETY: The point must be within the size range.
-    unsafe fn get_pixel_unchecked(&self, point: Point) -> Self::PixelType {
+    unsafe fn get_pixel_unchecked(&self, point: Point) -> Self::ColorType {
         *self
             .slice()
             .get_unchecked(point.x as usize + point.y as usize * self.stride())
@@ -48,18 +70,12 @@ pub trait RasterImage: ImageTrait {
 }
 
 pub trait MutableRasterImage: RasterImage {
-    fn slice_mut(&mut self) -> &mut [Self::PixelType];
+    fn slice_mut(&mut self) -> &mut [Self::ColorType];
+}
 
-    fn set_pixel(&mut self, point: Point, pixel: Self::PixelType) {
-        if point.is_within(Rect::from(self.size())) {
-            unsafe {
-                self.set_pixel_unchecked(point, pixel);
-            }
-        }
-    }
-
+impl<T: MutableRasterImage> SetPixel for T {
     /// SAFETY: The point must be within the size range.
-    unsafe fn set_pixel_unchecked(&mut self, point: Point, pixel: Self::PixelType) {
+    unsafe fn set_pixel_unchecked(&mut self, point: Point, pixel: Self::ColorType) {
         let stride = self.stride();
         *self
             .slice_mut()
@@ -67,12 +83,21 @@ pub trait MutableRasterImage: RasterImage {
     }
 }
 
-pub trait BasicDrawing: MutableRasterImage {
-    fn fill_rect(&mut self, rect: Rect, color: Self::PixelType);
-    fn draw_hline(&mut self, point: Point, width: isize, color: Self::PixelType);
-    fn draw_vline(&mut self, point: Point, height: isize, color: Self::PixelType);
+pub trait Blt<T>
+where
+    T: ColorTrait,
+{
+    fn blt<U>(&mut self, src: &U, origin: Point, rect: Rect)
+    where
+        U: RasterImage<ColorType = T>;
+}
 
-    fn draw_rect(&mut self, rect: Rect, color: Self::PixelType) {
+pub trait BasicDrawing: SetPixel {
+    fn fill_rect(&mut self, rect: Rect, color: Self::ColorType);
+    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType);
+    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType);
+
+    fn draw_rect(&mut self, rect: Rect, color: Self::ColorType) {
         let coords = match Coordinates::from_rect(rect) {
             Ok(v) => v,
             Err(_) => return,
@@ -87,7 +112,7 @@ pub trait BasicDrawing: MutableRasterImage {
         }
     }
 
-    fn draw_circle(&mut self, origin: Point, radius: isize, color: Self::PixelType) {
+    fn draw_circle(&mut self, origin: Point, radius: isize, color: Self::ColorType) {
         let rect = Rect {
             origin: origin - radius,
             size: Size::new(radius * 2, radius * 2),
@@ -95,7 +120,7 @@ pub trait BasicDrawing: MutableRasterImage {
         self.draw_round_rect(rect, radius, color);
     }
 
-    fn fill_circle(&mut self, origin: Point, radius: isize, color: Self::PixelType) {
+    fn fill_circle(&mut self, origin: Point, radius: isize, color: Self::ColorType) {
         let rect = Rect {
             origin: origin - radius,
             size: Size::new(radius * 2, radius * 2),
@@ -103,7 +128,7 @@ pub trait BasicDrawing: MutableRasterImage {
         self.fill_round_rect(rect, radius, color);
     }
 
-    fn fill_round_rect(&mut self, rect: Rect, radius: isize, color: Self::PixelType) {
+    fn fill_round_rect(&mut self, rect: Rect, radius: isize, color: Self::ColorType) {
         let width = rect.size.width;
         let height = rect.size.height;
         let dx = rect.origin.x;
@@ -154,7 +179,7 @@ pub trait BasicDrawing: MutableRasterImage {
         }
     }
 
-    fn draw_round_rect(&mut self, rect: Rect, radius: isize, color: Self::PixelType) {
+    fn draw_round_rect(&mut self, rect: Rect, radius: isize, color: Self::ColorType) {
         let width = rect.size.width;
         let height = rect.size.height;
         let dx = rect.origin.x;
@@ -214,7 +239,7 @@ pub trait BasicDrawing: MutableRasterImage {
         }
     }
 
-    fn draw_line(&mut self, c1: Point, c2: Point, color: Self::PixelType) {
+    fn draw_line(&mut self, c1: Point, c2: Point, color: Self::ColorType) {
         if c1.x() == c2.x() {
             if c1.y() < c2.y() {
                 let height = c2.y() - c1.y();
@@ -237,14 +262,10 @@ pub trait BasicDrawing: MutableRasterImage {
             });
         }
     }
-
-    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
-    where
-        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>;
 }
 
-pub trait RasterFontWriter: MutableRasterImage {
-    fn draw_font(&mut self, src: &[u8], size: Size, origin: Point, color: Self::PixelType) {
+pub trait RasterFontWriter: SetPixel {
+    fn draw_font(&mut self, src: &[u8], size: Size, origin: Point, color: Self::ColorType) {
         let stride = (size.width as usize + 7) / 8;
 
         let mut coords = match Coordinates::from_rect(Rect { origin, size }) {
@@ -333,8 +354,8 @@ impl<'a> ConstBitmap8<'a> {
     }
 }
 
-impl ImageTrait for ConstBitmap8<'_> {
-    type PixelType = IndexedColor;
+impl Drawable for ConstBitmap8<'_> {
+    type ColorType = IndexedColor;
 
     fn width(&self) -> usize {
         self.width
@@ -350,7 +371,7 @@ impl RasterImage for ConstBitmap8<'_> {
         self.stride
     }
 
-    fn slice(&self) -> &[Self::PixelType] {
+    fn slice(&self) -> &[Self::ColorType] {
         self.slice
     }
 }
@@ -403,15 +424,22 @@ impl Bitmap8<'static> {
 
 impl BitmapDrawing8 for Bitmap8<'_> {}
 
-pub trait BitmapDrawing8: MutableRasterImage<PixelType = IndexedColor> {
+pub trait BitmapDrawing8: MutableRasterImage<ColorType = IndexedColor> {
+    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
+    where
+        T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
+    {
+        self.blt_main(src, origin, rect, None);
+    }
+
     fn blt_with_key<T>(
         &mut self,
         src: &T,
         origin: Point,
         rect: Rect,
-        color_key: <Self as ImageTrait>::PixelType,
+        color_key: <Self as Drawable>::ColorType,
     ) where
-        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>,
+        T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
     {
         self.blt_main(src, origin, rect, Some(color_key));
     }
@@ -422,9 +450,9 @@ pub trait BitmapDrawing8: MutableRasterImage<PixelType = IndexedColor> {
         src: &T,
         origin: Point,
         rect: Rect,
-        color_key: Option<<Self as ImageTrait>::PixelType>,
+        color_key: Option<<Self as Drawable>::ColorType>,
     ) where
-        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>,
+        T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
     {
         let mut dx = origin.x;
         let mut dy = origin.y;
@@ -538,8 +566,8 @@ pub trait BitmapDrawing8: MutableRasterImage<PixelType = IndexedColor> {
     }
 }
 
-impl ImageTrait for Bitmap8<'_> {
-    type PixelType = IndexedColor;
+impl Drawable for Bitmap8<'_> {
+    type ColorType = IndexedColor;
 
     fn width(&self) -> usize {
         self.width
@@ -555,19 +583,19 @@ impl RasterImage for Bitmap8<'_> {
         self.stride
     }
 
-    fn slice(&self) -> &[Self::PixelType] {
+    fn slice(&self) -> &[Self::ColorType] {
         unsafe { self.slice.get().as_ref().unwrap() }
     }
 }
 
 impl MutableRasterImage for Bitmap8<'_> {
-    fn slice_mut(&mut self) -> &mut [Self::PixelType] {
+    fn slice_mut(&mut self) -> &mut [Self::ColorType] {
         self.slice.get_mut()
     }
 }
 
 impl BasicDrawing for Bitmap8<'_> {
-    fn fill_rect(&mut self, rect: Rect, color: Self::PixelType) {
+    fn fill_rect(&mut self, rect: Rect, color: Self::ColorType) {
         let mut width = rect.width();
         let mut height = rect.height();
         let mut dx = rect.x();
@@ -607,7 +635,7 @@ impl BasicDrawing for Bitmap8<'_> {
         }
     }
 
-    fn draw_hline(&mut self, point: Point, width: isize, color: Self::PixelType) {
+    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType) {
         let mut dx = point.x;
         let dy = point.y;
         let mut w = width;
@@ -631,7 +659,7 @@ impl BasicDrawing for Bitmap8<'_> {
         memset_colors8(self.slice_mut(), cursor, w as usize, color);
     }
 
-    fn draw_vline(&mut self, point: Point, height: isize, color: Self::PixelType) {
+    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType) {
         let dx = point.x;
         let mut dy = point.y;
         let mut h = height;
@@ -658,13 +686,6 @@ impl BasicDrawing for Bitmap8<'_> {
             cursor += stride;
         }
     }
-
-    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
-    where
-        T: RasterImage<PixelType = <Self as ImageTrait>::PixelType>,
-    {
-        self.blt_main(src, origin, rect, None);
-    }
 }
 
 impl RasterFontWriter for Bitmap8<'_> {}
@@ -683,6 +704,8 @@ pub struct VecBitmap8 {
     vec: Vec<IndexedColor>,
 }
 
+impl BitmapDrawing8 for VecBitmap8 {}
+
 impl VecBitmap8 {
     pub fn new(size: Size, bg_color: IndexedColor) -> Self {
         let len = size.width() as usize * size.height() as usize;
@@ -695,19 +718,10 @@ impl VecBitmap8 {
             vec,
         }
     }
-
-    /// Make a bitmap view
-    pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
-    where
-        F: FnOnce(&mut Bitmap8) -> R,
-    {
-        let mut bitmap = Bitmap8::from(self);
-        bitmap.view(rect, f)
-    }
 }
 
-impl ImageTrait for VecBitmap8 {
-    type PixelType = IndexedColor;
+impl Drawable for VecBitmap8 {
+    type ColorType = IndexedColor;
 
     fn width(&self) -> usize {
         self.width
@@ -723,13 +737,13 @@ impl RasterImage for VecBitmap8 {
         self.stride
     }
 
-    fn slice(&self) -> &[Self::PixelType] {
+    fn slice(&self) -> &[Self::ColorType] {
         self.vec.as_slice()
     }
 }
 
 impl MutableRasterImage for VecBitmap8 {
-    fn slice_mut(&mut self) -> &mut [Self::PixelType] {
+    fn slice_mut(&mut self) -> &mut [Self::ColorType] {
         self.vec.as_mut_slice()
     }
 }
@@ -784,7 +798,7 @@ fn memset_colors8(slice: &mut [IndexedColor], cursor: usize, size: usize, color:
 }
 
 /// Fast copy
-#[inline(never)]
+#[inline]
 fn memcpy_colors8(
     dest: &mut [IndexedColor],
     dest_cursor: usize,
@@ -837,6 +851,719 @@ fn memcpy_colors8(
                 ptr_d = ptr_d.add(1);
                 ptr_s = ptr_s.add(1);
             }
+        }
+    }
+}
+
+//-//
+
+#[repr(C)]
+pub struct ConstBitmap32<'a> {
+    width: usize,
+    height: usize,
+    stride: usize,
+    slice: &'a [TrueColor],
+}
+
+bitflags! {
+    pub struct BitmapFlags: usize {
+        const PORTRAIT      = 0b0000_0001;
+        const TRANSLUCENT   = 0b0000_0010;
+        const VIEW          = 0b1000_0000;
+    }
+}
+
+impl<'a> ConstBitmap32<'a> {
+    #[inline]
+    pub const fn from_slice(slice: &'a [TrueColor], size: Size, stride: usize) -> Self {
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride,
+            slice,
+        }
+    }
+
+    #[inline]
+    pub const fn from_bytes(bytes: &'a [u32], size: Size) -> Self {
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride: size.width() as usize,
+            slice: unsafe { transmute(bytes) },
+        }
+    }
+}
+
+impl Drawable for ConstBitmap32<'_> {
+    type ColorType = TrueColor;
+
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+}
+
+impl RasterImage for ConstBitmap32<'_> {
+    fn stride(&self) -> usize {
+        self.stride
+    }
+
+    fn slice(&self) -> &[Self::ColorType] {
+        self.slice
+    }
+}
+
+#[repr(C)]
+pub struct Bitmap32<'a> {
+    width: usize,
+    height: usize,
+    stride: usize,
+    slice: UnsafeCell<&'a mut [TrueColor]>,
+}
+
+impl<'a> Bitmap32<'a> {
+    #[inline]
+    pub fn from_slice(slice: &'a mut [TrueColor], size: Size, stride: usize) -> Self {
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride,
+            slice: UnsafeCell::new(slice),
+        }
+    }
+
+    /// Clone a bitmap
+    #[inline]
+    pub fn clone(&self) -> Bitmap32<'a> {
+        let slice = unsafe { self.slice.get().as_mut().unwrap() };
+        Self {
+            width: self.width(),
+            height: self.height(),
+            stride: self.stride(),
+            slice: UnsafeCell::new(slice),
+        }
+    }
+}
+
+impl Bitmap32<'_> {
+    pub fn blend_rect(&mut self, rect: Rect, color: TrueColor) {
+        let rhs = color.components();
+        if rhs.is_opaque() {
+            return self.fill_rect(rect, color);
+        } else if rhs.is_transparent() {
+            return;
+        }
+        let alpha = rhs.a as usize;
+        let alpha_n = 255 - alpha;
+
+        let mut width = rect.size.width;
+        let mut height = rect.size.height;
+        let mut dx = rect.origin.x;
+        let mut dy = rect.origin.y;
+
+        if dx < 0 {
+            width += dx;
+            dx = 0;
+        }
+        if dy < 0 {
+            height += dy;
+            dy = 0;
+        }
+        let r = dx + width;
+        let b = dy + height;
+        if r >= self.size().width {
+            width = self.size().width - dx;
+        }
+        if b >= self.size().height {
+            height = self.size().height - dy;
+        }
+        if width <= 0 || height <= 0 {
+            return;
+        }
+
+        // if self.is_portrait() {
+        //     let temp = dx;
+        //     dx = self.size().height - dy - height;
+        //     dy = temp;
+        //     swap(&mut width, &mut height);
+        // }
+
+        let mut cursor = dx as usize + dy as usize * self.stride();
+        let stride = self.stride() - width as usize;
+        let slice = self.slice_mut();
+        for _ in 0..height {
+            for _ in 0..width {
+                let lhs = unsafe { slice.get_unchecked(cursor) }.components();
+                let c = lhs
+                    .blend_color(
+                        rhs,
+                        |lhs, rhs| {
+                            (((lhs as usize) * alpha_n + (rhs as usize) * alpha) / 255) as u8
+                        },
+                        |a, b| a.saturating_add(b),
+                    )
+                    .into();
+                unsafe {
+                    *slice.get_unchecked_mut(cursor) = c;
+                }
+                cursor += 1;
+            }
+            cursor += stride;
+        }
+    }
+}
+
+impl Bitmap32<'static> {
+    /// SAFETY: Must guarantee the existence of the `ptr`.
+    #[inline]
+    pub unsafe fn from_static(ptr: *mut TrueColor, size: Size, stride: usize) -> Self {
+        let slice = core::slice::from_raw_parts_mut(ptr, size.height() as usize * stride);
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride,
+            slice: UnsafeCell::new(slice),
+        }
+    }
+}
+
+impl Drawable for Bitmap32<'_> {
+    type ColorType = TrueColor;
+
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+}
+
+impl RasterImage for Bitmap32<'_> {
+    fn stride(&self) -> usize {
+        self.stride
+    }
+
+    fn slice(&self) -> &[Self::ColorType] {
+        unsafe { self.slice.get().as_ref().unwrap() }
+    }
+}
+
+impl MutableRasterImage for Bitmap32<'_> {
+    fn slice_mut(&mut self) -> &mut [Self::ColorType] {
+        self.slice.get_mut()
+    }
+}
+
+impl BasicDrawing for Bitmap32<'_> {
+    fn fill_rect(&mut self, rect: Rect, color: Self::ColorType) {
+        let mut width = rect.width();
+        let mut height = rect.height();
+        let mut dx = rect.x();
+        let mut dy = rect.y();
+
+        if dx < 0 {
+            width += dx;
+            dx = 0;
+        }
+        if dy < 0 {
+            height += dy;
+            dy = 0;
+        }
+        let r = dx + width;
+        let b = dy + height;
+        if r >= self.width as isize {
+            width = self.width as isize - dx;
+        }
+        if b >= self.height as isize {
+            height = self.height as isize - dy;
+        }
+        if width <= 0 || height <= 0 {
+            return;
+        }
+
+        let width = width as usize;
+        let height = height as usize;
+        let stride = self.stride;
+        let mut cursor = dx as usize + dy as usize * stride;
+        if stride == width {
+            memset_colors32(self.slice_mut(), cursor, width * height, color);
+        } else {
+            for _ in 0..height {
+                memset_colors32(self.slice_mut(), cursor, width, color);
+                cursor += stride;
+            }
+        }
+    }
+
+    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType) {
+        let mut dx = point.x;
+        let dy = point.y;
+        let mut w = width;
+
+        if dy < 0 || dy >= (self.height as isize) {
+            return;
+        }
+        if dx < 0 {
+            w += dx;
+            dx = 0;
+        }
+        let r = dx + w;
+        if r >= (self.width as isize) {
+            w = (self.width as isize) - dx;
+        }
+        if w <= 0 {
+            return;
+        }
+
+        let cursor = dx as usize + dy as usize * self.stride;
+        memset_colors32(self.slice_mut(), cursor, w as usize, color);
+    }
+
+    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType) {
+        let dx = point.x;
+        let mut dy = point.y;
+        let mut h = height;
+
+        if dx < 0 || dx >= (self.width as isize) {
+            return;
+        }
+        if dy < 0 {
+            h += dy;
+            dy = 0;
+        }
+        let b = dy + h;
+        if b >= (self.height as isize) {
+            h = (self.height as isize) - dy;
+        }
+        if h <= 0 {
+            return;
+        }
+
+        let stride = self.stride;
+        let mut cursor = dx as usize + dy as usize * stride;
+        for _ in 0..h {
+            self.slice_mut()[cursor] = color;
+            cursor += stride;
+        }
+    }
+}
+
+impl RasterFontWriter for Bitmap32<'_> {}
+
+impl<'a> From<&'a Bitmap32<'a>> for ConstBitmap32<'a> {
+    fn from(src: &'a Bitmap32) -> Self {
+        Self::from_slice(src.slice(), src.size(), src.stride())
+    }
+}
+
+impl BitmapDrawing32 for Bitmap32<'_> {}
+
+pub enum BltMode {
+    Blend,
+    Copy,
+}
+
+pub trait BitmapDrawing32: MutableRasterImage<ColorType = TrueColor> {
+    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
+    where
+        T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
+    {
+        self.blt_main(src, origin, rect, BltMode::Copy);
+    }
+
+    #[inline]
+    fn blt_main<T>(&mut self, src: &T, origin: Point, rect: Rect, mode: BltMode)
+    where
+        T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
+    {
+        let mut dx = origin.x;
+        let mut dy = origin.y;
+        let mut sx = rect.origin.x;
+        let mut sy = rect.origin.y;
+        let mut width = rect.width();
+        let mut height = rect.height();
+
+        if dx < 0 {
+            sx -= dx;
+            width += dx;
+            dx = 0;
+        }
+        if dy < 0 {
+            sy -= dy;
+            height += dy;
+            dy = 0;
+        }
+        let sw = src.width() as isize;
+        let sh = src.height() as isize;
+        if width > sx + sw {
+            width = sw - sx;
+        }
+        if height > sy + sh {
+            height = sh - sy;
+        }
+        let r = dx + width;
+        let b = dy + height;
+        let dw = self.width() as isize;
+        let dh = self.height() as isize;
+        if r >= dw {
+            width = dw - dx;
+        }
+        if b >= dh {
+            height = dh - dy;
+        }
+        if width <= 0 || height <= 0 {
+            return;
+        }
+
+        let width = width as usize;
+        let height = height as usize;
+
+        let ds = self.stride();
+        let ss = src.stride();
+        let mut dest_cursor = dx as usize + dy as usize * ds;
+        let mut src_cursor = sx as usize + sy as usize * ss;
+        let dest_fb = self.slice_mut();
+        let src_fb = src.slice();
+
+        match mode {
+            BltMode::Copy => {
+                if ds == width && ss == width {
+                    memcpy_colors32(dest_fb, dest_cursor, src_fb, src_cursor, width * height);
+                } else {
+                    for _ in 0..height {
+                        memcpy_colors32(dest_fb, dest_cursor, src_fb, src_cursor, width);
+                        dest_cursor += ds;
+                        src_cursor += ss;
+                    }
+                }
+            }
+            _ => {
+                for _ in 0..height {
+                    blend_line32(dest_fb, dest_cursor, src_fb, src_cursor, width);
+                    dest_cursor += ds;
+                    src_cursor += ss;
+                }
+            }
+        }
+    }
+
+    /// Make a bitmap view
+    fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Bitmap32) -> R,
+    {
+        let coords = match Coordinates::try_from(rect) {
+            Ok(v) => v,
+            Err(_) => return None,
+        };
+        let width = self.width() as isize;
+        let height = self.height() as isize;
+        let stride = self.stride();
+
+        if coords.left < 0
+            || coords.left >= width
+            || coords.right > width
+            || coords.top < 0
+            || coords.top >= height
+            || coords.bottom > height
+        {
+            return None;
+        }
+
+        let offset = rect.x() as usize + rect.y() as usize * stride;
+        let new_len = rect.height() as usize * stride;
+        let r = {
+            let slice = self.slice_mut();
+            let mut view = Bitmap32 {
+                width: rect.width() as usize,
+                height: rect.height() as usize,
+                stride,
+                slice: UnsafeCell::new(&mut slice[offset..offset + new_len]),
+            };
+            f(&mut view)
+        };
+        Some(r)
+    }
+}
+
+#[repr(C)]
+pub struct VecBitmap32 {
+    width: usize,
+    height: usize,
+    stride: usize,
+    vec: Vec<TrueColor>,
+}
+
+impl BitmapDrawing32 for VecBitmap32 {}
+
+impl VecBitmap32 {
+    pub fn new(size: Size, bg_color: TrueColor) -> Self {
+        let len = size.width() as usize * size.height() as usize;
+        let mut vec = Vec::with_capacity(len);
+        vec.resize_with(len, || bg_color);
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride: size.width() as usize,
+            vec,
+        }
+    }
+}
+
+impl Drawable for VecBitmap32 {
+    type ColorType = TrueColor;
+
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+}
+
+impl RasterImage for VecBitmap32 {
+    fn stride(&self) -> usize {
+        self.stride
+    }
+
+    fn slice(&self) -> &[Self::ColorType] {
+        self.vec.as_slice()
+    }
+}
+
+impl MutableRasterImage for VecBitmap32 {
+    fn slice_mut(&mut self) -> &mut [Self::ColorType] {
+        self.vec.as_mut_slice()
+    }
+}
+
+impl<'a> From<&'a mut VecBitmap32> for Bitmap32<'a> {
+    fn from(src: &'a mut VecBitmap32) -> Self {
+        let size = src.size();
+        let stride = src.stride();
+        Self::from_slice(src.slice_mut(), size, stride)
+    }
+}
+
+/// Fast Fill
+#[inline]
+fn memset_colors32(slice: &mut [TrueColor], cursor: usize, count: usize, color: TrueColor) {
+    let slice = &mut slice[cursor..cursor + count];
+    unsafe {
+        let color32 = color.argb();
+        let mut ptr: *mut u32 = core::mem::transmute(&slice[0]);
+        let mut remain = count;
+
+        let prologue = usize::min(ptr as usize & 0x0F / 4, remain);
+        remain -= prologue;
+        for _ in 0..prologue {
+            ptr.write_volatile(color32);
+            ptr = ptr.add(1);
+        }
+
+        if remain > 4 {
+            let color128 = color32 as u128
+                | (color32 as u128) << 32
+                | (color32 as u128) << 64
+                | (color32 as u128) << 96;
+            let count = remain / 4;
+            let mut ptr2 = ptr as *mut u128;
+
+            for _ in 0..count {
+                ptr2.write_volatile(color128);
+                ptr2 = ptr2.add(1);
+            }
+
+            ptr = ptr2 as *mut u32;
+            remain -= count * 4;
+        }
+
+        for _ in 0..remain {
+            ptr.write_volatile(color32);
+            ptr = ptr.add(1);
+        }
+    }
+}
+
+/// Fast copy
+#[inline]
+fn memcpy_colors32(
+    dest: &mut [TrueColor],
+    dest_cursor: usize,
+    src: &[TrueColor],
+    src_cursor: usize,
+    count: usize,
+) {
+    let dest = &mut dest[dest_cursor..dest_cursor + count];
+    let src = &src[src_cursor..src_cursor + count];
+    unsafe {
+        let mut ptr_d: *mut u32 = core::mem::transmute(&dest[0]);
+        let mut ptr_s: *const u32 = core::mem::transmute(&src[0]);
+        let mut remain = count;
+        if ((ptr_d as usize) & 0xF) == ((ptr_s as usize) & 0xF) {
+            let prologue = usize::min(ptr_d as usize & 0x0F, remain);
+            remain -= prologue;
+            for _ in 0..prologue {
+                ptr_d.write_volatile(ptr_s.read_volatile());
+                ptr_d = ptr_d.add(1);
+                ptr_s = ptr_s.add(1);
+            }
+
+            if remain > 4 {
+                let count = remain / 4;
+                let mut ptr2d = ptr_d as *mut u128;
+                let mut ptr2s = ptr_s as *mut u128;
+
+                for _ in 0..count {
+                    ptr2d.write_volatile(ptr2s.read_volatile());
+                    ptr2d = ptr2d.add(1);
+                    ptr2s = ptr2s.add(1);
+                }
+
+                ptr_d = ptr2d as *mut u32;
+                ptr_s = ptr2s as *mut u32;
+                remain -= count * 4;
+            }
+
+            for _ in 0..remain {
+                ptr_d.write_volatile(ptr_s.read_volatile());
+                ptr_d = ptr_d.add(1);
+                ptr_s = ptr_s.add(1);
+            }
+        } else {
+            for i in 0..count {
+                dest[i] = src[i];
+            }
+        }
+    }
+}
+
+#[inline]
+fn blend_line32(
+    dest: &mut [TrueColor],
+    dest_cursor: usize,
+    src: &[TrueColor],
+    src_cursor: usize,
+    count: usize,
+) {
+    let dest = &mut dest[dest_cursor..dest_cursor + count];
+    let src = &src[src_cursor..src_cursor + count];
+    for i in 0..count {
+        dest[i] = dest[i].blend(src[i]);
+    }
+}
+
+//-//
+
+pub enum AbstractBitmap<'a> {
+    Indexed(Bitmap8<'a>),
+    Argb32(Bitmap32<'a>),
+}
+
+impl<'a> From<Bitmap8<'a>> for AbstractBitmap<'a> {
+    fn from(val: Bitmap8<'a>) -> Self {
+        Self::Indexed(val)
+    }
+}
+
+impl<'a> From<Bitmap32<'a>> for AbstractBitmap<'a> {
+    fn from(val: Bitmap32<'a>) -> Self {
+        Self::Argb32(val)
+    }
+}
+
+impl Blt<IndexedColor> for AbstractBitmap<'_> {
+    fn blt<U>(&mut self, src: &U, origin: Point, rect: Rect)
+    where
+        U: RasterImage<ColorType = IndexedColor>,
+    {
+        match self {
+            AbstractBitmap::Indexed(bitmap) => bitmap.blt(src, origin, rect),
+            AbstractBitmap::Argb32(_bitmap) => todo!(),
+        }
+    }
+}
+
+impl Blt<TrueColor> for AbstractBitmap<'_> {
+    fn blt<U>(&mut self, src: &U, origin: Point, rect: Rect)
+    where
+        U: RasterImage<ColorType = TrueColor>,
+    {
+        match self {
+            AbstractBitmap::Indexed(_bitmap) => todo!(),
+            AbstractBitmap::Argb32(bitmap) => bitmap.blt(src, origin, rect),
+        }
+    }
+}
+
+impl Drawable for AbstractBitmap<'_> {
+    type ColorType = AmbiguousColor;
+
+    fn width(&self) -> usize {
+        match self {
+            Self::Indexed(inner) => inner.width(),
+            Self::Argb32(inner) => inner.width(),
+        }
+    }
+
+    fn height(&self) -> usize {
+        match self {
+            Self::Indexed(inner) => inner.height(),
+            Self::Argb32(inner) => inner.height(),
+        }
+    }
+}
+
+impl GetPixel for AbstractBitmap<'_> {
+    unsafe fn get_pixel_unchecked(&self, point: Point) -> Self::ColorType {
+        match self {
+            AbstractBitmap::Indexed(v) => v.get_pixel_unchecked(point).into(),
+            AbstractBitmap::Argb32(v) => v.get_pixel_unchecked(point).into(),
+        }
+    }
+}
+
+impl SetPixel for AbstractBitmap<'_> {
+    unsafe fn set_pixel_unchecked(&mut self, point: Point, pixel: Self::ColorType) {
+        match self {
+            AbstractBitmap::Indexed(v) => v.set_pixel_unchecked(point, pixel.into()),
+            AbstractBitmap::Argb32(v) => v.set_pixel_unchecked(point, pixel.into()),
+        }
+    }
+}
+
+impl RasterFontWriter for AbstractBitmap<'_> {
+    fn draw_font(&mut self, src: &[u8], size: Size, origin: Point, color: Self::ColorType) {
+        match self {
+            AbstractBitmap::Indexed(v) => v.draw_font(src, size, origin, color.into()),
+            AbstractBitmap::Argb32(v) => v.draw_font(src, size, origin, color.into()),
+        }
+    }
+}
+
+impl BasicDrawing for AbstractBitmap<'_> {
+    fn fill_rect(&mut self, rect: Rect, color: Self::ColorType) {
+        match self {
+            AbstractBitmap::Indexed(v) => v.fill_rect(rect, color.into()),
+            AbstractBitmap::Argb32(v) => v.fill_rect(rect, color.into()),
+        }
+    }
+    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType) {
+        match self {
+            AbstractBitmap::Indexed(v) => v.draw_hline(point, width, color.into()),
+            AbstractBitmap::Argb32(v) => v.draw_hline(point, width, color.into()),
+        }
+    }
+    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType) {
+        match self {
+            AbstractBitmap::Indexed(v) => v.draw_vline(point, height, color.into()),
+            AbstractBitmap::Argb32(v) => v.draw_vline(point, height, color.into()),
         }
     }
 }

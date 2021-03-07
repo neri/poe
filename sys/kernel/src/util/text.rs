@@ -2,6 +2,7 @@
 
 use crate::fonts::*;
 use crate::graphics::bitmap::*;
+use crate::graphics::color::*;
 use crate::graphics::coords::*;
 use alloc::vec::Vec;
 use core::num::NonZeroUsize;
@@ -141,15 +142,13 @@ impl TextProcessing {
     }
 
     /// Write string to bitmap
-    pub fn write_str<T>(
-        to: &mut T,
+    pub fn write_str(
+        to: &mut AbstractBitmap,
         s: &str,
         font: &FixedFontDriver,
         origin: Point,
-        color: T::PixelType,
-    ) where
-        T: RasterFontWriter + RasterImage,
-    {
+        color: AmbiguousColor,
+    ) {
         Self::draw_text(
             to,
             s,
@@ -170,19 +169,17 @@ impl TextProcessing {
     }
 
     /// Write text to bitmap
-    pub fn draw_text<T>(
-        to: &mut T,
+    pub fn draw_text(
+        to: &mut AbstractBitmap,
         s: &str,
         font: &FixedFontDriver,
         rect: Rect,
-        color: T::PixelType,
+        color: AmbiguousColor,
         max_lines: usize,
         line_break: LineBreakMode,
         align: TextAlignment,
         valign: VerticalAlignment,
-    ) where
-        T: RasterFontWriter,
-    {
+    ) {
         let coords = match Coordinates::from_rect(rect) {
             Ok(v) => v,
             Err(_) => return,

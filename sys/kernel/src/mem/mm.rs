@@ -1,7 +1,7 @@
 // Memory Manager
 
 use super::slab::SlabAllocator;
-use super::string::*;
+use super::string::StringBuffer;
 use crate::arch::cpu::Cpu;
 use crate::*;
 use bitflags::*;
@@ -139,13 +139,14 @@ impl MemoryManager {
         }
     }
 
-    // pub fn statistics_slab(sb: &mut StringBuffer) {
-    //     let shared = Self::shared();
-    //     // sb.clear();
-    //     for slab in shared.slab.as_ref().unwrap().statistics() {
-    //         writeln!(sb, "Slab {:4}: {:3} / {:3}", slab.0, slab.1, slab.2).unwrap();
-    //     }
-    // }
+    #[allow(dead_code)]
+    pub fn statistics_slab(sb: &mut StringBuffer) {
+        let shared = Self::shared();
+        // sb.clear();
+        for slab in shared.slab.as_ref().unwrap().statistics() {
+            writeln!(sb, "Slab {:4}: {:3} / {:3}", slab.0, slab.1, slab.2).unwrap();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

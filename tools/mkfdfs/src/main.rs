@@ -100,11 +100,11 @@ fn main() {
         );
     }
 
-    for fqpn in args {
-        let path = Path::new(&fqpn);
+    for arg in args {
+        let path = Path::new(&arg);
         let lpc = path.file_name().unwrap();
         let basename = lpc.to_str().unwrap();
-        println!("COPYING: {} <= {}", basename, fqpn);
+        println!("COPYING: {} <= {}", basename, arg);
 
         let mut dir_ent = DosDirEnt::file_entry(basename).expect("file name");
 
@@ -211,20 +211,20 @@ impl Fatfs {
         match self.fattype {
             FatType::Fat12 => {
                 let fat_size = (self.fat.len() * 3 + 1) / 2;
-                let mut fat_impl: Vec<u8> = Vec::with_capacity(fat_size);
-                fat_impl.resize(fat_size, 0);
+                let mut fat: Vec<u8> = Vec::with_capacity(fat_size);
+                fat.resize(fat_size, 0);
                 for (i, entry) in self.fat.iter().enumerate() {
                     let index = i * 3 / 2;
                     if (i & 1) == 0 {
-                        fat_impl[index] = *entry as u8;
-                        fat_impl[index + 1] = 0x0F & (*entry >> 8) as u8;
+                        fat[index] = *entry as u8;
+                        fat[index + 1] = 0x0F & (*entry >> 8) as u8;
                     } else {
-                        fat_impl[index] |= (*entry << 4) as u8;
-                        fat_impl[index + 1] = (*entry >> 4) as u8;
+                        fat[index] |= (*entry << 4) as u8;
+                        fat[index + 1] = (*entry >> 4) as u8;
                     }
                 }
-                vd.write(self.offset_fat, fat_impl.as_slice())?;
-                vd.write(self.offset_fat + sectors_per_fat, fat_impl.as_slice())?;
+                vd.write(self.offset_fat, fat.as_slice())?;
+                vd.write(self.offset_fat + sectors_per_fat, fat.as_slice())?;
             }
             FatType::Fat16 => {
                 vd.write(self.offset_fat, self.fat.as_slice())?;

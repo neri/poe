@@ -304,10 +304,10 @@ impl CpuContextData {
     }
 
     #[inline]
-    pub unsafe fn switch(&mut self, other: &Self) {
+    pub unsafe fn switch(&mut self, next: &Self) {
         let current = self as *const _ as *mut u8;
-        let other = other as *const _ as *const u8;
-        asm_sch_switch_context(current, other);
+        let next = next as *const _ as *const u8;
+        asm_sch_switch_context(current, next);
     }
 
     #[inline]

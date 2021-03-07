@@ -38,7 +38,7 @@ const WINDOW_BORDER_PADDING: isize = 1;
 const WINDOW_TITLE_HEIGHT: isize = 20;
 
 const WINDOW_BORDER_COLOR: IndexedColor = IndexedColor::from_rgb(0x666666);
-const WINDOW_DEFAULT_BGCOLOR: IndexedColor = IndexedColor::WHITE;
+const WINDOW_DEFAULT_BGCOLOR: AmbiguousColor = AmbiguousColor::Indexed(IndexedColor::WHITE);
 const WINDOW_DEFAULT_KEY_COLOR: IndexedColor = IndexedColor::DEFAULT_KEY;
 const WINDOW_ACTIVE_TITLE_BG_COLOR: IndexedColor = IndexedColor::from_rgb(0xCCCCCC);
 const WINDOW_ACTIVE_TITLE_FG_COLOR: IndexedColor = IndexedColor::from_rgb(0x333333);
@@ -117,7 +117,7 @@ impl WindowManager {
                 .style(WindowStyle::NAKED)
                 .level(WindowLevel::ROOT)
                 .frame(main_screen.bounds())
-                .bg_color(IndexedColor::BLACK)
+                .bg_color(IndexedColor::BLACK.into())
                 .without_bitmap()
                 .without_message_queue()
                 .build_inner();
@@ -141,7 +141,7 @@ impl WindowManager {
             window
                 .draw_in_rect(pointer_size.into(), |bitmap| {
                     let cursor = ConstBitmap8::from_bytes(&MOUSE_POINTER_SOURCE, pointer_size);
-                    bitmap.blt(&cursor, Point::new(0, 0), pointer_size.into());
+                    bitmap.blt(&cursor, Point::new(0, 0), pointer_size.into())
                 })
                 .unwrap();
 
@@ -541,7 +541,7 @@ impl WindowManager {
         });
     }
 
-    pub fn set_desktop_color(color: IndexedColor) {
+    pub fn set_desktop_color(color: AmbiguousColor) {
         let shared = Self::shared();
         let _ = shared.root.update_opt(|root| {
             root.bitmap = None;
@@ -652,7 +652,7 @@ struct RawWindow {
     content_insets: EdgeInsets,
 
     // Appearances
-    bg_color: IndexedColor,
+    bg_color: AmbiguousColor,
     key_color: IndexedColor,
     bitmap: Option<Box<UnsafeCell<VecBitmap8>>>,
 
@@ -801,10 +801,10 @@ impl RawWindow {
         }
     }
 
-    fn set_bg_color(&mut self, color: IndexedColor) {
+    fn set_bg_color(&mut self, color: AmbiguousColor) {
         self.bg_color = color;
         if let Some(mut bitmap) = self.bitmap() {
-            bitmap.fill_rect(bitmap.bounds(), color);
+            bitmap.fill_rect(bitmap.bounds(), color.into());
             self.draw_frame();
         }
         self.set_needs_display();
@@ -860,7 +860,7 @@ impl RawWindow {
                 if let Some(s) = self.title() {
                     let rect = title_rect.insets_by(EdgeInsets::new(0, 8, 0, 8));
                     TextProcessing::draw_text(
-                        &mut bitmap,
+                        &mut AbstractBitmap::from(bitmap),
                         s,
                         font,
                         rect,
@@ -868,7 +868,8 @@ impl RawWindow {
                             WINDOW_ACTIVE_TITLE_FG_COLOR
                         } else {
                             WINDOW_INACTIVE_TITLE_FG_COLOR
-                        },
+                        }
+                        .into(),
                         1,
                         LineBreakMode::TrancatingTail,
                         TextAlignment::Center,
@@ -881,7 +882,7 @@ impl RawWindow {
 
     fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
     where
-        F: FnOnce(&mut Bitmap8) -> (),
+        F: FnOnce(&mut AbstractBitmap) -> (),
     {
         let window = self;
         let mut bitmap = match window.bitmap() {
@@ -904,7 +905,9 @@ impl RawWindow {
         }
 
         let rect = coords.into();
-        match bitmap.view(rect, |bitmap| f(bitmap)) {
+        match bitmap.view(rect, |bitmap| {
+            f(&mut AbstractBitmap::from(bitmap.clone()));
+        }) {
             Some(_) => Ok(()),
             None => Err(WindowDrawingError::InconsistentCoordinates),
         }
@@ -914,10 +917,6 @@ impl RawWindow {
         let mut frame = rect;
         frame.origin += self.frame.origin;
         let main_screen = WindowManager::shared().main_screen();
-        // let off_screen = WindowManager::shared().off_screen.as_ref();
-        // if self.draw_into(&mut off_screen, frame) {
-        //     main_screen.blt(off_screen, frame.origin, frame);
-        // }
         self.draw_into(main_screen, frame);
     }
 
@@ -981,7 +980,7 @@ impl RawWindow {
                             target_bitmap.blt(&mut bitmap, blt_origin, blt_rect);
                         }
                     } else {
-                        target_bitmap.fill_rect(blt_rect, window.bg_color);
+                        target_bitmap.fill_rect(blt_rect, window.bg_color.into());
                     }
                 }
             })
@@ -1050,7 +1049,7 @@ pub struct WindowBuilder {
     frame: Rect,
     style: WindowStyle,
     level: WindowLevel,
-    bg_color: IndexedColor,
+    bg_color: AmbiguousColor,
     key_color: IndexedColor,
     title: [u8; WINDOW_TITLE_LENGTH],
     queue_size: usize,
@@ -1137,7 +1136,7 @@ impl WindowBuilder {
         if !self.no_bitmap {
             window.bitmap = Some(Box::new(UnsafeCell::new(VecBitmap8::new(
                 frame.size(),
-                self.bg_color,
+                self.bg_color.into(),
             ))));
         };
 
@@ -1187,7 +1186,7 @@ impl WindowBuilder {
     }
 
     #[inline]
-    pub const fn bg_color(mut self, bg_color: IndexedColor) -> Self {
+    pub const fn bg_color(mut self, bg_color: AmbiguousColor) -> Self {
         self.bg_color = bg_color;
         self
     }
@@ -1287,14 +1286,14 @@ impl WindowHandle {
         self.get().and_then(|v| v.title())
     }
 
-    pub fn set_bg_color(&self, color: IndexedColor) {
+    pub fn set_bg_color(&self, color: AmbiguousColor) {
         self.update(|window| {
             window.set_bg_color(color);
         });
     }
 
     #[inline]
-    pub fn bg_color(&self) -> IndexedColor {
+    pub fn bg_color(&self) -> AmbiguousColor {
         self.as_ref().bg_color
     }
 
@@ -1392,7 +1391,7 @@ impl WindowHandle {
     #[inline]
     pub fn draw<F>(&self, f: F) -> Result<(), WindowDrawingError>
     where
-        F: FnOnce(&mut Bitmap8) -> (),
+        F: FnOnce(&mut AbstractBitmap) -> (),
     {
         self.update(|window| {
             let rect = window.actual_bounds().insets_by(window.content_insets);
@@ -1408,7 +1407,7 @@ impl WindowHandle {
 
     pub fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
     where
-        F: FnOnce(&mut Bitmap8) -> (),
+        F: FnOnce(&mut AbstractBitmap) -> (),
     {
         self.as_ref().draw_in_rect(rect, f)
     }
