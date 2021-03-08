@@ -66,7 +66,7 @@ const MOUSE_POINTER_SOURCE: [u8; MOUSE_POINTER_WIDTH * MOUSE_POINTER_HEIGHT] = [
 ];
 
 pub struct WindowManager {
-    main_screen: &'static mut Bitmap8<'static>,
+    main_screen: &'static mut AbstractBitmap<'static>,
     screen_insets: EdgeInsets,
 
     window_pool: BTreeMap<WindowHandle, Box<RawWindow>>,
@@ -141,7 +141,7 @@ impl WindowManager {
             window
                 .draw_in_rect(pointer_size.into(), |bitmap| {
                     let cursor = ConstBitmap8::from_bytes(&MOUSE_POINTER_SOURCE, pointer_size);
-                    bitmap.blt(&cursor, Point::new(0, 0), pointer_size.into())
+                    bitmap.blt(&cursor.into(), Point::new(0, 0), pointer_size.into())
                 })
                 .unwrap();
 
@@ -463,7 +463,7 @@ impl WindowManager {
     }
 
     #[inline]
-    pub fn main_screen<'a>(&self) -> &'a mut Bitmap8<'static> {
+    pub fn main_screen<'a>(&self) -> &'a mut AbstractBitmap<'static> {
         &mut Self::shared_mut().main_screen
     }
 
@@ -615,7 +615,7 @@ impl WindowManager {
         result
     }
 
-    pub fn save_screen_to(bitmap: &mut Bitmap8, rect: Rect) {
+    pub fn save_screen_to(bitmap: &mut AbstractBitmap, rect: Rect) {
         let shared = Self::shared();
         Self::while_hiding_pointer(|| shared.root.update(|v| v.draw_into(bitmap, rect)));
     }
@@ -920,7 +920,12 @@ impl RawWindow {
         self.draw_into(main_screen, frame);
     }
 
-    fn draw_into(&self, target_bitmap: &mut Bitmap8, frame: Rect) -> bool {
+    fn draw_into(&self, target_bitmap: &mut AbstractBitmap, frame: Rect) -> bool {
+        let target_bitmap = match target_bitmap {
+            AbstractBitmap::Indexed(v) => v,
+            AbstractBitmap::Argb32(_) => todo!(),
+        };
+
         let coords1 = match Coordinates::from_rect(frame) {
             Ok(v) => v,
             Err(_) => return false,
@@ -1413,7 +1418,7 @@ impl WindowHandle {
     }
 
     /// Draws the contents of the window on the screen as a bitmap.
-    pub fn draw_into(&self, target_bitmap: &mut Bitmap8, rect: Rect) {
+    pub fn draw_into(&self, target_bitmap: &mut AbstractBitmap, rect: Rect) {
         self.as_ref().draw_into(target_bitmap, rect);
     }
 

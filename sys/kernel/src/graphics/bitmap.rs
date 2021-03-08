@@ -52,7 +52,7 @@ pub trait SetPixel: Drawable {
     }
 }
 
-pub trait RasterImage: GetPixel {
+pub trait RasterImage: Drawable {
     fn slice(&self) -> &[Self::ColorType];
 
     fn stride(&self) -> usize {
@@ -83,19 +83,10 @@ impl<T: MutableRasterImage> SetPixel for T {
     }
 }
 
-pub trait Blt<T>
-where
-    T: ColorTrait,
-{
-    fn blt<U>(&mut self, src: &U, origin: Point, rect: Rect)
-    where
-        U: RasterImage<ColorType = T>;
-}
-
 pub trait BasicDrawing: SetPixel {
     fn fill_rect(&mut self, rect: Rect, color: Self::ColorType);
-    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType);
-    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType);
+    fn draw_hline(&mut self, origin: Point, width: isize, color: Self::ColorType);
+    fn draw_vline(&mut self, origin: Point, height: isize, color: Self::ColorType);
 
     fn draw_rect(&mut self, rect: Rect, color: Self::ColorType) {
         let coords = match Coordinates::from_rect(rect) {
@@ -350,6 +341,16 @@ impl<'a> ConstBitmap8<'a> {
             height: size.height() as usize,
             stride: size.width() as usize,
             slice: unsafe { transmute(bytes) },
+        }
+    }
+
+    #[inline]
+    pub fn clone(&'a self) -> Self {
+        Self {
+            width: self.width(),
+            height: self.height(),
+            stride: self.stride(),
+            slice: self.slice(),
         }
     }
 }
@@ -635,9 +636,9 @@ impl BasicDrawing for Bitmap8<'_> {
         }
     }
 
-    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType) {
-        let mut dx = point.x;
-        let dy = point.y;
+    fn draw_hline(&mut self, origin: Point, width: isize, color: Self::ColorType) {
+        let mut dx = origin.x;
+        let dy = origin.y;
         let mut w = width;
 
         if dy < 0 || dy >= (self.height as isize) {
@@ -659,9 +660,9 @@ impl BasicDrawing for Bitmap8<'_> {
         memset_colors8(self.slice_mut(), cursor, w as usize, color);
     }
 
-    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType) {
-        let dx = point.x;
-        let mut dy = point.y;
+    fn draw_vline(&mut self, origin: Point, height: isize, color: Self::ColorType) {
+        let dx = origin.x;
+        let mut dy = origin.y;
         let mut h = height;
 
         if dx < 0 || dx >= (self.width as isize) {
@@ -691,8 +692,8 @@ impl BasicDrawing for Bitmap8<'_> {
 impl RasterFontWriter for Bitmap8<'_> {}
 
 impl<'a> From<&'a Bitmap8<'a>> for ConstBitmap8<'a> {
-    fn from(src: &'a Bitmap8) -> Self {
-        Self::from_slice(src.slice(), src.size(), src.stride())
+    fn from(src: &'a Bitmap8<'a>) -> ConstBitmap8<'a> {
+        ConstBitmap8::from_slice(src.slice(), src.size(), src.stride())
     }
 }
 
@@ -745,6 +746,14 @@ impl RasterImage for VecBitmap8 {
 impl MutableRasterImage for VecBitmap8 {
     fn slice_mut(&mut self) -> &mut [Self::ColorType] {
         self.vec.as_mut_slice()
+    }
+}
+
+impl<'a> From<&'a VecBitmap8> for ConstBitmap8<'a> {
+    fn from(src: &'a VecBitmap8) -> Self {
+        let size = src.size();
+        let stride = src.stride();
+        Self::from_slice(src.slice(), size, stride)
     }
 }
 
@@ -891,6 +900,16 @@ impl<'a> ConstBitmap32<'a> {
             height: size.height() as usize,
             stride: size.width() as usize,
             slice: unsafe { transmute(bytes) },
+        }
+    }
+
+    #[inline]
+    pub fn clone(&'a self) -> Self {
+        Self {
+            width: self.width(),
+            height: self.height(),
+            stride: self.stride(),
+            slice: self.slice(),
         }
     }
 }
@@ -1100,9 +1119,9 @@ impl BasicDrawing for Bitmap32<'_> {
         }
     }
 
-    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType) {
-        let mut dx = point.x;
-        let dy = point.y;
+    fn draw_hline(&mut self, origin: Point, width: isize, color: Self::ColorType) {
+        let mut dx = origin.x;
+        let dy = origin.y;
         let mut w = width;
 
         if dy < 0 || dy >= (self.height as isize) {
@@ -1124,9 +1143,9 @@ impl BasicDrawing for Bitmap32<'_> {
         memset_colors32(self.slice_mut(), cursor, w as usize, color);
     }
 
-    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType) {
-        let dx = point.x;
-        let mut dy = point.y;
+    fn draw_vline(&mut self, origin: Point, height: isize, color: Self::ColorType) {
+        let dx = origin.x;
+        let mut dy = origin.y;
         let mut h = height;
 
         if dx < 0 || dx >= (self.width as isize) {
@@ -1156,7 +1175,7 @@ impl BasicDrawing for Bitmap32<'_> {
 impl RasterFontWriter for Bitmap32<'_> {}
 
 impl<'a> From<&'a Bitmap32<'a>> for ConstBitmap32<'a> {
-    fn from(src: &'a Bitmap32) -> Self {
+    fn from(src: &'a Bitmap32<'a>) -> Self {
         Self::from_slice(src.slice(), src.size(), src.stride())
     }
 }
@@ -1343,6 +1362,14 @@ impl MutableRasterImage for VecBitmap32 {
     }
 }
 
+impl<'a> From<&'a VecBitmap32> for ConstBitmap32<'a> {
+    fn from(src: &'a VecBitmap32) -> Self {
+        let size = src.size();
+        let stride = src.stride();
+        Self::from_slice(src.slice(), size, stride)
+    }
+}
+
 impl<'a> From<&'a mut VecBitmap32> for Bitmap32<'a> {
     fn from(src: &'a mut VecBitmap32) -> Self {
         let size = src.size();
@@ -1461,6 +1488,35 @@ fn blend_line32(
 
 //-//
 
+pub enum ConstBitmap<'a> {
+    Indexed(ConstBitmap8<'a>),
+    Argb32(ConstBitmap32<'a>),
+}
+
+impl<'a> From<ConstBitmap8<'a>> for ConstBitmap<'a> {
+    fn from(val: ConstBitmap8<'a>) -> ConstBitmap<'a> {
+        ConstBitmap::Indexed(val)
+    }
+}
+
+impl<'a> From<ConstBitmap32<'a>> for ConstBitmap<'a> {
+    fn from(val: ConstBitmap32<'a>) -> ConstBitmap {
+        ConstBitmap::Argb32(val)
+    }
+}
+
+impl<'a> From<&'a Bitmap8<'a>> for ConstBitmap<'a> {
+    fn from(val: &'a Bitmap8<'a>) -> ConstBitmap {
+        ConstBitmap::Indexed(val.into())
+    }
+}
+
+impl<'a> From<&'a Bitmap32<'a>> for ConstBitmap<'a> {
+    fn from(val: &'a Bitmap32<'a>) -> ConstBitmap {
+        ConstBitmap::Argb32(val.into())
+    }
+}
+
 pub enum AbstractBitmap<'a> {
     Indexed(Bitmap8<'a>),
     Argb32(Bitmap32<'a>),
@@ -1478,44 +1534,20 @@ impl<'a> From<Bitmap32<'a>> for AbstractBitmap<'a> {
     }
 }
 
-impl Blt<IndexedColor> for AbstractBitmap<'_> {
-    fn blt<U>(&mut self, src: &U, origin: Point, rect: Rect)
-    where
-        U: RasterImage<ColorType = IndexedColor>,
-    {
-        match self {
-            AbstractBitmap::Indexed(bitmap) => bitmap.blt(src, origin, rect),
-            AbstractBitmap::Argb32(_bitmap) => todo!(),
-        }
-    }
-}
-
-impl Blt<TrueColor> for AbstractBitmap<'_> {
-    fn blt<U>(&mut self, src: &U, origin: Point, rect: Rect)
-    where
-        U: RasterImage<ColorType = TrueColor>,
-    {
-        match self {
-            AbstractBitmap::Indexed(_bitmap) => todo!(),
-            AbstractBitmap::Argb32(bitmap) => bitmap.blt(src, origin, rect),
-        }
-    }
-}
-
 impl Drawable for AbstractBitmap<'_> {
     type ColorType = AmbiguousColor;
 
     fn width(&self) -> usize {
         match self {
-            Self::Indexed(inner) => inner.width(),
-            Self::Argb32(inner) => inner.width(),
+            Self::Indexed(v) => v.width(),
+            Self::Argb32(v) => v.width(),
         }
     }
 
     fn height(&self) -> usize {
         match self {
-            Self::Indexed(inner) => inner.height(),
-            Self::Argb32(inner) => inner.height(),
+            Self::Indexed(v) => v.height(),
+            Self::Argb32(v) => v.height(),
         }
     }
 }
@@ -1554,16 +1586,80 @@ impl BasicDrawing for AbstractBitmap<'_> {
             AbstractBitmap::Argb32(v) => v.fill_rect(rect, color.into()),
         }
     }
-    fn draw_hline(&mut self, point: Point, width: isize, color: Self::ColorType) {
+    fn draw_hline(&mut self, origin: Point, width: isize, color: Self::ColorType) {
         match self {
-            AbstractBitmap::Indexed(v) => v.draw_hline(point, width, color.into()),
-            AbstractBitmap::Argb32(v) => v.draw_hline(point, width, color.into()),
+            AbstractBitmap::Indexed(v) => v.draw_hline(origin, width, color.into()),
+            AbstractBitmap::Argb32(v) => v.draw_hline(origin, width, color.into()),
         }
     }
-    fn draw_vline(&mut self, point: Point, height: isize, color: Self::ColorType) {
+    fn draw_vline(&mut self, origin: Point, height: isize, color: Self::ColorType) {
         match self {
-            AbstractBitmap::Indexed(v) => v.draw_vline(point, height, color.into()),
-            AbstractBitmap::Argb32(v) => v.draw_vline(point, height, color.into()),
+            AbstractBitmap::Indexed(v) => v.draw_vline(origin, height, color.into()),
+            AbstractBitmap::Argb32(v) => v.draw_vline(origin, height, color.into()),
+        }
+    }
+}
+
+impl<'a> AbstractBitmap<'a> {
+    #[inline]
+    pub fn clone(&self) -> AbstractBitmap<'a> {
+        match self {
+            AbstractBitmap::Indexed(v) => Self::from(v.clone()),
+            AbstractBitmap::Argb32(v) => Self::from(v.clone()),
+        }
+    }
+}
+
+impl AbstractBitmap<'_> {
+    pub fn blt_to_self(&mut self, origin: Point, rect: Rect) {
+        match self {
+            AbstractBitmap::Indexed(v) => v.blt(&v.clone(), origin, rect),
+            AbstractBitmap::Argb32(v) => v.blt(&v.clone(), origin, rect),
+        }
+    }
+
+    pub fn blt(&mut self, src: &ConstBitmap, origin: Point, rect: Rect) {
+        match self {
+            AbstractBitmap::Indexed(bitmap) => match src {
+                ConstBitmap::Indexed(src) => bitmap.blt(src, origin, rect),
+                ConstBitmap::Argb32(_src) => todo!(),
+            },
+            AbstractBitmap::Argb32(bitmap) => match src {
+                ConstBitmap::Indexed(_src) => todo!(),
+                ConstBitmap::Argb32(src) => bitmap.blt(src, origin, rect),
+            },
+        }
+    }
+}
+
+pub enum VecBitmap {
+    Indexed(VecBitmap8),
+    Argb32(VecBitmap32),
+}
+
+impl Drawable for VecBitmap {
+    type ColorType = AmbiguousColor;
+
+    fn width(&self) -> usize {
+        match self {
+            Self::Indexed(v) => v.width(),
+            Self::Argb32(v) => v.width(),
+        }
+    }
+
+    fn height(&self) -> usize {
+        match self {
+            Self::Indexed(v) => v.height(),
+            Self::Argb32(v) => v.height(),
+        }
+    }
+}
+
+impl<'a> From<&'a mut VecBitmap> for AbstractBitmap<'a> {
+    fn from(val: &'a mut VecBitmap) -> Self {
+        match val {
+            VecBitmap::Indexed(v) => AbstractBitmap::Indexed(v.into()),
+            VecBitmap::Argb32(v) => AbstractBitmap::Argb32(v.into()),
         }
     }
 }

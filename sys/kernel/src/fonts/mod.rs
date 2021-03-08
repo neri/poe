@@ -1,6 +1,7 @@
 // Fonts
 
 use super::graphics::bitmap::*;
+use crate::graphics::color::*;
 use crate::graphics::coords::*;
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
@@ -168,6 +169,14 @@ pub trait FontDriver {
     fn width_of(&self, character: char) -> isize;
 
     fn height_of(&self, character: char) -> isize;
+
+    fn write_char(
+        &self,
+        character: char,
+        bitmap: &mut AbstractBitmap,
+        origin: Point,
+        color: AmbiguousColor,
+    );
 }
 
 pub struct FixedFontDriver<'a> {
@@ -227,17 +236,6 @@ impl FixedFontDriver<'_> {
             None
         }
     }
-
-    pub fn write_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::ColorType)
-    where
-        T: RasterFontWriter,
-    {
-        if let Some(font) = self.glyph_for(character) {
-            let origin = Point::new(origin.x, origin.y + self.leading);
-            let size = Size::new(self.width_of(character), self.size.height());
-            bitmap.draw_font(font, size, origin, color);
-        }
-    }
 }
 
 impl FontDriver for FixedFontDriver<'_> {
@@ -274,5 +272,19 @@ impl FontDriver for FixedFontDriver<'_> {
     fn height_of(&self, character: char) -> isize {
         let _ = character;
         self.size.height
+    }
+
+    fn write_char(
+        &self,
+        character: char,
+        bitmap: &mut AbstractBitmap,
+        origin: Point,
+        color: AmbiguousColor,
+    ) {
+        if let Some(font) = self.glyph_for(character) {
+            let origin = Point::new(origin.x, origin.y + self.leading);
+            let size = Size::new(self.width_of(character), self.size.height());
+            bitmap.draw_font(font, size, origin, color);
+        }
     }
 }

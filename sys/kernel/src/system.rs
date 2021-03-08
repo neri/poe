@@ -71,7 +71,7 @@ impl fmt::Display for Version {
 }
 
 pub struct System {
-    main_screen: Option<Bitmap8<'static>>,
+    main_screen: Option<AbstractBitmap<'static>>,
     em_console: EmConsole,
     platform: Platform,
     cpu_ver: CpuVersion,
@@ -101,7 +101,7 @@ impl System {
         let mut screen =
             Bitmap8::from_static(info.vram_base as usize as *mut IndexedColor, size, stride);
         screen.fill_rect(screen.bounds(), IndexedColor::BLACK);
-        shared.main_screen = Some(screen);
+        shared.main_screen = Some(AbstractBitmap::from(screen));
 
         mem::MemoryManager::init(&info);
         arch::Arch::init();
@@ -174,7 +174,7 @@ impl System {
     }
 
     /// Get main screen
-    pub fn main_screen() -> &'static mut Bitmap8<'static> {
+    pub fn main_screen() -> &'static mut AbstractBitmap<'static> {
         let shared = Self::shared();
         shared.main_screen.as_mut().unwrap()
     }

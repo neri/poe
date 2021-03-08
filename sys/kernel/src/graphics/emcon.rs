@@ -43,10 +43,10 @@ impl EmConsole {
             let mut rect = bitmap.bounds();
             rect.origin.y += font_size.height();
             rect.size.height = sh;
-            bitmap.blt(&bitmap.clone(), Point::new(0, 0), rect);
+            bitmap.blt_to_self(Point::new(0, 0), rect);
             bitmap.fill_rect(
                 Rect::new(0, sh, rect.width(), font_size.height()),
-                self.bg_color,
+                self.bg_color.into(),
             );
         }
 
@@ -73,9 +73,9 @@ impl EmConsole {
                         origin,
                         size: font_size,
                     },
-                    self.bg_color,
+                    self.bg_color.into(),
                 );
-                font.write_char(c, bitmap, origin, self.fg_color);
+                font.write_char(c, bitmap, origin, self.fg_color.into());
 
                 self.x += 1;
             }
