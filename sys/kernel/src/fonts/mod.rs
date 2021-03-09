@@ -148,15 +148,6 @@ impl FontDescriptor {
     pub fn is_scalable(&self) -> bool {
         self.driver.is_scalable()
     }
-
-    // #[inline]
-    // pub fn draw_char<T>(&self, character: char, bitmap: &mut T, origin: Point, color: T::ColorType)
-    // where
-    //     T: RasterFontWriter,
-    // {
-    //     self.driver
-    //         .draw_char(character, bitmap, origin, self.point(), color)
-    // }
 }
 
 pub trait FontDriver {
@@ -173,7 +164,7 @@ pub trait FontDriver {
     fn write_char(
         &self,
         character: char,
-        bitmap: &mut AbstractBitmap,
+        bitmap: &mut Bitmap,
         origin: Point,
         color: AmbiguousColor,
     );
@@ -277,7 +268,7 @@ impl FontDriver for FixedFontDriver<'_> {
     fn write_char(
         &self,
         character: char,
-        bitmap: &mut AbstractBitmap,
+        bitmap: &mut Bitmap,
         origin: Point,
         color: AmbiguousColor,
     ) {

@@ -25,13 +25,15 @@ impl Default for LineBreakMode {
 
 pub enum TextAlignment {
     Left,
-    Right,
     Center,
+    Right,
+    Leading,
+    Trailing,
 }
 
 impl Default for TextAlignment {
     fn default() -> Self {
-        Self::Left
+        Self::Leading
     }
 }
 
@@ -143,7 +145,7 @@ impl TextProcessing {
 
     /// Write string to bitmap
     pub fn write_str(
-        to: &mut AbstractBitmap,
+        to: &mut Bitmap,
         s: &str,
         font: &FixedFontDriver,
         origin: Point,
@@ -170,7 +172,7 @@ impl TextProcessing {
 
     /// Write text to bitmap
     pub fn draw_text(
-        to: &mut AbstractBitmap,
+        to: &mut Bitmap,
         s: &str,
         font: &FixedFontDriver,
         rect: Rect,
@@ -206,8 +208,8 @@ impl TextProcessing {
 
             if line.start_position < line.end_position {
                 cursor.x = match align {
-                    TextAlignment::Left => coords.left,
-                    TextAlignment::Right => coords.right - line.width,
+                    TextAlignment::Leading | TextAlignment::Left => coords.left,
+                    TextAlignment::Trailing | TextAlignment::Right => coords.right - line.width,
                     TextAlignment::Center => coords.left + (rect.width() - line.width) / 2,
                 };
                 for _ in line.start_position..line.end_position {

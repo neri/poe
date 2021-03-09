@@ -25,7 +25,8 @@
 %define CEEF_S_VADDR        0x08
 %define CEEF_S_MEMSZ        0x0C
 
-%define VESA_MODE           0x4101 ; 640x480x8
+%define VESA_MODE_1         0x4112 ; 640x480x32
+%define VESA_MODE_2         0x4101 ; 640x480x8
 %define MAX_PALETTE         256
 
 %define SMAP_AVAILABLE      0x01
@@ -470,25 +471,50 @@ _vesa:
     or al, 2
     out 0x92, al
 
+;     mov ax, 0x4F02
+;     mov bx, VESA_MODE_1
+;     int 0x10
+;     cmp ax, 0x004F
+;     jnz .vesa_next
+;     mov ax, 0x4F01
+;     mov cx, bx
+;     mov di, sp
+;     int 0x10
+;     cmp ax, 0x004F
+;     jnz .vesa_next
+;     mov al, [es:di + 0x19]
+;     cmp al, 8
+;     jz .vesa_ok
+;     cmp al, 32
+;     jz .vesa_ok
+; .vesa_next:
     mov ax, 0x4F02
-    mov bx, VESA_MODE
+    mov bx, VESA_MODE_2
     int 0x10
-    jc .no_vesa
-    or ah, ah
+    cmp ax, 0x004F
     jnz .no_vesa
     mov ax, 0x4F01
     mov cx, bx
     mov di, sp
     int 0x10
-    jc .no_vesa
-    or ah, ah
+    cmp ax, 0x004F
     jnz .no_vesa
+    mov al, [es:di + 0x19]
+    cmp al, 8
+    jz .vesa_ok
+    cmp al, 32
+    jnz .no_vesa
+
+.vesa_ok:
+    mov [_screen_bpp], al
+    movzx cx, al
+    shr cx, 3
     mov eax, [es:di + 0x12]
     mov [_screen_width], eax
     mov ax, [es:di + 0x10]
+    xor dx, dx
+    div cx
     mov [_screen_stride], ax
-    mov al, [es:di + 0x19]
-    mov [_screen_bpp], al
     mov eax, [es:di + 0x28]
     mov [_vram_base],eax
     jmp .next

@@ -66,7 +66,7 @@ const MOUSE_POINTER_SOURCE: [u8; MOUSE_POINTER_WIDTH * MOUSE_POINTER_HEIGHT] = [
 ];
 
 pub struct WindowManager {
-    main_screen: &'static mut AbstractBitmap<'static>,
+    main_screen: &'static mut Bitmap<'static>,
     screen_insets: EdgeInsets,
 
     window_pool: BTreeMap<WindowHandle, Box<RawWindow>>,
@@ -141,7 +141,7 @@ impl WindowManager {
             window
                 .draw_in_rect(pointer_size.into(), |bitmap| {
                     let cursor = ConstBitmap8::from_bytes(&MOUSE_POINTER_SOURCE, pointer_size);
-                    bitmap.blt(&cursor.into(), Point::new(0, 0), pointer_size.into())
+                    bitmap.blt(&cursor, Point::new(0, 0), pointer_size.into())
                 })
                 .unwrap();
 
@@ -463,7 +463,7 @@ impl WindowManager {
     }
 
     #[inline]
-    pub fn main_screen<'a>(&self) -> &'a mut AbstractBitmap<'static> {
+    pub fn main_screen<'a>(&self) -> &'a mut Bitmap<'static> {
         &mut Self::shared_mut().main_screen
     }
 
@@ -615,7 +615,7 @@ impl WindowManager {
         result
     }
 
-    pub fn save_screen_to(bitmap: &mut AbstractBitmap, rect: Rect) {
+    pub fn save_screen_to(bitmap: &mut Bitmap, rect: Rect) {
         let shared = Self::shared();
         Self::while_hiding_pointer(|| shared.root.update(|v| v.draw_into(bitmap, rect)));
     }
@@ -860,7 +860,7 @@ impl RawWindow {
                 if let Some(s) = self.title() {
                     let rect = title_rect.insets_by(EdgeInsets::new(0, 8, 0, 8));
                     TextProcessing::draw_text(
-                        &mut AbstractBitmap::from(bitmap),
+                        &mut Bitmap::from(bitmap),
                         s,
                         font,
                         rect,
@@ -882,7 +882,7 @@ impl RawWindow {
 
     fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
     where
-        F: FnOnce(&mut AbstractBitmap) -> (),
+        F: FnOnce(&mut Bitmap) -> (),
     {
         let window = self;
         let mut bitmap = match window.bitmap() {
@@ -906,7 +906,7 @@ impl RawWindow {
 
         let rect = coords.into();
         match bitmap.view(rect, |bitmap| {
-            f(&mut AbstractBitmap::from(bitmap.clone()));
+            f(&mut Bitmap::from(bitmap.clone()));
         }) {
             Some(_) => Ok(()),
             None => Err(WindowDrawingError::InconsistentCoordinates),
@@ -920,10 +920,10 @@ impl RawWindow {
         self.draw_into(main_screen, frame);
     }
 
-    fn draw_into(&self, target_bitmap: &mut AbstractBitmap, frame: Rect) -> bool {
+    fn draw_into(&self, target_bitmap: &mut Bitmap, frame: Rect) -> bool {
         let target_bitmap = match target_bitmap {
-            AbstractBitmap::Indexed(v) => v,
-            AbstractBitmap::Argb32(_) => todo!(),
+            Bitmap::Indexed(v) => v,
+            Bitmap::Argb32(_) => todo!(),
         };
 
         let coords1 = match Coordinates::from_rect(frame) {
@@ -1396,7 +1396,7 @@ impl WindowHandle {
     #[inline]
     pub fn draw<F>(&self, f: F) -> Result<(), WindowDrawingError>
     where
-        F: FnOnce(&mut AbstractBitmap) -> (),
+        F: FnOnce(&mut Bitmap) -> (),
     {
         self.update(|window| {
             let rect = window.actual_bounds().insets_by(window.content_insets);
@@ -1412,13 +1412,13 @@ impl WindowHandle {
 
     pub fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
     where
-        F: FnOnce(&mut AbstractBitmap) -> (),
+        F: FnOnce(&mut Bitmap) -> (),
     {
         self.as_ref().draw_in_rect(rect, f)
     }
 
     /// Draws the contents of the window on the screen as a bitmap.
-    pub fn draw_into(&self, target_bitmap: &mut AbstractBitmap, rect: Rect) {
+    pub fn draw_into(&self, target_bitmap: &mut Bitmap, rect: Rect) {
         self.as_ref().draw_into(target_bitmap, rect);
     }
 

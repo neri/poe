@@ -43,7 +43,7 @@ impl EmConsole {
             let mut rect = bitmap.bounds();
             rect.origin.y += font_size.height();
             rect.size.height = sh;
-            bitmap.blt_to_self(Point::new(0, 0), rect);
+            bitmap.blt_itself(Point::new(0, 0), rect);
             bitmap.fill_rect(
                 Rect::new(0, sh, rect.width(), font_size.height()),
                 self.bg_color.into(),
