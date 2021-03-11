@@ -96,13 +96,25 @@ impl System {
         shared.cpu_ver = info.cpu_ver;
         // shared.acpi_rsdptr = info.acpi_rsdptr as usize;
 
-        let size = Size::new(info.screen_width as isize, info.screen_height as isize);
-        let stride = info.screen_stride as usize;
-        let mut screen =
-            Bitmap8::from_static(info.vram_base as usize as *mut IndexedColor, size, stride);
-        screen.fill_rect(screen.bounds(), IndexedColor::BLACK);
-
-        shared.main_screen = Some(Bitmap::from(screen));
+        shared.main_screen = match info.screen_bpp {
+            32 => {
+                let size = Size::new(info.screen_width as isize, info.screen_height as isize);
+                let stride = info.screen_stride as usize;
+                let screen =
+                    Bitmap32::from_static(info.vram_base as usize as *mut TrueColor, size, stride);
+                Some(Bitmap::from(screen))
+            }
+            _ => {
+                let size = Size::new(info.screen_width as isize, info.screen_height as isize);
+                let stride = info.screen_stride as usize;
+                let screen = Bitmap8::from_static(
+                    info.vram_base as usize as *mut IndexedColor,
+                    size,
+                    stride,
+                );
+                Some(Bitmap::from(screen))
+            }
+        };
 
         mem::MemoryManager::init(&info);
         arch::Arch::init();

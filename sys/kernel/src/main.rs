@@ -48,8 +48,8 @@ impl Shell {
 
         Scheduler::spawn_async(Task::new(Self::status_bar_main()));
         Scheduler::spawn_async(Task::new(Self::activity_monitor_main()));
+        Scheduler::spawn_async(Task::new(Self::about_main()));
         Scheduler::spawn_async(Task::new(Self::console_main()));
-        // Scheduler::spawn_async(Task::new(Self::about_main()));
         Scheduler::perform_tasks();
     }
 
@@ -276,7 +276,7 @@ impl Shell {
 
     #[allow(dead_code)]
     async fn about_main() {
-        let window_size = Size::new(320, 160);
+        let window_size = Size::new(240, 180);
         let window = WindowBuilder::new("About").size(window_size).build();
         window.show();
 
@@ -298,6 +298,14 @@ impl Shell {
                     writeln!(sb, "CPU ver {}", System::cpu_ver().0,).unwrap();
                     writeln!(sb, "Memory {} MB", MemoryManager::total_memory_size() >> 20,)
                         .unwrap();
+                    let screen = System::main_screen();
+                    writeln!(
+                        sb,
+                        "Screen {}x{} {} bit color",
+                        screen.width(),
+                        screen.height(),
+                        screen.color_mode(),
+                    );
 
                     window
                         .draw(|bitmap| {

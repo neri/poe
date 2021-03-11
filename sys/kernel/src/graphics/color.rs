@@ -71,6 +71,7 @@ impl IndexedColor {
         0xFFFFFFFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
 
+    #[inline]
     pub const fn from_rgb(rgb: u32) -> Self {
         let b = (((rgb & 0xFF) + 25) / 51) as u8;
         let g = ((((rgb >> 8) & 0xFF) + 25) / 51) as u8;
@@ -78,10 +79,12 @@ impl IndexedColor {
         Self(16 + r + g * 6 + b * 36)
     }
 
+    #[inline]
     pub const fn as_argb(self) -> u32 {
         Self::COLOR_PALETTE[self.0 as usize]
     }
 
+    #[inline]
     pub const fn as_true_color(self) -> TrueColor {
         TrueColor::from_argb(self.as_argb())
     }
@@ -284,6 +287,18 @@ impl Into<u32> for ColorComponents {
 pub enum AmbiguousColor {
     Indexed(IndexedColor),
     Argb32(TrueColor),
+}
+
+impl AmbiguousColor {
+    #[inline]
+    pub const fn from_rgb(rgb: u32) -> Self {
+        Self::Argb32(TrueColor::from_rgb(rgb))
+    }
+
+    #[inline]
+    pub const fn from_argb(rgb: u32) -> Self {
+        Self::Argb32(TrueColor::from_argb(rgb))
+    }
 }
 
 impl Into<IndexedColor> for AmbiguousColor {

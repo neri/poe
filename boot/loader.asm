@@ -25,7 +25,8 @@
 %define CEEF_S_VADDR        0x08
 %define CEEF_S_MEMSZ        0x0C
 
-%define VESA_MODE_1         0x4112 ; 640x480x32
+; %define VESA_MODE_1         0x4112 ; 640x480x32
+%define VESA_MODE_1         0x4103 ; 800x600x8
 %define VESA_MODE_2         0x4101 ; 640x480x8
 %define MAX_PALETTE         256
 
@@ -471,23 +472,23 @@ _vesa:
     or al, 2
     out 0x92, al
 
-;     mov ax, 0x4F02
-;     mov bx, VESA_MODE_1
-;     int 0x10
-;     cmp ax, 0x004F
-;     jnz .vesa_next
-;     mov ax, 0x4F01
-;     mov cx, bx
-;     mov di, sp
-;     int 0x10
-;     cmp ax, 0x004F
-;     jnz .vesa_next
-;     mov al, [es:di + 0x19]
-;     cmp al, 8
-;     jz .vesa_ok
-;     cmp al, 32
-;     jz .vesa_ok
-; .vesa_next:
+    mov ax, 0x4F02
+    mov bx, VESA_MODE_1
+    int 0x10
+    cmp ax, 0x004F
+    jnz .vesa_next
+    mov ax, 0x4F01
+    mov cx, bx
+    mov di, sp
+    int 0x10
+    cmp ax, 0x004F
+    jnz .vesa_next
+    mov al, [es:di + 0x19]
+    cmp al, 8
+    jz .vesa_ok
+    cmp al, 32
+    jz .vesa_ok
+.vesa_next:
     mov ax, 0x4F02
     mov bx, VESA_MODE_2
     int 0x10

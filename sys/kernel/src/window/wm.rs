@@ -1,6 +1,5 @@
 // A Window System
 
-use crate::arch::cpu::Cpu;
 use crate::fonts::*;
 use crate::graphics::bitmap::*;
 use crate::graphics::color::*;
@@ -12,6 +11,7 @@ use crate::task::scheduler::*;
 use crate::task::AtomicWaker;
 use crate::util::text::*;
 use crate::*;
+use crate::{arch::cpu::Cpu, graphics::bitmap::Blt};
 use crate::{io::hid::*, system::System};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
@@ -31,19 +31,18 @@ use core::time::Duration;
 static mut WM: Option<Box<WindowManager>> = None;
 
 const MAX_WINDOWS: usize = 255;
-
 const WINDOW_TITLE_LENGTH: usize = 32;
 
 const WINDOW_BORDER_PADDING: isize = 1;
 const WINDOW_TITLE_HEIGHT: isize = 20;
 
-const WINDOW_BORDER_COLOR: IndexedColor = IndexedColor::from_rgb(0x666666);
-const WINDOW_DEFAULT_BGCOLOR: AmbiguousColor = AmbiguousColor::Indexed(IndexedColor::WHITE);
 const WINDOW_DEFAULT_KEY_COLOR: IndexedColor = IndexedColor::DEFAULT_KEY;
-const WINDOW_ACTIVE_TITLE_BG_COLOR: IndexedColor = IndexedColor::from_rgb(0xCCCCCC);
-const WINDOW_ACTIVE_TITLE_FG_COLOR: IndexedColor = IndexedColor::from_rgb(0x333333);
-const WINDOW_INACTIVE_TITLE_BG_COLOR: IndexedColor = IndexedColor::from_rgb(0xFFFFFF);
-const WINDOW_INACTIVE_TITLE_FG_COLOR: IndexedColor = IndexedColor::from_rgb(0x999999);
+const WINDOW_BORDER_COLOR: AmbiguousColor = AmbiguousColor::Argb32(TrueColor::from_rgb(0x666666));
+const WINDOW_DEFAULT_BGCOLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
+const WINDOW_ACTIVE_TITLE_BG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xCCCCCC);
+const WINDOW_ACTIVE_TITLE_FG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x333333);
+const WINDOW_INACTIVE_TITLE_BG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
+const WINDOW_INACTIVE_TITLE_FG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x999999);
 
 const MOUSE_POINTER_WIDTH: usize = 12;
 const MOUSE_POINTER_HEIGHT: usize = 20;
@@ -549,10 +548,10 @@ impl WindowManager {
         });
     }
 
-    pub fn set_desktop_bitmap(bitmap: Option<Box<UnsafeCell<VecBitmap8>>>) {
+    pub fn set_desktop_bitmap(bitmap: Option<VecBitmap>) {
         let shared = Self::shared();
         let _ = shared.root.update_opt(|root| {
-            root.bitmap = bitmap;
+            root.bitmap = bitmap.map(|v| UnsafeCell::new(v));
             root.set_needs_display();
         });
     }
@@ -654,7 +653,7 @@ struct RawWindow {
     // Appearances
     bg_color: AmbiguousColor,
     key_color: IndexedColor,
-    bitmap: Option<Box<UnsafeCell<VecBitmap8>>>,
+    bitmap: Option<UnsafeCell<VecBitmap>>,
 
     /// Window Title
     title: [u8; WINDOW_TITLE_LENGTH],
@@ -810,11 +809,11 @@ impl RawWindow {
         self.set_needs_display();
     }
 
-    fn bitmap<'a>(&self) -> Option<Bitmap8<'a>> {
+    fn bitmap<'a>(&self) -> Option<Bitmap<'a>> {
         match self.bitmap.as_ref() {
             Some(v) => {
-                let q = unsafe { v.as_ref().get().as_mut() };
-                q.map(|v| Bitmap8::from(v))
+                let q = unsafe { v.get().as_mut() };
+                q.map(|v| v.into())
             }
             None => None,
         }
@@ -921,11 +920,6 @@ impl RawWindow {
     }
 
     fn draw_into(&self, target_bitmap: &mut Bitmap, frame: Rect) -> bool {
-        let target_bitmap = match target_bitmap {
-            Bitmap::Indexed(v) => v,
-            Bitmap::Argb32(_) => todo!(),
-        };
-
         let coords1 = match Coordinates::from_rect(frame) {
             Ok(v) => v,
             Err(_) => return false,
@@ -975,8 +969,8 @@ impl RawWindow {
 
                     if let Some(mut bitmap) = window.bitmap() {
                         if window.style.contains(WindowStyle::TRANSPARENT) {
-                            target_bitmap.blt_with_key(
-                                &mut bitmap,
+                            target_bitmap.blt_transparent(
+                                &bitmap,
                                 blt_origin,
                                 blt_rect,
                                 window.key_color,
@@ -1139,10 +1133,9 @@ impl WindowBuilder {
         });
 
         if !self.no_bitmap {
-            window.bitmap = Some(Box::new(UnsafeCell::new(VecBitmap8::new(
-                frame.size(),
-                self.bg_color.into(),
-            ))));
+            window.bitmap = Some(UnsafeCell::new(
+                VecBitmap8::new(frame.size(), self.bg_color.into()).into(),
+            ));
         };
 
         window

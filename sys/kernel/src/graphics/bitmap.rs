@@ -317,6 +317,176 @@ pub trait RasterFontWriter: SetPixel {
     }
 }
 
+pub trait BltConverter<T: ColorTrait>: MutableRasterImage {
+    fn blt_convert<U, F>(&mut self, src: &U, origin: Point, rect: Rect, mut f: F)
+    where
+        U: RasterImage<ColorType = T>,
+        F: FnMut(T) -> Self::ColorType,
+    {
+        let mut dx = origin.x;
+        let mut dy = origin.y;
+        let mut sx = rect.origin.x;
+        let mut sy = rect.origin.y;
+        let mut width = rect.width();
+        let mut height = rect.height();
+
+        if dx < 0 {
+            sx -= dx;
+            width += dx;
+            dx = 0;
+        }
+        if dy < 0 {
+            sy -= dy;
+            height += dy;
+            dy = 0;
+        }
+        let sw = src.width() as isize;
+        let sh = src.height() as isize;
+        if width > sx + sw {
+            width = sw - sx;
+        }
+        if height > sy + sh {
+            height = sh - sy;
+        }
+        let r = dx + width;
+        let b = dy + height;
+        let dw = self.width() as isize;
+        let dh = self.height() as isize;
+        if r >= dw {
+            width = dw - dx;
+        }
+        if b >= dh {
+            height = dh - dy;
+        }
+        if width <= 0 || height <= 0 {
+            return;
+        }
+
+        let width = width as usize;
+        let height = height as usize;
+
+        let ds = self.stride();
+        let ss = src.stride();
+        let mut dest_cursor = dx as usize + dy as usize * ds;
+        let mut src_cursor = sx as usize + sy as usize * ss;
+        let dest_fb = self.slice_mut();
+        let src_fb = src.slice();
+
+        let dd = ds - width;
+        let sd = ss - width;
+        if dd == 0 && sd == 0 {
+            for _ in 0..height * width {
+                unsafe {
+                    let c = src_fb.get_unchecked(src_cursor);
+                    *dest_fb.get_unchecked_mut(dest_cursor) = f(*c);
+                }
+                src_cursor += 1;
+                dest_cursor += 1;
+            }
+        } else {
+            for _ in 0..height {
+                for _ in 0..width {
+                    unsafe {
+                        let c = src_fb.get_unchecked(src_cursor);
+                        *dest_fb.get_unchecked_mut(dest_cursor) = f(*c);
+                    }
+                    src_cursor += 1;
+                    dest_cursor += 1;
+                }
+                dest_cursor += dd;
+                src_cursor += sd;
+            }
+        }
+    }
+
+    fn blt_convert_opt<U, F>(&mut self, src: &U, origin: Point, rect: Rect, mut f: F)
+    where
+        U: RasterImage<ColorType = T>,
+        F: FnMut(T) -> Option<Self::ColorType>,
+    {
+        let mut dx = origin.x;
+        let mut dy = origin.y;
+        let mut sx = rect.origin.x;
+        let mut sy = rect.origin.y;
+        let mut width = rect.width();
+        let mut height = rect.height();
+
+        if dx < 0 {
+            sx -= dx;
+            width += dx;
+            dx = 0;
+        }
+        if dy < 0 {
+            sy -= dy;
+            height += dy;
+            dy = 0;
+        }
+        let sw = src.width() as isize;
+        let sh = src.height() as isize;
+        if width > sx + sw {
+            width = sw - sx;
+        }
+        if height > sy + sh {
+            height = sh - sy;
+        }
+        let r = dx + width;
+        let b = dy + height;
+        let dw = self.width() as isize;
+        let dh = self.height() as isize;
+        if r >= dw {
+            width = dw - dx;
+        }
+        if b >= dh {
+            height = dh - dy;
+        }
+        if width <= 0 || height <= 0 {
+            return;
+        }
+
+        let width = width as usize;
+        let height = height as usize;
+
+        let ds = self.stride();
+        let ss = src.stride();
+        let mut dest_cursor = dx as usize + dy as usize * ds;
+        let mut src_cursor = sx as usize + sy as usize * ss;
+        let dest_fb = self.slice_mut();
+        let src_fb = src.slice();
+
+        let dd = ds - width;
+        let sd = ss - width;
+        if dd == 0 && sd == 0 {
+            for _ in 0..height * width {
+                unsafe {
+                    let c = src_fb.get_unchecked(src_cursor);
+                    match f(*c) {
+                        Some(c) => *dest_fb.get_unchecked_mut(dest_cursor) = c,
+                        None => {}
+                    }
+                }
+                src_cursor += 1;
+                dest_cursor += 1;
+            }
+        } else {
+            for _ in 0..height {
+                for _ in 0..width {
+                    unsafe {
+                        let c = src_fb.get_unchecked(src_cursor);
+                        match f(*c) {
+                            Some(c) => *dest_fb.get_unchecked_mut(dest_cursor) = c,
+                            None => {}
+                        }
+                    }
+                    src_cursor += 1;
+                    dest_cursor += 1;
+                }
+                dest_cursor += dd;
+                src_cursor += sd;
+            }
+        }
+    }
+}
+
 //-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//
 
 #[repr(C)]
@@ -427,17 +597,18 @@ impl Bitmap8<'static> {
     }
 }
 
-impl BitmapDrawing8 for Bitmap8<'_> {}
+impl BltConverter<TrueColor> for Bitmap8<'_> {}
+impl BltConverter<IndexedColor> for Bitmap8<'_> {}
 
-pub trait BitmapDrawing8: MutableRasterImage<ColorType = IndexedColor> {
-    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
+impl Bitmap8<'_> {
+    pub fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
     where
         T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
     {
         self.blt_main(src, origin, rect, None);
     }
 
-    fn blt_with_key<T>(
+    pub fn blt_with_key<T>(
         &mut self,
         src: &T,
         origin: Point,
@@ -450,7 +621,7 @@ pub trait BitmapDrawing8: MutableRasterImage<ColorType = IndexedColor> {
     }
 
     #[inline]
-    fn blt_main<T>(
+    pub fn blt_main<T>(
         &mut self,
         src: &T,
         origin: Point,
@@ -532,8 +703,15 @@ pub trait BitmapDrawing8: MutableRasterImage<ColorType = IndexedColor> {
         }
     }
 
+    pub fn blt32<T>(&mut self, src: &T, origin: Point, rect: Rect)
+    where
+        T: RasterImage<ColorType = TrueColor>,
+    {
+        self.blt_convert(src, origin, rect, |c| IndexedColor::from_rgb(c.rgb()));
+    }
+
     /// Make a bitmap view
-    fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
+    pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
     where
         F: FnOnce(&mut Bitmap8) -> R,
     {
@@ -1182,15 +1360,16 @@ impl<'a> From<&'a Bitmap32<'a>> for ConstBitmap32<'a> {
     }
 }
 
-impl BitmapDrawing32 for Bitmap32<'_> {}
+impl BltConverter<TrueColor> for Bitmap32<'_> {}
+impl BltConverter<IndexedColor> for Bitmap32<'_> {}
 
 pub enum BltMode {
     Blend,
     Copy,
 }
 
-pub trait BitmapDrawing32: MutableRasterImage<ColorType = TrueColor> {
-    fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
+impl Bitmap32<'_> {
+    pub fn blt<T>(&mut self, src: &T, origin: Point, rect: Rect)
     where
         T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
     {
@@ -1198,7 +1377,7 @@ pub trait BitmapDrawing32: MutableRasterImage<ColorType = TrueColor> {
     }
 
     #[inline]
-    fn blt_main<T>(&mut self, src: &T, origin: Point, rect: Rect, mode: BltMode)
+    pub fn blt_main<T>(&mut self, src: &T, origin: Point, rect: Rect, mode: BltMode)
     where
         T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
     {
@@ -1273,75 +1452,17 @@ pub trait BitmapDrawing32: MutableRasterImage<ColorType = TrueColor> {
         }
     }
 
-    fn translate<T>(&mut self, src: &T, origin: Point, rect: Rect, palette: &[u32; 256])
+    pub fn blt8<T>(&mut self, src: &T, origin: Point, rect: Rect, palette: &[u32; 256])
     where
         T: RasterImage<ColorType = IndexedColor>,
     {
-        let mut dx = origin.x;
-        let mut dy = origin.y;
-        let mut sx = rect.origin.x;
-        let mut sy = rect.origin.y;
-        let mut width = rect.width();
-        let mut height = rect.height();
-
-        if dx < 0 {
-            sx -= dx;
-            width += dx;
-            dx = 0;
-        }
-        if dy < 0 {
-            sy -= dy;
-            height += dy;
-            dy = 0;
-        }
-        let sw = src.width() as isize;
-        let sh = src.height() as isize;
-        if width > sx + sw {
-            width = sw - sx;
-        }
-        if height > sy + sh {
-            height = sh - sy;
-        }
-        let r = dx + width;
-        let b = dy + height;
-        let dw = self.width() as isize;
-        let dh = self.height() as isize;
-        if r >= dw {
-            width = dw - dx;
-        }
-        if b >= dh {
-            height = dh - dy;
-        }
-        if width <= 0 || height <= 0 {
-            return;
-        }
-
-        let width = width as usize;
-        let height = height as usize;
-
-        let ds = self.stride();
-        let ss = src.stride();
-        let mut dest_cursor = dx as usize + dy as usize * ds;
-        let mut src_cursor = sx as usize + sy as usize * ss;
-        let dest_fb = self.slice_mut();
-        let src_fb = src.slice();
-
-        let dd = ds - width;
-        let sd = ss - width;
-        for _ in 0..height {
-            for _ in 0..width {
-                let c8 = src_fb[src_cursor].0 as usize;
-                dest_fb[dest_cursor] = TrueColor::from_argb(palette[c8]);
-                src_cursor += 1;
-                dest_cursor += 1;
-            }
-            dest_cursor += dd;
-            src_cursor += sd;
-        }
+        self.blt_convert(src, origin, rect, |c| {
+            TrueColor::from_argb(palette[c.0 as usize])
+        });
     }
 
     /// Make a bitmap view
-    fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
+    pub fn view<'a, F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
     where
         F: FnOnce(&mut Bitmap32) -> R,
     {
@@ -1633,6 +1754,27 @@ impl Drawable for Bitmap<'_> {
     }
 }
 
+impl<'a> Bitmap<'a> {
+    #[inline]
+    pub fn clone(&self) -> Bitmap<'a> {
+        match self {
+            Bitmap::Indexed(v) => Self::from(v.clone()),
+            Bitmap::Argb32(v) => Self::from(v.clone()),
+        }
+    }
+
+    #[inline]
+    pub fn view<F, R>(&'a mut self, rect: Rect, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Bitmap) -> R,
+    {
+        match self {
+            Bitmap::Indexed(v) => v.view(rect, |v| f(&mut v.clone().into())),
+            Bitmap::Argb32(v) => v.view(rect, |v| f(&mut v.clone().into())),
+        }
+    }
+}
+
 impl GetPixel for Bitmap<'_> {
     #[inline]
     unsafe fn get_pixel_unchecked(&self, point: Point) -> Self::ColorType {
@@ -1689,22 +1831,52 @@ impl BasicDrawing for Bitmap<'_> {
     }
 }
 
-impl<'a> Bitmap<'a> {
+impl Bitmap<'_> {
     #[inline]
-    pub fn clone(&self) -> Bitmap<'a> {
+    pub const fn color_mode(&self) -> usize {
         match self {
-            Bitmap::Indexed(v) => Self::from(v.clone()),
-            Bitmap::Argb32(v) => Self::from(v.clone()),
+            Bitmap::Indexed(_) => 8,
+            Bitmap::Argb32(_) => 32,
         }
     }
-}
 
-impl Bitmap<'_> {
     #[inline]
     pub fn blt_itself(&mut self, origin: Point, rect: Rect) {
         match self {
             Bitmap::Indexed(v) => v.blt(&v.clone(), origin, rect),
             Bitmap::Argb32(v) => v.blt(&v.clone(), origin, rect),
+        }
+    }
+
+    #[inline]
+    pub fn blt_transparent(
+        &mut self,
+        src: &Bitmap,
+        origin: Point,
+        rect: Rect,
+        color_key: IndexedColor,
+    ) {
+        match self {
+            Bitmap::Indexed(bitmap) => match src {
+                Bitmap::Indexed(src) => bitmap.blt_with_key(src, origin, rect, color_key),
+                Bitmap::Argb32(src) => bitmap.blt_convert_opt(src, origin, rect, |c| {
+                    if c.is_transparent() {
+                        None
+                    } else {
+                        Some(c.into())
+                    }
+                }),
+            },
+            Bitmap::Argb32(bitmap) => match src {
+                Bitmap::Indexed(src) => bitmap.blt_convert_opt(src, origin, rect, |c| {
+                    if c == color_key {
+                        None
+                    } else {
+                        Some(c.into())
+                    }
+                }),
+                Bitmap::Argb32(src) => bitmap.blt_main(src, origin, rect, BltMode::Blend),
+            },
         }
     }
 }
@@ -1714,11 +1886,11 @@ impl Blt<ConstBitmap<'_>> for Bitmap<'_> {
         match self {
             Bitmap::Indexed(bitmap) => match src {
                 ConstBitmap::Indexed(src) => bitmap.blt(src, origin, rect),
-                ConstBitmap::Argb32(_src) => todo!(),
+                ConstBitmap::Argb32(src) => bitmap.blt32(src, origin, rect),
             },
             Bitmap::Argb32(bitmap) => match src {
                 ConstBitmap::Indexed(src) => {
-                    bitmap.translate(src, origin, rect, &IndexedColor::COLOR_PALETTE)
+                    bitmap.blt8(src, origin, rect, &IndexedColor::COLOR_PALETTE)
                 }
                 ConstBitmap::Argb32(src) => bitmap.blt(src, origin, rect),
             },
@@ -1731,11 +1903,11 @@ impl Blt<Bitmap<'_>> for Bitmap<'_> {
         match self {
             Bitmap::Indexed(bitmap) => match src {
                 Bitmap::Indexed(src) => bitmap.blt(src.into(), origin, rect),
-                Bitmap::Argb32(_src) => todo!(),
+                Bitmap::Argb32(src) => bitmap.blt32(src, origin, rect),
             },
             Bitmap::Argb32(bitmap) => match src {
                 Bitmap::Indexed(src) => {
-                    bitmap.translate(src, origin, rect, &IndexedColor::COLOR_PALETTE)
+                    bitmap.blt8(src, origin, rect, &IndexedColor::COLOR_PALETTE)
                 }
                 Bitmap::Argb32(src) => bitmap.blt(src.into(), origin, rect),
             },
@@ -1747,9 +1919,7 @@ impl Blt<ConstBitmap8<'_>> for Bitmap<'_> {
     fn blt(&mut self, src: &ConstBitmap8<'_>, origin: Point, rect: Rect) {
         match self {
             Bitmap::Indexed(bitmap) => bitmap.blt(src, origin, rect),
-            Bitmap::Argb32(bitmap) => {
-                bitmap.translate(src, origin, rect, &IndexedColor::COLOR_PALETTE)
-            }
+            Bitmap::Argb32(bitmap) => bitmap.blt8(src, origin, rect, &IndexedColor::COLOR_PALETTE),
         }
     }
 }
@@ -1757,7 +1927,7 @@ impl Blt<ConstBitmap8<'_>> for Bitmap<'_> {
 impl Blt<ConstBitmap32<'_>> for Bitmap<'_> {
     fn blt(&mut self, src: &ConstBitmap32<'_>, origin: Point, rect: Rect) {
         match self {
-            Bitmap::Indexed(_bitmap) => todo!(),
+            Bitmap::Indexed(bitmap) => bitmap.blt32(src, origin, rect),
             Bitmap::Argb32(bitmap) => bitmap.blt(src, origin, rect),
         }
     }

@@ -77,7 +77,11 @@ impl Scheduler {
 
         SpawnOption::with_priority(Priority::Normal).spawn(f, args, "System");
 
-        SpawnOption::with_priority(Priority::High).spawn(Self::statistics_thread, 0, "Statistics");
+        SpawnOption::with_priority(Priority::Realtime).spawn(
+            Self::statistics_thread,
+            0,
+            "Statistics",
+        );
 
         SCHEDULER_ENABLED.store(true, Ordering::SeqCst);
 
