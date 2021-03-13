@@ -7,10 +7,147 @@ use crate::graphics::coords::*;
 use alloc::vec::Vec;
 use core::num::NonZeroUsize;
 
+pub struct AttributedStringDescriptor<'a> {
+    text: &'a str,
+    font: FontDescriptor,
+    color: AmbiguousColor,
+    line_break_mode: LineBreakMode,
+    align: TextAlignment,
+    valign: VerticalAlignment,
+}
+
+impl AttributedStringDescriptor<'_> {
+    #[inline]
+    pub const fn text(&self) -> &str {
+        self.text
+    }
+
+    #[inline]
+    pub const fn font(&self) -> &FontDescriptor {
+        &self.font
+    }
+
+    #[inline]
+    pub const fn color(&self) -> AmbiguousColor {
+        self.color
+    }
+
+    #[inline]
+    pub const fn line_break_mode(&self) -> LineBreakMode {
+        self.line_break_mode
+    }
+
+    #[inline]
+    pub const fn align(&self) -> TextAlignment {
+        self.align
+    }
+
+    #[inline]
+    pub const fn valign(&self) -> VerticalAlignment {
+        self.valign
+    }
+
+    #[inline]
+    pub fn bounding_size(&self, size: Size, max_lines: usize) -> Size {
+        TextProcessing::bounding_size(self.font, self.text, size, max_lines, self.line_break_mode)
+    }
+
+    #[inline]
+    pub fn draw_text(&self, bitmap: &mut Bitmap, rect: Rect, max_lines: usize) {
+        TextProcessing::draw_text(
+            bitmap,
+            self.text,
+            self.font,
+            rect,
+            self.color,
+            max_lines,
+            self.line_break_mode,
+            self.align,
+            self.valign,
+        );
+    }
+}
+
+pub struct AttributedString {
+    font: FontDescriptor,
+    color: AmbiguousColor,
+    line_break_mode: LineBreakMode,
+    align: TextAlignment,
+    valign: VerticalAlignment,
+}
+
+impl AttributedString {
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            font: FontManager::ui_font(),
+            color: AmbiguousColor::BLACK,
+            line_break_mode: LineBreakMode::default(),
+            align: TextAlignment::Leading,
+            valign: VerticalAlignment::Center,
+        }
+    }
+
+    #[inline]
+    pub fn text(self, text: &str) -> AttributedStringDescriptor {
+        AttributedStringDescriptor {
+            text,
+            font: self.font,
+            color: self.color,
+            line_break_mode: self.line_break_mode,
+            align: self.align,
+            valign: self.valign,
+        }
+    }
+
+    #[inline]
+    pub fn font(mut self, font: FontDescriptor) -> Self {
+        self.font = font;
+        self
+    }
+
+    #[inline]
+    pub fn color(mut self, color: AmbiguousColor) -> Self {
+        self.color = color;
+        self
+    }
+
+    #[inline]
+    pub fn line_break_mode(mut self, line_break_mode: LineBreakMode) -> Self {
+        self.line_break_mode = line_break_mode;
+        self
+    }
+
+    #[inline]
+    pub fn align(mut self, align: TextAlignment) -> Self {
+        self.align = align;
+        self
+    }
+
+    #[inline]
+    pub fn center(mut self) -> Self {
+        self.align = TextAlignment::Center;
+        self
+    }
+
+    #[inline]
+    pub fn trailing(mut self) -> Self {
+        self.align = TextAlignment::Trailing;
+        self
+    }
+
+    #[inline]
+    pub fn valign(mut self, valign: VerticalAlignment) -> Self {
+        self.valign = valign;
+        self
+    }
+}
+
 pub struct TextProcessing {
     //
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineBreakMode {
     CharWrapping,
     WordWrapping,
@@ -23,6 +160,7 @@ impl Default for LineBreakMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextAlignment {
     Left,
     Center,
@@ -37,6 +175,7 @@ impl Default for TextAlignment {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerticalAlignment {
     Top,
     Bottom,
@@ -70,7 +209,7 @@ impl LineStatus {
 
 impl TextProcessing {
     pub fn line_statuses(
-        font: &FixedFontDriver,
+        font: FontDescriptor,
         s: &str,
         size: Size,
         max_lines: usize,
@@ -130,7 +269,7 @@ impl TextProcessing {
     }
 
     pub fn bounding_size(
-        font: &FixedFontDriver,
+        font: FontDescriptor,
         s: &str,
         size: Size,
         max_lines: usize,
@@ -147,7 +286,7 @@ impl TextProcessing {
     pub fn write_str(
         to: &mut Bitmap,
         s: &str,
-        font: &FixedFontDriver,
+        font: FontDescriptor,
         origin: Point,
         color: AmbiguousColor,
     ) {
@@ -174,7 +313,7 @@ impl TextProcessing {
     pub fn draw_text(
         to: &mut Bitmap,
         s: &str,
-        font: &FixedFontDriver,
+        font: FontDescriptor,
         rect: Rect,
         color: AmbiguousColor,
         max_lines: usize,
@@ -214,7 +353,7 @@ impl TextProcessing {
                 };
                 for _ in line.start_position..line.end_position {
                     let c = chars.next().unwrap();
-                    font.write_char(c, to, cursor, color);
+                    font.draw_char(c, to, cursor, color);
                     cursor.x += font.width_of(c);
                 }
             }

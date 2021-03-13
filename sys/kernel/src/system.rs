@@ -71,7 +71,7 @@ impl fmt::Display for Version {
 }
 
 pub struct System {
-    main_screen: Option<Bitmap<'static>>,
+    main_screen: Option<OwnedBitmap<'static>>,
     em_console: EmConsole,
     platform: Platform,
     cpu_ver: CpuVersion,
@@ -102,7 +102,7 @@ impl System {
                 let stride = info.screen_stride as usize;
                 let screen =
                     Bitmap32::from_static(info.vram_base as usize as *mut TrueColor, size, stride);
-                Some(Bitmap::from(screen))
+                Some(screen.into())
             }
             _ => {
                 let size = Size::new(info.screen_width as isize, info.screen_height as isize);
@@ -112,7 +112,7 @@ impl System {
                     size,
                     stride,
                 );
-                Some(Bitmap::from(screen))
+                Some(screen.into())
             }
         };
 
@@ -187,9 +187,9 @@ impl System {
     }
 
     /// Get main screen
-    pub fn main_screen() -> &'static mut Bitmap<'static> {
+    pub fn main_screen() -> Bitmap<'static> {
         let shared = Self::shared();
-        shared.main_screen.as_mut().unwrap()
+        shared.main_screen.as_mut().unwrap().as_bitmap()
     }
 
     /// Get emergency console

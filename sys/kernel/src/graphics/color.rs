@@ -290,6 +290,10 @@ pub enum AmbiguousColor {
 }
 
 impl AmbiguousColor {
+    pub const TRANSPARENT: Self = Self::Argb32(TrueColor::TRANSPARENT);
+    pub const WHITE: Self = Self::Indexed(IndexedColor::WHITE);
+    pub const BLACK: Self = Self::Indexed(IndexedColor::BLACK);
+
     #[inline]
     pub const fn from_rgb(rgb: u32) -> Self {
         Self::Argb32(TrueColor::from_rgb(rgb))

@@ -9,7 +9,6 @@ use crate::task::*;
 use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
-use kernel::arch::cpu::Cpu;
 use kernel::fonts::FontManager;
 use kernel::graphics::bitmap::*;
 use kernel::graphics::color::*;
@@ -20,6 +19,7 @@ use kernel::task::scheduler::*;
 use kernel::util::text::*;
 use kernel::window::*;
 use kernel::*;
+use kernel::{arch::cpu::Cpu, fonts::*};
 use mem::string::*;
 use window::WindowBuilder;
 // use kernel::audio::AudioManager;
@@ -63,7 +63,7 @@ impl Shell {
     async fn console_main() {
         let padding_x = 4;
         let padding_y = 4;
-        let font = FontManager::fixed_system_font();
+        let font = FontManager::system_font();
         let bg_color = AmbiguousColor::from(IndexedColor::WHITE);
         let fg_color = AmbiguousColor::from(IndexedColor::BLACK);
 
@@ -121,9 +121,9 @@ impl Shell {
                             if window.is_active() && cursor_phase == 1 {
                                 bitmap.fill_rect(
                                     Rect::new(
-                                        rect.x() + font.width() * sb.len() as isize,
+                                        rect.x() + font.width_of(' ') * sb.len() as isize,
                                         rect.y(),
-                                        font.width(),
+                                        font.width_of(' '),
                                         font.line_height(),
                                     ),
                                     fg_color,
@@ -168,6 +168,7 @@ impl Shell {
             vec
         };
 
+        let font = FontDescriptor::new(FontFamily::SmallFixed, 8).unwrap();
         let mut sb = StringBuffer::with_capacity(0x1000);
 
         let interval = 1000;
@@ -175,11 +176,6 @@ impl Shell {
         while let Some(message) = window.get_message().await {
             match message {
                 WindowMessage::Timer(_timer) => {
-                    window.set_needs_display();
-                    window.create_timer(0, Duration::from_millis(interval));
-                }
-                WindowMessage::Draw => {
-                    let font = FontManager::fixed_small_font();
                     sb.clear();
 
                     let max_value = 1000;
@@ -201,6 +197,10 @@ impl Shell {
                     .unwrap();
                     Scheduler::print_statistics(&mut sb, true);
 
+                    window.set_needs_display();
+                    window.create_timer(0, Duration::from_millis(interval));
+                }
+                WindowMessage::Draw => {
                     window
                         .draw(|bitmap| {
                             bitmap.fill_rect(bitmap.bounds(), window.bg_color().into());
@@ -290,7 +290,7 @@ impl Shell {
                     window.create_timer(0, Duration::from_millis(interval));
                 }
                 WindowMessage::Draw => {
-                    let font = FontManager::fixed_ui_font();
+                    let font = FontManager::ui_font();
                     sb.clear();
 
                     writeln!(sb, "{} v{}", System::name(), System::version(),).unwrap();
@@ -305,7 +305,8 @@ impl Shell {
                         screen.width(),
                         screen.height(),
                         screen.color_mode(),
-                    );
+                    )
+                    .unwrap();
 
                     window
                         .draw(|bitmap| {
@@ -344,7 +345,7 @@ impl Shell {
             .build();
         window
             .draw_in_rect(window_size.into(), |bitmap| {
-                let font = FontManager::fixed_ui_font();
+                let font = FontManager::ui_font();
                 let s = System::short_name();
                 {
                     TextProcessing::write_str(
@@ -388,8 +389,8 @@ impl Shell {
                         write!(sb, "{:2}:{:02}", hour, min).unwrap();
                     }
 
-                    let font = FontManager::fixed_system_font();
-                    let clock_width = font.width() * 8;
+                    let font = FontManager::system_font();
+                    let clock_width = font.width_of('0') * 8;
                     let clock_rect = Rect::new(
                         window_size.width() - clock_width - 8,
                         (window_size.height() - font.line_height()) / 2,

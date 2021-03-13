@@ -28,7 +28,8 @@ impl EmConsole {
         // let font = FontManager::fixed_system_font();
         let font = FontManager::fixed_small_font();
         let font_size = Size::new(font.width(), font.line_height());
-        let bitmap = System::main_screen();
+        let mut bitmap = System::main_screen();
+        let bitmap = &mut bitmap;
 
         // check bounds
         let cols = bitmap.width() / font_size.width() as usize;
@@ -75,7 +76,7 @@ impl EmConsole {
                     },
                     self.bg_color.into(),
                 );
-                font.write_char(c, bitmap, origin, self.fg_color.into());
+                font.draw_char(c, bitmap, origin, font.height_for(c), self.fg_color.into());
 
                 self.x += 1;
             }

@@ -85,7 +85,7 @@ impl FontManager {
     }
 
     #[inline]
-    pub fn label_font() -> FontDescriptor {
+    pub fn ui_font() -> FontDescriptor {
         FontDescriptor::new(FontFamily::SystemUI, 0).unwrap_or(Self::system_font())
     }
 }
@@ -148,6 +148,18 @@ impl FontDescriptor {
     pub fn is_scalable(&self) -> bool {
         self.driver.is_scalable()
     }
+
+    #[inline]
+    pub fn draw_char(
+        &self,
+        character: char,
+        bitmap: &mut Bitmap,
+        origin: Point,
+        color: AmbiguousColor,
+    ) {
+        self.driver
+            .draw_char(character, bitmap, origin, self.point(), color)
+    }
 }
 
 pub trait FontDriver {
@@ -161,11 +173,12 @@ pub trait FontDriver {
 
     fn height_of(&self, character: char) -> isize;
 
-    fn write_char(
+    fn draw_char(
         &self,
         character: char,
         bitmap: &mut Bitmap,
         origin: Point,
+        height: isize,
         color: AmbiguousColor,
     );
 }
@@ -265,11 +278,12 @@ impl FontDriver for FixedFontDriver<'_> {
         self.size.height
     }
 
-    fn write_char(
+    fn draw_char(
         &self,
         character: char,
         bitmap: &mut Bitmap,
         origin: Point,
+        _height: isize,
         color: AmbiguousColor,
     ) {
         if let Some(font) = self.glyph_for(character) {

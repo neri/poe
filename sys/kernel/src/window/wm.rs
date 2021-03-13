@@ -15,6 +15,7 @@ use crate::{arch::cpu::Cpu, graphics::bitmap::Blt};
 use crate::{io::hid::*, system::System};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use bitflags::*;
 use core::cell::UnsafeCell;
@@ -28,7 +29,7 @@ use core::time::Duration;
 
 // use core::fmt::Write;
 
-static mut WM: Option<Box<WindowManager>> = None;
+static mut WM: Option<Box<WindowManager<'_>>> = None;
 
 const MAX_WINDOWS: usize = 255;
 const WINDOW_TITLE_LENGTH: usize = 32;
@@ -64,11 +65,11 @@ const MOUSE_POINTER_SOURCE: [u8; MOUSE_POINTER_WIDTH * MOUSE_POINTER_HEIGHT] = [
     0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 ];
 
-pub struct WindowManager {
-    main_screen: &'static mut Bitmap<'static>,
+pub struct WindowManager<'a> {
+    main_screen: Bitmap<'static>,
     screen_insets: EdgeInsets,
 
-    window_pool: BTreeMap<WindowHandle, Box<RawWindow>>,
+    window_pool: BTreeMap<WindowHandle, Arc<UnsafeCell<Box<RawWindow<'a>>>>>,
     window_orders: Vec<WindowHandle>,
     sem_winthread: Semaphore,
     attributes: AtomicBitflags<WindowManagerAttributes>,
@@ -102,7 +103,7 @@ impl Into<usize> for WindowManagerAttributes {
     }
 }
 
-impl WindowManager {
+impl WindowManager<'static> {
     pub(crate) unsafe fn init() {
         let main_screen = System::main_screen();
         let pointer_x = AtomicIsize::new(main_screen.width() as isize / 2);
@@ -122,7 +123,7 @@ impl WindowManager {
                 .build_inner();
 
             let handle = window.handle;
-            window_pool.insert(handle, window);
+            window_pool.insert(handle, Arc::new(UnsafeCell::new(window)));
             handle
         };
         window_orders.push(root);
@@ -145,7 +146,7 @@ impl WindowManager {
                 .unwrap();
 
             let handle = window.handle;
-            window_pool.insert(handle, window);
+            window_pool.insert(handle, Arc::new(UnsafeCell::new(window)));
             handle
         };
 
@@ -170,6 +171,71 @@ impl WindowManager {
         }));
 
         SpawnOption::with_priority(Priority::High).spawn(Self::window_thread, 0, "Window Manager");
+    }
+
+    #[inline]
+    pub fn main_screen<'a>(&self) -> &'a mut Bitmap<'static> {
+        &mut WindowManager::shared_mut().main_screen
+    }
+
+    fn add(window: Box<RawWindow<'static>>) {
+        unsafe {
+            Cpu::without_interrupts(|| {
+                let shared = WindowManager::shared_mut();
+                let handle = window.handle;
+                shared
+                    .window_pool
+                    .insert(handle, Arc::new(UnsafeCell::new(window)));
+            })
+        }
+    }
+
+    #[allow(dead_code)]
+    fn remove(_window: &WindowHandle) {
+        // TODO:
+    }
+}
+
+impl WindowManager<'static> {
+    #[inline]
+    fn get<'a>(&self, key: &WindowHandle) -> Option<&'a Box<RawWindow<'static>>> {
+        unsafe {
+            Cpu::without_interrupts(|| self.window_pool.get(key))
+                .map(|v| v.clone().get())
+                .map(|v| &(*v))
+        }
+    }
+
+    fn get_mut<F, R>(&mut self, key: &WindowHandle, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut RawWindow) -> R,
+    {
+        let window = unsafe {
+            Cpu::without_interrupts(move || self.window_pool.get_mut(key).map(|v| v.clone()))
+        };
+        window.map(|window| unsafe {
+            let window = window.get();
+            f(&mut *window)
+        })
+    }
+}
+
+impl WindowManager<'_> {
+    #[inline]
+    #[track_caller]
+    fn shared<'a>() -> &'a WindowManager<'static> {
+        unsafe { WM.as_ref().unwrap() }
+    }
+
+    #[inline]
+    #[track_caller]
+    fn shared_mut<'a>() -> &'a mut WindowManager<'static> {
+        unsafe { WM.as_mut().unwrap() }
+    }
+
+    #[inline]
+    fn shared_opt<'a>() -> Option<&'a Box<WindowManager<'static>>> {
+        unsafe { WM.as_ref() }
     }
 
     fn window_thread(_: usize) {
@@ -344,47 +410,6 @@ impl WindowManager {
         unsafe { WM.is_some() }
     }
 
-    #[inline]
-    #[track_caller]
-    fn shared() -> &'static Self {
-        unsafe { WM.as_ref().unwrap() }
-    }
-
-    #[inline]
-    #[track_caller]
-    fn shared_mut() -> &'static mut Self {
-        unsafe { WM.as_mut().unwrap() }
-    }
-
-    #[inline]
-    fn shared_opt() -> Option<&'static Box<Self>> {
-        unsafe { WM.as_ref() }
-    }
-
-    fn add(window: Box<RawWindow>) {
-        unsafe {
-            Cpu::without_interrupts(|| {
-                let shared = Self::shared_mut();
-                shared.window_pool.insert(window.handle, window);
-            })
-        }
-    }
-
-    #[allow(dead_code)]
-    fn remove(_window: &WindowHandle) {
-        // TODO:
-    }
-
-    #[inline]
-    fn get(&self, key: &WindowHandle) -> Option<&Box<RawWindow>> {
-        unsafe { Cpu::without_interrupts(|| self.window_pool.get(key)) }
-    }
-
-    #[inline]
-    fn get_mut(&mut self, key: &WindowHandle) -> Option<&mut Box<RawWindow>> {
-        unsafe { Cpu::without_interrupts(move || self.window_pool.get_mut(key)) }
-    }
-
     /// SAFETY: MUST lock window_orders
     unsafe fn add_hierarchy(window: WindowHandle) {
         let window = match window.get() {
@@ -435,7 +460,7 @@ impl WindowManager {
 
     #[inline]
     pub fn main_screen_bounds() -> Rect {
-        match Self::shared_opt() {
+        match WindowManager::shared_opt() {
             Some(shared) => shared.main_screen.bounds(),
             None => System::main_screen().size().into(),
         }
@@ -443,7 +468,7 @@ impl WindowManager {
 
     #[inline]
     pub fn user_screen_bounds() -> Rect {
-        match Self::shared_opt() {
+        match WindowManager::shared_opt() {
             Some(shared) => shared.main_screen.bounds().insets_by(shared.screen_insets),
             None => System::main_screen().size().into(),
         }
@@ -451,23 +476,18 @@ impl WindowManager {
 
     #[inline]
     pub fn screen_insets() -> EdgeInsets {
-        let shared = Self::shared();
+        let shared = WindowManager::shared();
         shared.screen_insets
     }
 
     #[inline]
     pub fn add_screen_insets(insets: EdgeInsets) {
-        let shared = Self::shared_mut();
+        let shared = WindowManager::shared_mut();
         shared.screen_insets += insets;
     }
 
-    #[inline]
-    pub fn main_screen<'a>(&self) -> &'a mut Bitmap<'static> {
-        &mut Self::shared_mut().main_screen
-    }
-
     pub(crate) fn post_key_event(event: KeyEvent) {
-        let shared = match Self::shared_opt() {
+        let shared = match WindowManager::shared_opt() {
             Some(v) => v,
             None => return,
         };
@@ -484,7 +504,7 @@ impl WindowManager {
     }
 
     pub fn post_mouse_event(mouse_state: &mut MouseState) {
-        let shared = match Self::shared_opt() {
+        let shared = match WindowManager::shared_opt() {
             Some(v) => v,
             None => return,
         };
@@ -534,32 +554,32 @@ impl WindowManager {
 
     #[inline]
     pub fn invalidate_screen(rect: Rect) {
-        let shared = Self::shared();
+        let shared = WindowManager::shared();
         let _ = shared.root.update_opt(|root| {
             root.invalidate_rect(rect);
         });
     }
 
     pub fn set_desktop_color(color: AmbiguousColor) {
-        let shared = Self::shared();
+        let shared = WindowManager::shared();
         let _ = shared.root.update_opt(|root| {
             root.bitmap = None;
             root.set_bg_color(color);
         });
     }
 
-    pub fn set_desktop_bitmap(bitmap: Option<VecBitmap>) {
-        let shared = Self::shared();
-        let _ = shared.root.update_opt(|root| {
-            root.bitmap = bitmap.map(|v| UnsafeCell::new(v));
-            root.set_needs_display();
-        });
-    }
+    // pub fn set_desktop_bitmap(bitmap: Option<BoxedBitmap>) {
+    //     let shared = Self::shared();
+    //     let _ = shared.root.update_opt(|root| {
+    //         root.bitmap = bitmap.map(|v| UnsafeCell::new(v));
+    //         root.set_needs_display();
+    //     });
+    // }
 
     fn window_at_point(point: Point) -> WindowHandle {
         unsafe {
             Cpu::without_interrupts(|| {
-                let shared = Self::shared();
+                let shared = WindowManager::shared();
                 for handle in shared.window_orders.iter().rev().skip(1) {
                     let window = handle.as_ref();
                     if point.is_within(window.frame) {
@@ -581,7 +601,7 @@ impl WindowManager {
 
     #[inline]
     pub fn is_pointer_visible() -> bool {
-        Self::shared()
+        WindowManager::shared()
             .pointer
             .get()
             .map(|v| v.is_visible())
@@ -589,7 +609,7 @@ impl WindowManager {
     }
 
     pub fn set_pointer_visible(visible: bool) -> bool {
-        Self::shared()
+        WindowManager::shared()
             .pointer
             .update_opt(|pointer| {
                 let result = pointer.is_visible();
@@ -615,12 +635,12 @@ impl WindowManager {
     }
 
     pub fn save_screen_to(bitmap: &mut Bitmap, rect: Rect) {
-        let shared = Self::shared();
+        let shared = WindowManager::shared();
         Self::while_hiding_pointer(|| shared.root.update(|v| v.draw_into(bitmap, rect)));
     }
 
     fn set_active(window: Option<WindowHandle>) {
-        let shared = Self::shared_mut();
+        let shared = WindowManager::shared_mut();
         if let Some(old_active) = shared.active {
             let _ = old_active.post(WindowMessage::Deactivated);
             shared.active = window;
@@ -637,7 +657,7 @@ impl WindowManager {
 
 /// Raw implementation of the window
 #[allow(dead_code)]
-struct RawWindow {
+struct RawWindow<'a> {
     /// Refer to the self owned handle
     handle: WindowHandle,
 
@@ -653,7 +673,7 @@ struct RawWindow {
     // Appearances
     bg_color: AmbiguousColor,
     key_color: IndexedColor,
-    bitmap: Option<UnsafeCell<VecBitmap>>,
+    bitmap: Option<UnsafeCell<BoxedBitmap<'a>>>,
 
     /// Window Title
     title: [u8; WINDOW_TITLE_LENGTH],
@@ -717,7 +737,7 @@ impl WindowLevel {
     pub const POINTER: WindowLevel = WindowLevel(127);
 }
 
-impl RawWindow {
+impl RawWindow<'_> {
     #[inline]
     fn actual_bounds(&self) -> Rect {
         self.frame.size().into()
@@ -809,16 +829,6 @@ impl RawWindow {
         self.set_needs_display();
     }
 
-    fn bitmap<'a>(&self) -> Option<Bitmap<'a>> {
-        match self.bitmap.as_ref() {
-            Some(v) => {
-                let q = unsafe { v.get().as_mut() };
-                q.map(|v| v.into())
-            }
-            None => None,
-        }
-    }
-
     fn title_frame(&self) -> Rect {
         if self.style.contains(WindowStyle::TITLE) {
             Rect::new(
@@ -854,63 +864,27 @@ impl RawWindow {
                     title_rect.width(),
                     WINDOW_BORDER_COLOR,
                 );
-                let font = FontManager::fixed_ui_font();
 
                 if let Some(s) = self.title() {
                     let rect = title_rect.insets_by(EdgeInsets::new(0, 8, 0, 8));
-                    TextProcessing::draw_text(
-                        &mut Bitmap::from(bitmap),
-                        s,
-                        font,
-                        rect,
-                        if is_active {
+                    AttributedString::new()
+                        .font(FontManager::title_font())
+                        .color(if is_active {
                             WINDOW_ACTIVE_TITLE_FG_COLOR
                         } else {
                             WINDOW_INACTIVE_TITLE_FG_COLOR
-                        }
-                        .into(),
-                        1,
-                        LineBreakMode::TrancatingTail,
-                        TextAlignment::Center,
-                        VerticalAlignment::Center,
-                    );
+                        })
+                        .center()
+                        .text(s)
+                        .draw_text(&mut bitmap, rect, 1);
                 }
             }
         }
     }
 
-    fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
-    where
-        F: FnOnce(&mut Bitmap) -> (),
-    {
-        let window = self;
-        let mut bitmap = match window.bitmap() {
-            Some(bitmap) => bitmap,
-            None => return Err(WindowDrawingError::NoBitmap),
-        };
-        let bounds = Rect::from(window.frame.size).insets_by(window.content_insets);
-        let origin = Point::new(isize::max(0, rect.x()), isize::max(0, rect.y()));
-        let coords = match Coordinates::from_rect(Rect::new(
-            origin.x + bounds.x(),
-            origin.y + bounds.y(),
-            isize::min(rect.width(), bounds.width() - origin.x),
-            isize::min(rect.height(), bounds.height() - origin.y),
-        )) {
-            Ok(coords) => coords,
-            Err(_) => return Err(WindowDrawingError::InconsistentCoordinates),
-        };
-        if coords.left > coords.right || coords.top > coords.bottom {
-            return Err(WindowDrawingError::InconsistentCoordinates);
-        }
-
-        let rect = coords.into();
-        match bitmap.view(rect, |bitmap| {
-            f(&mut Bitmap::from(bitmap.clone()));
-        }) {
-            Some(_) => Ok(()),
-            None => Err(WindowDrawingError::InconsistentCoordinates),
-        }
-    }
+    //
+    // fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
+    //
 
     fn draw_to_screen(&self, rect: Rect) {
         let mut frame = rect;
@@ -967,7 +941,7 @@ impl RawWindow {
                             - cmp::max(coords1.top, coords2.top),
                     );
 
-                    if let Some(mut bitmap) = window.bitmap() {
+                    if let Some(bitmap) = window.bitmap() {
                         if window.style.contains(WindowStyle::TRANSPARENT) {
                             target_bitmap.blt_transparent(
                                 &bitmap,
@@ -976,7 +950,7 @@ impl RawWindow {
                                 window.key_color,
                             );
                         } else {
-                            target_bitmap.blt(&mut bitmap, blt_origin, blt_rect);
+                            target_bitmap.blt(&bitmap, blt_origin, blt_rect);
                         }
                     } else {
                         target_bitmap.fill_rect(blt_rect, window.bg_color.into());
@@ -1033,13 +1007,53 @@ impl RawWindow {
             self.invalidate_rect(self.title_frame());
         }
     }
+}
 
-    fn title<'a>(&self) -> Option<&'a str> {
+impl<'a> RawWindow<'a> {
+    #[inline(never)]
+    fn bitmap(&self) -> Option<Bitmap<'a>> {
+        self.bitmap
+            .as_ref()
+            .and_then(|v| unsafe { v.get().as_mut() })
+            .map(|v| v.as_bitmap())
+    }
+
+    fn title<'b>(&self) -> Option<&'b str> {
         let len = self.title[0] as usize;
         match len {
             0 => None,
             _ => core::str::from_utf8(unsafe { core::slice::from_raw_parts(&self.title[1], len) })
                 .ok(),
+        }
+    }
+
+    fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
+    where
+        F: FnOnce(&mut Bitmap) -> (),
+    {
+        let mut bitmap = match self.bitmap() {
+            Some(bitmap) => bitmap,
+            None => return Err(WindowDrawingError::NoBitmap),
+        };
+        let bounds = Rect::from(self.frame.size).insets_by(self.content_insets);
+        let origin = Point::new(isize::max(0, rect.x()), isize::max(0, rect.y()));
+        let coords = match Coordinates::from_rect(Rect::new(
+            origin.x + bounds.x(),
+            origin.y + bounds.y(),
+            isize::min(rect.width(), bounds.width() - origin.x),
+            isize::min(rect.height(), bounds.height() - origin.y),
+        )) {
+            Ok(coords) => coords,
+            Err(_) => return Err(WindowDrawingError::InconsistentCoordinates),
+        };
+        if coords.left > coords.right || coords.top > coords.bottom {
+            return Err(WindowDrawingError::InconsistentCoordinates);
+        }
+
+        let rect = coords.into();
+        match bitmap.view(rect, |mut bitmap| f(&mut bitmap)) {
+            Some(_) => Ok(()),
+            None => Err(WindowDrawingError::InconsistentCoordinates),
         }
     }
 }
@@ -1078,7 +1092,7 @@ impl WindowBuilder {
         handle
     }
 
-    fn build_inner(mut self) -> Box<RawWindow> {
+    fn build_inner<'a>(mut self) -> Box<RawWindow<'a>> {
         let screen_bounds = WindowManager::user_screen_bounds();
         let window_insets = self.style.as_content_insets();
         let content_insets = window_insets;
@@ -1133,9 +1147,8 @@ impl WindowBuilder {
         });
 
         if !self.no_bitmap {
-            window.bitmap = Some(UnsafeCell::new(
-                VecBitmap8::new(frame.size(), self.bg_color.into()).into(),
-            ));
+            let bitmap = BoxedBitmap8::new(frame.size(), self.bg_color.into());
+            window.bitmap = Some(UnsafeCell::new(bitmap.into()));
         };
 
         window
@@ -1236,14 +1249,13 @@ impl WindowHandle {
     }
 
     #[inline]
-    fn get<'a>(&self) -> Option<&'a Box<RawWindow>> {
-        let shared = WindowManager::shared();
-        shared.get(self)
+    fn get<'a>(&self) -> Option<&'a Box<RawWindow<'static>>> {
+        WindowManager::shared().get(self)
     }
 
     #[inline]
     #[track_caller]
-    fn as_ref<'a>(&self) -> &'a RawWindow {
+    fn as_ref<'a>(&self) -> &'a RawWindow<'static> {
         self.get().unwrap()
     }
 
@@ -1252,8 +1264,7 @@ impl WindowHandle {
     where
         F: FnOnce(&mut RawWindow) -> R,
     {
-        let window = WindowManager::shared_mut().get_mut(self);
-        window.map(|v| f(v))
+        WindowManager::shared_mut().get_mut(self, f)
     }
 
     #[inline]
