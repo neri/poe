@@ -1,9 +1,8 @@
 // A Window System
 
+use crate::arch::cpu::Cpu;
+use crate::drawing::*;
 use crate::fonts::*;
-use crate::graphics::bitmap::*;
-use crate::graphics::color::*;
-use crate::graphics::coords::*;
 use crate::sync::atomicflags::AtomicBitflags;
 use crate::sync::fifo::*;
 use crate::sync::semaphore::*;
@@ -11,7 +10,6 @@ use crate::task::scheduler::*;
 use crate::task::AtomicWaker;
 use crate::util::text::*;
 use crate::*;
-use crate::{arch::cpu::Cpu, graphics::bitmap::Blt};
 use crate::{io::hid::*, system::System};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
@@ -38,7 +36,7 @@ const WINDOW_BORDER_PADDING: isize = 1;
 const WINDOW_TITLE_HEIGHT: isize = 20;
 
 const WINDOW_DEFAULT_KEY_COLOR: IndexedColor = IndexedColor::DEFAULT_KEY;
-const WINDOW_BORDER_COLOR: AmbiguousColor = AmbiguousColor::Argb32(TrueColor::from_rgb(0x666666));
+const WINDOW_BORDER_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x666666);
 const WINDOW_DEFAULT_BGCOLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
 const WINDOW_ACTIVE_TITLE_BG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xCCCCCC);
 const WINDOW_ACTIVE_TITLE_FG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x333333);
@@ -135,6 +133,7 @@ impl WindowManager<'static> {
                 .style(WindowStyle::NAKED | WindowStyle::TRANSPARENT)
                 .level(WindowLevel::POINTER)
                 .size(pointer_size)
+                .bitmap_strategy(BitmapStrategy::Compact)
                 .without_message_queue()
                 .build_inner();
 
@@ -867,7 +866,7 @@ impl RawWindow<'_> {
 
                 if let Some(s) = self.title() {
                     let rect = title_rect.insets_by(EdgeInsets::new(0, 8, 0, 8));
-                    AttributedString::new()
+                    AttributedString::props()
                         .font(FontManager::title_font())
                         .color(if is_active {
                             WINDOW_ACTIVE_TITLE_FG_COLOR
@@ -881,10 +880,6 @@ impl RawWindow<'_> {
             }
         }
     }
-
-    //
-    // fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
-    //
 
     fn draw_to_screen(&self, rect: Rect) {
         let mut frame = rect;
@@ -1010,7 +1005,7 @@ impl RawWindow<'_> {
 }
 
 impl<'a> RawWindow<'a> {
-    #[inline(never)]
+    #[inline]
     fn bitmap(&self) -> Option<Bitmap<'a>> {
         self.bitmap
             .as_ref()
@@ -1066,7 +1061,7 @@ pub struct WindowBuilder {
     key_color: IndexedColor,
     title: [u8; WINDOW_TITLE_LENGTH],
     queue_size: usize,
-    no_bitmap: bool,
+    bitmap_strategy: BitmapStrategy,
 }
 
 impl WindowBuilder {
@@ -1079,7 +1074,7 @@ impl WindowBuilder {
             key_color: WINDOW_DEFAULT_KEY_COLOR,
             title: [0; WINDOW_TITLE_LENGTH],
             queue_size: 32,
-            no_bitmap: false,
+            bitmap_strategy: BitmapStrategy::default(),
         };
         window.title(title).style(WindowStyle::DEFAULT)
     }
@@ -1146,10 +1141,26 @@ impl WindowBuilder {
             waker: AtomicWaker::new(),
         });
 
-        if !self.no_bitmap {
-            let bitmap = BoxedBitmap8::new(frame.size(), self.bg_color.into());
-            window.bitmap = Some(UnsafeCell::new(bitmap.into()));
-        };
+        match self.bitmap_strategy {
+            BitmapStrategy::NonBitmap => (),
+            BitmapStrategy::Native => {
+                window.bitmap = Some(UnsafeCell::new(BoxedBitmap::same_format(
+                    WindowManager::shared().main_screen(),
+                    frame.size(),
+                    self.bg_color,
+                )));
+            }
+            BitmapStrategy::Compact => {
+                window.bitmap = Some(UnsafeCell::new(
+                    BoxedBitmap8::new(frame.size(), self.bg_color.into()).into(),
+                ));
+            }
+            BitmapStrategy::Expressive => {
+                window.bitmap = Some(UnsafeCell::new(
+                    BoxedBitmap32::new(frame.size(), self.bg_color.into()).into(),
+                ));
+            }
+        }
 
         window
     }
@@ -1222,8 +1233,27 @@ impl WindowBuilder {
 
     #[inline]
     pub const fn without_bitmap(mut self) -> Self {
-        self.no_bitmap = true;
+        self.bitmap_strategy = BitmapStrategy::NonBitmap;
         self
+    }
+
+    #[inline]
+    pub const fn bitmap_strategy(mut self, bitmap_strategy: BitmapStrategy) -> Self {
+        self.bitmap_strategy = bitmap_strategy;
+        self
+    }
+}
+
+pub enum BitmapStrategy {
+    NonBitmap,
+    Native,
+    Compact,
+    Expressive,
+}
+
+impl Default for BitmapStrategy {
+    fn default() -> Self {
+        Self::Compact
     }
 }
 

@@ -1,6 +1,6 @@
 // Memory Management
 pub mod alloc;
-pub mod mm;
+mod mm;
 pub mod slab;
 pub mod string;
 

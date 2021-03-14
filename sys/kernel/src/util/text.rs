@@ -1,13 +1,11 @@
-// Text Processing
+// Text Drawing
 
+use crate::drawing::*;
 use crate::fonts::*;
-use crate::graphics::bitmap::*;
-use crate::graphics::color::*;
-use crate::graphics::coords::*;
 use alloc::vec::Vec;
 use core::num::NonZeroUsize;
 
-pub struct AttributedStringDescriptor<'a> {
+pub struct AttributedString<'a> {
     text: &'a str,
     font: FontDescriptor,
     color: AmbiguousColor,
@@ -16,7 +14,11 @@ pub struct AttributedStringDescriptor<'a> {
     valign: VerticalAlignment,
 }
 
-impl AttributedStringDescriptor<'_> {
+impl AttributedString<'_> {
+    pub fn props() -> AttributedStringBuilder {
+        AttributedStringBuilder::new()
+    }
+
     #[inline]
     pub const fn text(&self) -> &str {
         self.text
@@ -68,7 +70,7 @@ impl AttributedStringDescriptor<'_> {
     }
 }
 
-pub struct AttributedString {
+pub struct AttributedStringBuilder {
     font: FontDescriptor,
     color: AmbiguousColor,
     line_break_mode: LineBreakMode,
@@ -76,7 +78,7 @@ pub struct AttributedString {
     valign: VerticalAlignment,
 }
 
-impl AttributedString {
+impl AttributedStringBuilder {
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -89,8 +91,8 @@ impl AttributedString {
     }
 
     #[inline]
-    pub fn text(self, text: &str) -> AttributedStringDescriptor {
-        AttributedStringDescriptor {
+    pub fn text(self, text: &str) -> AttributedString {
+        AttributedString {
             text,
             font: self.font,
             color: self.color,

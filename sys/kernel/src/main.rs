@@ -9,10 +9,8 @@ use crate::task::*;
 use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
+use kernel::drawing::*;
 use kernel::fonts::FontManager;
-use kernel::graphics::bitmap::*;
-use kernel::graphics::color::*;
-use kernel::graphics::coords::*;
 use kernel::mem::MemoryManager;
 use kernel::system::System;
 use kernel::task::scheduler::*;
@@ -48,7 +46,7 @@ impl Shell {
 
         Scheduler::spawn_async(Task::new(Self::status_bar_main()));
         Scheduler::spawn_async(Task::new(Self::activity_monitor_main()));
-        Scheduler::spawn_async(Task::new(Self::about_main()));
+        // Scheduler::spawn_async(Task::new(Self::about_main()));
         Scheduler::spawn_async(Task::new(Self::console_main()));
         Scheduler::perform_tasks();
     }
@@ -68,7 +66,7 @@ impl Shell {
         let fg_color = AmbiguousColor::from(IndexedColor::BLACK);
 
         let window_rect = Rect::new(8, 30, 128, font.line_height() + padding_y * 2);
-        let window = WindowBuilder::new("Terminal")
+        let window = WindowBuilder::new("Mini Console")
             .style_add(WindowStyle::NAKED)
             .frame(window_rect)
             .bg_color(bg_color.into())

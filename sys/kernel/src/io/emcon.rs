@@ -1,9 +1,7 @@
 // Emergency debugging console
 
+use crate::drawing::*;
 use crate::fonts::*;
-use crate::graphics::bitmap::*;
-use crate::graphics::color::*;
-use crate::graphics::coords::*;
 use crate::system::*;
 use core::fmt;
 

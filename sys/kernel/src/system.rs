@@ -1,10 +1,9 @@
 // A Computer System
 
-use crate::graphics::color::*;
-use crate::graphics::coords::*;
-use crate::graphics::emcon::*;
+use crate::drawing::*;
+use crate::fonts::FontManager;
+use crate::io::emcon::*;
 use crate::*;
-use crate::{fonts::FontManager, graphics::bitmap::*};
 use arch::cpu::Cpu;
 use core::fmt;
 use toeboot::*;

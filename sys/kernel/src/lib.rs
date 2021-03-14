@@ -16,8 +16,8 @@ use system::System;
 
 pub mod arch;
 pub mod audio;
+pub mod drawing;
 pub mod fonts;
-pub mod graphics;
 pub mod io;
 pub mod mem;
 pub mod sync;
