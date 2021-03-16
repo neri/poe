@@ -21,19 +21,19 @@ A hobby OS written in Rust, currently a subset of MYOS.
 
 ### Differences between MYOS and TOE
 
-| | MYOS | TOE |
-|-|-|-|
-| Codename | myos | toe |
-| Arch | x86-64 | x86 |
-| Platform | PC | IBM PC, PC-98, FM Towns |
-| Operating Mode | Long mode | Protected mode |
-| Paging | Parital | Never |
-| Segmentation | 32bit App Only | ??? |
-| Boot mode | UEFI | Legacy BIOS |
-| SMP | Support | Never |
-| Color Mode | ARGB32 | 8bit Indexed Color |
-| Transparency method | Alpha blending | Chroma Keying |
-| App Runtime | WASM, Haribote OS | WASM? |
+|                     | MYOS              | TOE                      |
+| ------------------- | ----------------- | ------------------------ |
+| Codename            | MYOS              | TOE                      |
+| Arch                | x86-64            | x86                      |
+| Platform            | PC                | IBM PC, PC-98, FM Towns  |
+| Operating Mode      | Long mode         | Protected mode           |
+| Paging              | Parital           | Never                    |
+| Segmentation        | 32bit App Only    | ???                      |
+| Boot mode           | UEFI              | Legacy BIOS              |
+| SMP                 | Support           | Never                    |
+| Color Mode          | 32bit ARGB        | 8bit Indexed / 32bit RGB |
+| Transparency method | Alpha blending    | Chroma Keying            |
+| App Runtime         | WASM, Haribote OS | WASM?                    |
 
 ### Will it work with real hardware?
 

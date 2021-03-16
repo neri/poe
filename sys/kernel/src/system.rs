@@ -1,7 +1,7 @@
 // A Computer System
 
 use crate::drawing::*;
-use crate::fonts::FontManager;
+use crate::fonts::*;
 use crate::io::emcon::*;
 use crate::*;
 use arch::cpu::Cpu;
@@ -189,6 +189,12 @@ impl System {
     pub fn main_screen() -> Bitmap<'static> {
         let shared = Self::shared();
         shared.main_screen.as_mut().unwrap().as_bitmap()
+    }
+
+    #[inline]
+    pub const fn em_console_font() -> &'static FixedFontDriver<'static> {
+        // FontManager::fixed_system_font()
+        FontManager::fixed_small_font()
     }
 
     /// Get emergency console

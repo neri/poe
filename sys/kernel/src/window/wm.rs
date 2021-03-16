@@ -193,9 +193,7 @@ impl WindowManager<'static> {
     fn remove(_window: &WindowHandle) {
         // TODO:
     }
-}
 
-impl WindowManager<'static> {
     #[inline]
     fn get<'a>(&self, key: &WindowHandle) -> Option<&'a Box<RawWindow<'static>>> {
         unsafe {

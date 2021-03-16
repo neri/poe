@@ -10,6 +10,7 @@ pub struct EmConsole {
     y: usize,
     fg_color: IndexedColor,
     bg_color: IndexedColor,
+    font: &'static FixedFontDriver<'static>,
 }
 
 impl EmConsole {
@@ -19,12 +20,13 @@ impl EmConsole {
             y: 0,
             fg_color: IndexedColor::WHITE,
             bg_color: IndexedColor::BLUE,
+            font: System::em_console_font(),
         }
     }
 
     pub fn write_char(&mut self, c: char) {
         // let font = FontManager::fixed_system_font();
-        let font = FontManager::fixed_small_font();
+        let font = self.font;
         let font_size = Size::new(font.width(), font.line_height());
         let mut bitmap = System::main_screen();
         let bitmap = &mut bitmap;
@@ -74,7 +76,7 @@ impl EmConsole {
                     },
                     self.bg_color.into(),
                 );
-                font.draw_char(c, bitmap, origin, font.height_for(c), self.fg_color.into());
+                font.draw_char(c, bitmap, origin, font.base_height(), self.fg_color.into());
 
                 self.x += 1;
             }

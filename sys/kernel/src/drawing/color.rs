@@ -80,6 +80,11 @@ impl IndexedColor {
     }
 
     #[inline]
+    pub const fn as_rgb(self) -> u32 {
+        Self::COLOR_PALETTE[self.0 as usize] & 0xFF_FF_FF
+    }
+
+    #[inline]
     pub const fn as_argb(self) -> u32 {
         Self::COLOR_PALETTE[self.0 as usize]
     }
@@ -302,6 +307,14 @@ impl AmbiguousColor {
     #[inline]
     pub const fn from_argb(rgb: u32) -> Self {
         Self::Argb32(TrueColor::from_argb(rgb))
+    }
+
+    #[inline]
+    pub const fn into_argb(&self) -> TrueColor {
+        match self {
+            AmbiguousColor::Indexed(v) => v.as_true_color(),
+            AmbiguousColor::Argb32(v) => *v,
+        }
     }
 }
 

@@ -947,6 +947,15 @@ impl<'a> BoxedBitmap8<'a> {
     pub fn inner(&'a mut self) -> &mut Bitmap8<'a> {
         &mut self.inner
     }
+
+    #[inline]
+    pub fn draw<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Bitmap8) -> R,
+    {
+        let inner = &mut self.inner;
+        f(inner)
+    }
 }
 
 impl<'a> From<&'a BoxedBitmap8<'a>> for ConstBitmap8<'a> {
@@ -1385,6 +1394,13 @@ impl Bitmap32<'_> {
         self.blt_main(src, origin, rect, BltMode::Copy);
     }
 
+    pub fn blt_blend<T>(&mut self, src: &T, origin: Point, rect: Rect)
+    where
+        T: RasterImage<ColorType = <Self as Drawable>::ColorType>,
+    {
+        self.blt_main(src, origin, rect, BltMode::Blend);
+    }
+
     #[inline]
     pub fn blt_main<T>(&mut self, src: &T, origin: Point, rect: Rect, mode: BltMode)
     where
@@ -1560,6 +1576,15 @@ impl<'a> BoxedBitmap32<'a> {
     #[inline]
     pub fn inner(&'a mut self) -> &mut Bitmap32<'a> {
         &mut self.inner
+    }
+
+    #[inline]
+    pub fn draw<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Bitmap32) -> R,
+    {
+        let inner = &mut self.inner;
+        f(inner)
     }
 }
 
@@ -2058,7 +2083,7 @@ impl ColorTrait for u8 {}
 pub struct OperationalBitmap {
     width: usize,
     height: usize,
-    slice: UnsafeCell<Box<[u8]>>,
+    vec: UnsafeCell<Vec<u8>>,
 }
 
 impl Drawable for OperationalBitmap {
@@ -2079,26 +2104,36 @@ impl RasterImage for OperationalBitmap {
     }
 
     fn slice(&self) -> &[Self::ColorType] {
-        unsafe { self.slice.get().as_ref().unwrap() }
+        unsafe { self.vec.get().as_ref().unwrap().as_slice() }
     }
 }
 
 impl MutableRasterImage for OperationalBitmap {
     fn slice_mut(&mut self) -> &mut [Self::ColorType] {
-        self.slice.get_mut()
+        self.vec.get_mut().as_mut_slice()
     }
 }
 
 impl OperationalBitmap {
-    pub fn new(size: Size) -> Self {
-        let len = size.width() as usize * size.height() as usize;
-        let mut vec = Vec::with_capacity(len);
-        vec.resize(len, 0);
-        let slice = UnsafeCell::new(vec.into_boxed_slice());
+    pub const fn new(size: Size) -> Self {
+        let vec = Vec::new();
         Self {
             width: size.width() as usize,
             height: size.height() as usize,
-            slice,
+            vec: UnsafeCell::new(vec),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        let count = self.stride() * self.height() as usize;
+        let vec = self.vec.get_mut();
+        if vec.capacity() >= count {
+            let slice = vec.as_mut_slice();
+            for i in 0..count {
+                slice[i] = 0;
+            }
+        } else {
+            vec.resize(count, 0);
         }
     }
 
