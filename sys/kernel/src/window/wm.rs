@@ -798,21 +798,15 @@ impl RawWindow<'_> {
             if self.attributes.contains(WindowAttributes::VISIBLE) {
                 self.draw_frame();
 
-                let coords1 = match Coordinates::from_rect(old_frame) {
+                let c1 = match Coordinates::from_rect(old_frame) {
                     Ok(v) => v,
                     Err(_) => return,
                 };
-                let coords2 = match Coordinates::from_rect(new_frame) {
+                let c2 = match Coordinates::from_rect(new_frame) {
                     Ok(v) => v,
                     Err(_) => return,
                 };
-                let new_coords = Coordinates::new(
-                    isize::min(coords1.left, coords2.left),
-                    isize::min(coords1.top, coords2.top),
-                    isize::max(coords1.right, coords2.right),
-                    isize::max(coords1.bottom, coords2.bottom),
-                );
-                WindowManager::invalidate_screen(new_coords.into());
+                WindowManager::invalidate_screen((c1 + c2).into());
             }
         }
     }
@@ -884,6 +878,7 @@ impl RawWindow<'_> {
         frame.origin += self.frame.origin;
         let main_screen = WindowManager::shared().main_screen();
         self.draw_into(main_screen, frame);
+        // main_screen.draw_rect(frame, AmbiguousColor::Indexed(IndexedColor::RED));
     }
 
     fn draw_into(&self, target_bitmap: &mut Bitmap, frame: Rect) -> bool {
@@ -1356,6 +1351,17 @@ impl WindowHandle {
     }
 
     #[inline]
+    pub fn content_rect(&self) -> Rect {
+        let window = self.as_ref();
+        Rect::from(window.frame.size()).insets_by(window.content_insets)
+    }
+
+    #[inline]
+    pub fn content_size(&self) -> Size {
+        self.content_rect().size()
+    }
+
+    #[inline]
     pub fn move_by(&self, delta: Point) {
         let mut new_rect = self.frame();
         new_rect.origin += delta;
@@ -1404,7 +1410,12 @@ impl WindowHandle {
 
     #[inline]
     pub fn invalidate_rect(&self, rect: Rect) {
-        self.update(|window| window.invalidate_rect(rect));
+        self.update(|window| {
+            let mut frame = rect;
+            frame.origin.x += window.content_insets.left;
+            frame.origin.y += window.content_insets.top;
+            window.invalidate_rect(frame);
+        });
     }
 
     #[inline]

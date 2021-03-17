@@ -5,23 +5,15 @@
 #![no_main]
 #![feature(asm)]
 
-use crate::task::*;
+// use crate::task::*;
 use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
-use kernel::drawing::*;
-use kernel::fonts::FontManager;
-use kernel::mem::MemoryManager;
-use kernel::system::System;
-use kernel::task::scheduler::*;
-use kernel::util::text::*;
-use kernel::window::*;
-use kernel::*;
-use kernel::{arch::cpu::Cpu, fonts::*};
-use mem::string::*;
-use window::WindowBuilder;
-// use kernel::audio::AudioManager;
-// use kernel::util::rng::XorShift32;
+use kernel::{
+    arch::cpu::Cpu, drawing::*, fonts::FontManager, fonts::*, io::tty::*, mem::string::*,
+    mem::MemoryManager, system::System, task::scheduler::*, task::*, util::text::*,
+    window::terminal::Terminal, window::*, *,
+};
 
 extern crate alloc;
 
@@ -46,8 +38,7 @@ impl Shell {
 
         Scheduler::spawn_async(Task::new(Self::status_bar_main()));
         Scheduler::spawn_async(Task::new(Self::activity_monitor_main()));
-        // Scheduler::spawn_async(Task::new(Self::about_main()));
-        Scheduler::spawn_async(Task::new(Self::console_main()));
+        Scheduler::spawn_async(Task::new(Self::repl_main()));
         Scheduler::perform_tasks();
     }
 
@@ -55,6 +46,38 @@ impl Shell {
     fn test_thread(_: usize) {
         loop {
             Cpu::noop();
+        }
+    }
+
+    async fn repl_main() {
+        let mut terminal = Terminal::new(80, 24);
+        let stdout = &mut terminal as &mut dyn Tty;
+        writeln!(stdout, "{} v{}", System::name(), System::version(),).unwrap();
+        writeln!(stdout, "Platform {}", System::platform(),).unwrap();
+        writeln!(stdout, "CPU ver {}", System::cpu_ver().0,).unwrap();
+        writeln!(
+            stdout,
+            "Memory {} MB",
+            MemoryManager::total_memory_size() >> 20,
+        )
+        .unwrap();
+        let screen = System::main_screen();
+        writeln!(
+            stdout,
+            "Screen {}x{} {} bit color",
+            screen.width(),
+            screen.height(),
+            screen.color_mode(),
+        )
+        .unwrap();
+
+        loop {
+            write!(stdout, "# ");
+            if let Some(cmdline) = stdout.read_line_async(120).await {
+                if cmdline.len() > 0 {
+                    writeln!(stdout, "ERROR: {}", cmdline);
+                }
+            }
         }
     }
 

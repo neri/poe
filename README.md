@@ -27,7 +27,7 @@ A hobby OS written in Rust, currently a subset of MYOS.
 | Arch                | x86-64            | x86                      |
 | Platform            | PC                | IBM PC, PC-98, FM Towns  |
 | Operating Mode      | Long mode         | Protected mode           |
-| Paging              | Parital           | Never                    |
+| Paging              | Partial           | Never                    |
 | Segmentation        | 32bit App Only    | ???                      |
 | Boot mode           | UEFI              | Legacy BIOS              |
 | SMP                 | Support           | Never                    |
