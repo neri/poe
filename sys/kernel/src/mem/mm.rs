@@ -31,7 +31,7 @@ impl MemoryManager {
         }
     }
 
-    pub(crate) unsafe fn init(info: &BootInfo) {
+    pub(crate) unsafe fn init_first(info: &BootInfo) {
         let shared = Self::shared();
 
         shared.total_memory_size = (info.smap.0 + info.smap.1) as usize;
@@ -44,6 +44,10 @@ impl MemoryManager {
         shared.slab = Some(SlabAllocator::new());
 
         // todo!();
+    }
+
+    pub(crate) unsafe fn late_init() {
+        //
     }
 
     #[inline]

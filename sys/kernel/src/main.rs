@@ -72,91 +72,18 @@ impl Shell {
         .unwrap();
 
         loop {
-            write!(stdout, "# ");
+            write!(stdout, "# ").unwrap();
             if let Some(cmdline) = stdout.read_line_async(120).await {
                 if cmdline.len() > 0 {
-                    writeln!(stdout, "ERROR: {}", cmdline);
+                    match &*cmdline {
+                        // "test" => {
+                        //     SpawnOption::new().spawn_f(Self::test_thread, 0, "loop");
+                        // }
+                        _ => writeln!(stdout, "ERROR: {}", cmdline).unwrap(),
+                    }
                 }
             }
         }
-    }
-
-    async fn console_main() {
-        let padding_x = 4;
-        let padding_y = 4;
-        let font = FontManager::system_font();
-        let bg_color = AmbiguousColor::from(IndexedColor::WHITE);
-        let fg_color = AmbiguousColor::from(IndexedColor::BLACK);
-
-        let window_rect = Rect::new(8, 30, 128, font.line_height() + padding_y * 2);
-        let window = WindowBuilder::new("Mini Console")
-            .style_add(WindowStyle::NAKED)
-            .frame(window_rect)
-            .bg_color(bg_color.into())
-            .build();
-        window.make_active();
-
-        let interval = 500;
-        window.create_timer(0, Duration::from_millis(0));
-        let mut sb = Sb255::new();
-        let mut cursor_phase = 0;
-        while let Some(message) = window.get_message().await {
-            match message {
-                WindowMessage::Activated | WindowMessage::Deactivated => {
-                    window.set_needs_display();
-                }
-                WindowMessage::Timer(_timer) => {
-                    cursor_phase ^= 1;
-                    window.create_timer(0, Duration::from_millis(interval));
-                    if window.is_active() {
-                        window.set_needs_display();
-                    }
-                }
-                WindowMessage::Char(c) => {
-                    match c {
-                        '\x08' => sb.backspace(),
-                        '\x0D' => sb.clear(),
-                        _ => {
-                            let _ = sb.write_char(c);
-                        }
-                    }
-                    window.set_needs_display();
-                }
-                WindowMessage::Draw => {
-                    window
-                        .draw(|bitmap| {
-                            let rect = Rect::new(
-                                padding_x,
-                                padding_y,
-                                bitmap.size().width() as isize - padding_x * 2,
-                                font.line_height(),
-                            );
-                            bitmap.fill_rect(rect, bg_color.into());
-                            TextProcessing::write_str(
-                                bitmap,
-                                sb.as_str(),
-                                font,
-                                Point::new(rect.x(), rect.y()),
-                                fg_color.into(),
-                            );
-                            if window.is_active() && cursor_phase == 1 {
-                                bitmap.fill_rect(
-                                    Rect::new(
-                                        rect.x() + font.width_of(' ') * sb.len() as isize,
-                                        rect.y(),
-                                        font.width_of(' '),
-                                        font.line_height(),
-                                    ),
-                                    fg_color,
-                                );
-                            }
-                        })
-                        .unwrap();
-                }
-                _ => window.handle_default_message(message),
-            }
-        }
-        unimplemented!()
     }
 
     #[allow(dead_code)]

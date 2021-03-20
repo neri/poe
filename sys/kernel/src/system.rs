@@ -1,9 +1,9 @@
 // A Computer System
 
-use crate::drawing::*;
 use crate::fonts::*;
 use crate::io::emcon::*;
 use crate::*;
+use crate::{drawing::*, mem::MemoryManager};
 use arch::cpu::Cpu;
 use core::fmt;
 use toeboot::*;
@@ -82,7 +82,7 @@ impl System {
     const fn new() -> Self {
         Self {
             main_screen: None,
-            em_console: EmConsole::new(),
+            em_console: EmConsole::new(FontManager::fixed_system_font()),
             platform: Platform::Unknown,
             cpu_ver: CpuVersion::UNSPECIFIED,
         }
@@ -115,7 +115,7 @@ impl System {
             }
         };
 
-        mem::MemoryManager::init(&info);
+        mem::MemoryManager::init_first(&info);
         arch::Arch::init();
 
         task::scheduler::Scheduler::start(Self::late_init, f as usize);
@@ -123,6 +123,7 @@ impl System {
 
     fn late_init(f: usize) {
         unsafe {
+            MemoryManager::late_init();
             FontManager::init();
             window::WindowManager::init();
             io::hid::HidManager::init();
@@ -189,12 +190,6 @@ impl System {
     pub fn main_screen() -> Bitmap<'static> {
         let shared = Self::shared();
         shared.main_screen.as_mut().unwrap().as_bitmap()
-    }
-
-    #[inline]
-    pub const fn em_console_font() -> &'static FixedFontDriver<'static> {
-        // FontManager::fixed_system_font()
-        FontManager::fixed_small_font()
     }
 
     /// Get emergency console

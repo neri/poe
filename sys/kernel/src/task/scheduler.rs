@@ -213,9 +213,41 @@ impl Scheduler {
             Cpu::without_interrupts(|| {
                 let shared = Self::shared();
                 Self::process_timer_event();
-                if shared.current.as_ref().priority != Priority::Realtime {
-                    if shared.current.update(|current| current.quantum.consume()) {
-                        Self::switch_context();
+                let current = shared.current;
+                current.update_statistics();
+                let priority = current.as_ref().priority;
+                if priority == Priority::Realtime {
+                    return;
+                }
+                if let Some(next) = shared.queue_realtime.dequeue() {
+                    Self::switch_context(next);
+                } else if let Some(next) = if priority < Priority::High {
+                    shared.queue_higher.dequeue()
+                } else {
+                    None
+                } {
+                    Self::switch_context(next);
+                } else if let Some(next) = if priority < Priority::Normal {
+                    shared.queue_normal.dequeue()
+                } else {
+                    None
+                } {
+                    Self::switch_context(next);
+                } else if let Some(next) = if priority < Priority::Low {
+                    shared.queue_lower.dequeue()
+                } else {
+                    None
+                } {
+                    Self::switch_context(next);
+                } else if current.update(|current| current.quantum.consume()) {
+                    if let Some(next) = match priority {
+                        Priority::Idle => None,
+                        Priority::Low => shared.queue_lower.dequeue(),
+                        Priority::Normal => shared.queue_normal.dequeue(),
+                        Priority::High => shared.queue_higher.dequeue(),
+                        Priority::Realtime => None,
+                    } {
+                        Self::switch_context(next);
                     }
                 }
             })
@@ -227,14 +259,21 @@ impl Scheduler {
             Cpu::without_interrupts(|| {
                 let shared = Self::shared();
                 let current = shared.current;
+                current.update_statistics();
                 current.as_ref().attribute.insert(ThreadAttributes::ASLEEP);
-                Self::switch_context();
+                Self::switch_context(Self::next());
             })
         }
     }
 
     pub fn yield_thread() {
-        unsafe { Cpu::without_interrupts(|| Self::switch_context()) }
+        unsafe {
+            Cpu::without_interrupts(|| {
+                let shared = Self::shared();
+                shared.current.update_statistics();
+                Self::switch_context(Self::next());
+            })
+        }
     }
 
     /// Spawning asynchronous tasks
@@ -261,24 +300,22 @@ impl Scheduler {
     }
 
     /// Get the next executable thread from the thread queue
-    fn next() -> Option<ThreadHandle> {
+    fn next() -> ThreadHandle {
         let shared = Self::shared();
         // if shared.is_frozen.load(Ordering::SeqCst) {
         //     return None;
         // }
         if let Some(next) = shared.queue_realtime.dequeue() {
-            return Some(next);
+            next
+        } else if let Some(next) = shared.queue_higher.dequeue() {
+            next
+        } else if let Some(next) = shared.queue_normal.dequeue() {
+            next
+        } else if let Some(next) = shared.queue_lower.dequeue() {
+            next
+        } else {
+            shared.idle
         }
-        if let Some(next) = shared.queue_higher.dequeue() {
-            return Some(next);
-        }
-        if let Some(next) = shared.queue_normal.dequeue() {
-            return Some(next);
-        }
-        if let Some(next) = shared.queue_lower.dequeue() {
-            return Some(next);
-        }
-        None
     }
 
     fn enqueue(&mut self, handle: ThreadHandle) {
@@ -358,19 +395,11 @@ impl Scheduler {
     }
 
     #[track_caller]
-    unsafe fn switch_context() {
+    unsafe fn switch_context(next: ThreadHandle) {
         Cpu::assert_without_interrupt();
 
         let shared = Self::shared();
         let current = shared.current;
-        let next = Self::next().unwrap_or(shared.idle);
-        current.update(|thread| {
-            let now = Timer::measure().0;
-            let diff = now - thread.measure.load(Ordering::SeqCst);
-            thread.cpu_time.fetch_add(diff, Ordering::SeqCst);
-            thread.load0.fetch_add(diff as u32, Ordering::SeqCst);
-            thread.measure.store(now, Ordering::SeqCst);
-        });
         if current == next {
             return;
         }
@@ -768,6 +797,16 @@ impl ThreadHandle {
     //     self.get().map(|t| t.sem.wait());
     //     0
     // }
+
+    fn update_statistics(&self) {
+        self.update(|thread| {
+            let now = Timer::measure().0;
+            let then = thread.measure.swap(now, Ordering::SeqCst);
+            let diff = now - then;
+            thread.cpu_time.fetch_add(diff, Ordering::SeqCst);
+            thread.load0.fetch_add(diff as u32, Ordering::SeqCst);
+        });
+    }
 }
 
 #[repr(u8)]
