@@ -1,16 +1,10 @@
 // A Window System
 
-use crate::arch::cpu::Cpu;
-use crate::drawing::*;
-use crate::fonts::*;
-use crate::sync::atomicflags::AtomicBitflags;
-use crate::sync::fifo::*;
-use crate::sync::semaphore::*;
-use crate::task::scheduler::*;
-use crate::task::AtomicWaker;
-use crate::util::text::*;
-use crate::*;
-use crate::{io::hid::*, system::System};
+use crate::{
+    arch::cpu::Cpu, drawing::*, fonts::*, io::hid::*, sync::atomicflags::AtomicBitflags,
+    sync::fifo::*, sync::semaphore::*, system::System, task::scheduler::*, task::AtomicWaker,
+    util::text::*, *,
+};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::sync::Arc;
@@ -1237,6 +1231,7 @@ impl WindowBuilder {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BitmapStrategy {
     NonBitmap,
     Native,
@@ -1453,6 +1448,7 @@ impl WindowHandle {
         })
     }
 
+    #[inline]
     pub fn draw_in_rect<F>(&self, rect: Rect, f: F) -> Result<(), WindowDrawingError>
     where
         F: FnOnce(&mut Bitmap) -> (),
@@ -1461,6 +1457,7 @@ impl WindowHandle {
     }
 
     /// Draws the contents of the window on the screen as a bitmap.
+    #[inline]
     pub fn draw_into(&self, target_bitmap: &mut Bitmap, rect: Rect) {
         self.as_ref().draw_into(target_bitmap, rect);
     }
@@ -1562,17 +1559,8 @@ impl WindowHandle {
 
     /// Create a timer associated with a window
     pub fn create_timer(&self, timer_id: usize, duration: Duration) {
-        let mut event = TimerEvent::window(*self, timer_id, Timer::new(duration));
-        loop {
-            if event.until() {
-                match Scheduler::schedule_timer(event) {
-                    Ok(()) => break,
-                    Err(e) => event = e,
-                }
-            } else {
-                break event.fire();
-            }
-        }
+        let event = TimerEvent::window(*self, timer_id, Timer::new(duration));
+        let _ = Scheduler::schedule_timer(event);
     }
 }
 

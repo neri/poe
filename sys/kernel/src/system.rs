@@ -74,6 +74,8 @@ pub struct System {
     em_console: EmConsole,
     platform: Platform,
     cpu_ver: CpuVersion,
+    initrd_base: usize,
+    initrd_size: usize,
 }
 
 static mut SYSTEM: System = System::new();
@@ -85,6 +87,8 @@ impl System {
             em_console: EmConsole::new(FontManager::fixed_system_font()),
             platform: Platform::Unknown,
             cpu_ver: CpuVersion::UNSPECIFIED,
+            initrd_base: 0,
+            initrd_size: 0,
         }
     }
 
@@ -93,29 +97,31 @@ impl System {
         let shared = Self::shared();
         shared.platform = info.platform;
         shared.cpu_ver = info.cpu_ver;
+        shared.initrd_base = info.initrd_base as usize;
+        shared.initrd_size = info.initrd_size as usize;
         // shared.acpi_rsdptr = info.acpi_rsdptr as usize;
 
         shared.main_screen = match info.screen_bpp {
-            32 => {
-                let size = Size::new(info.screen_width as isize, info.screen_height as isize);
-                let stride = info.screen_stride as usize;
-                let screen =
-                    Bitmap32::from_static(info.vram_base as usize as *mut TrueColor, size, stride);
-                Some(screen.into())
-            }
-            _ => {
-                let size = Size::new(info.screen_width as isize, info.screen_height as isize);
-                let stride = info.screen_stride as usize;
-                let screen = Bitmap8::from_static(
+            32 => Some(
+                Bitmap32::from_static(
+                    info.vram_base as usize as *mut TrueColor,
+                    Size::new(info.screen_width as isize, info.screen_height as isize),
+                    info.screen_stride as usize,
+                )
+                .into(),
+            ),
+            _ => Some(
+                Bitmap8::from_static(
                     info.vram_base as usize as *mut IndexedColor,
-                    size,
-                    stride,
-                );
-                Some(screen.into())
-            }
+                    Size::new(info.screen_width as isize, info.screen_height as isize),
+                    info.screen_stride as usize,
+                )
+                .into(),
+            ),
         };
 
         mem::MemoryManager::init_first(&info);
+
         arch::Arch::init();
 
         task::scheduler::Scheduler::start(Self::late_init, f as usize);
@@ -124,9 +130,12 @@ impl System {
     fn late_init(f: usize) {
         unsafe {
             MemoryManager::late_init();
+
             FontManager::init();
             window::WindowManager::init();
+
             io::hid::HidManager::init();
+
             arch::Arch::late_init();
 
             let f: fn() -> () = core::mem::transmute(f);

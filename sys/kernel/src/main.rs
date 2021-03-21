@@ -30,7 +30,7 @@ impl Shell {
     }
 
     fn main() {
-        WindowManager::set_desktop_color(TrueColor::from_rgb(0x2196F3).into());
+        WindowManager::set_desktop_color(AmbiguousColor::from_rgb(0x2196F3));
         WindowManager::set_pointer_visible(true);
         // Timer::sleep(Duration::from_millis(100));
 

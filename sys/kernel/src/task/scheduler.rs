@@ -2,13 +2,14 @@
 
 use super::executor::Executor;
 use super::*;
-use crate::arch::cpu::{Cpu, CpuContextData};
-use crate::mem::string::StringBuffer;
-use crate::sync::atomicflags::AtomicBitflags;
-use crate::sync::fifo::*;
-use crate::sync::semaphore::Semaphore;
-use crate::window::*;
-use alloc::boxed::Box;
+use crate::{
+    arch::cpu::{Cpu, CpuContextData},
+    mem::string::StringBuffer,
+    sync::atomicflags::AtomicBitflags,
+    sync::fifo::*,
+    sync::semaphore::Semaphore,
+    window::*,
+};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::*;
@@ -212,7 +213,7 @@ impl Scheduler {
         if Self::is_enabled() {
             Cpu::without_interrupts(|| {
                 let shared = Self::shared();
-                Self::process_timer_event();
+                Self::process_timer_events();
                 let current = shared.current;
                 current.update_statistics();
                 let priority = current.as_ref().priority;
@@ -376,7 +377,7 @@ impl Scheduler {
         }
     }
 
-    unsafe fn process_timer_event() {
+    unsafe fn process_timer_events() {
         Cpu::assert_without_interrupt();
 
         let shared = Self::shared();
@@ -557,15 +558,10 @@ impl SpawnOption {
 static mut TIMER_SOURCE: Option<&'static dyn TimerSource> = None;
 
 pub trait TimerSource {
-    /// Create timer object from duration
-    fn create(&self, duration: TimeSpec) -> TimeSpec;
-
-    /// Is that a timer before the deadline?
-    fn until(&self, deadline: TimeSpec) -> bool;
-
     fn measure(&self) -> TimeSpec;
 
     fn from_duration(&self, val: Duration) -> TimeSpec;
+
     fn to_duration(&self, val: TimeSpec) -> Duration;
 }
 
@@ -581,9 +577,16 @@ impl Timer {
 
     #[inline]
     pub fn new(duration: Duration) -> Self {
-        let timer = unsafe { TIMER_SOURCE.as_ref().unwrap() };
+        let timer = Self::timer_source();
         Timer {
-            deadline: timer.create(duration.into()),
+            deadline: timer.measure() + duration.into(),
+        }
+    }
+
+    pub fn epsilon() -> Self {
+        let timer = Self::timer_source();
+        Timer {
+            deadline: timer.measure() + TimeSpec::EPSILON,
         }
     }
 
@@ -597,8 +600,18 @@ impl Timer {
         if self.is_just() {
             false
         } else {
-            let timer = unsafe { TIMER_SOURCE.as_ref().unwrap() };
-            timer.until(self.deadline)
+            let timer = Self::timer_source();
+            self.deadline > timer.measure()
+        }
+    }
+
+    #[inline]
+    pub fn repeat_until<F>(&self, mut f: F)
+    where
+        F: FnMut(),
+    {
+        while self.until() {
+            f()
         }
     }
 
@@ -607,23 +620,17 @@ impl Timer {
         TIMER_SOURCE = Some(source);
     }
 
+    fn timer_source() -> &'static dyn TimerSource {
+        unsafe { TIMER_SOURCE.unwrap() }
+    }
+
     #[track_caller]
     pub fn sleep(duration: Duration) {
         if Scheduler::is_enabled() {
             let timer = Timer::new(duration);
-            let mut event = TimerEvent::one_shot(timer);
-            while timer.until() {
-                match Scheduler::schedule_timer(event) {
-                    Ok(()) => {
-                        Scheduler::sleep();
-                        return;
-                    }
-                    Err(e) => {
-                        event = e;
-                        Scheduler::yield_thread();
-                    }
-                }
-            }
+            let event = TimerEvent::one_shot(timer);
+            let _ = Scheduler::schedule_timer(event);
+            Scheduler::sleep();
         } else {
             panic!("Scheduler unavailable");
         }
@@ -641,7 +648,7 @@ impl Timer {
 
     #[inline]
     pub fn measure() -> TimeSpec {
-        unsafe { TIMER_SOURCE.as_ref() }.unwrap().measure()
+        Self::timer_source().measure()
     }
 
     #[inline]
@@ -651,18 +658,22 @@ impl Timer {
 
     #[inline]
     fn timespec_to_duration(val: TimeSpec) -> Duration {
-        unsafe { TIMER_SOURCE.as_ref() }.unwrap().to_duration(val)
+        Self::timer_source().to_duration(val)
     }
 
     #[inline]
     fn duration_to_timespec(val: Duration) -> TimeSpec {
-        unsafe { TIMER_SOURCE.as_ref() }.unwrap().from_duration(val)
+        Self::timer_source().from_duration(val)
     }
 }
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimeSpec(pub usize);
+
+impl TimeSpec {
+    pub const EPSILON: Self = Self(1);
+}
 
 impl Add<TimeSpec> for TimeSpec {
     type Output = Self;
@@ -792,11 +803,11 @@ impl ThreadHandle {
         Scheduler::add(*self);
     }
 
-    // #[inline]
-    // pub fn join(&self) -> usize {
-    //     self.get().map(|t| t.sem.wait());
-    //     0
-    // }
+    #[inline]
+    pub fn join(&self) -> usize {
+        self.get().map(|t| t.sem.wait());
+        0
+    }
 
     fn update_statistics(&self) {
         self.update(|thread| {
@@ -989,15 +1000,15 @@ impl RawThread {
     }
 
     fn exit(&mut self) -> ! {
-        // self.sem.signal();
+        self.sem.signal();
         // self.personality.as_mut().map(|v| v.on_exit());
         // self.personality = None;
 
         // TODO:
         Timer::sleep(Duration::from_secs(2));
         self.attribute.insert(ThreadAttributes::ZOMBIE);
-        // MyScheduler::sleep();
-        unreachable!();
+        Scheduler::sleep();
+        unreachable!()
     }
 
     fn set_name_array(array: &mut [u8; THREAD_NAME_LENGTH], name: &str) {

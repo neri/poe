@@ -1,8 +1,7 @@
 // Programmable Interval Timer
 
 use super::{cpu::Cpu, pic::Irq};
-use crate::System;
-use crate::{audio::*, task::scheduler::*};
+use crate::{audio::*, task::scheduler::*, System};
 use core::time::Duration;
 use toeboot::Platform;
 
@@ -98,17 +97,8 @@ impl Pit {
 }
 
 impl TimerSource for Pit {
-    fn create(&self, duration: TimeSpec) -> TimeSpec {
-        self.measure() + duration
-    }
-
-    fn until(&self, deadline: TimeSpec) -> bool {
-        deadline > self.measure()
-    }
-
     fn measure(&self) -> TimeSpec {
-        let shared = Self::shared();
-        TimeSpec(shared.monotonic as usize)
+        TimeSpec(self.monotonic as usize)
     }
 
     fn from_duration(&self, val: Duration) -> TimeSpec {

@@ -260,13 +260,13 @@ impl Cpu {
     where
         F: FnOnce() -> R,
     {
-        let eax: u32;
+        let r0: u32;
         asm!("
             pushfd
             cli
             pop {0}
-            ", out(reg) eax);
-        let flags = Eflags::from_bits_unchecked(eax);
+            ", out(reg) r0);
+        let flags = Eflags::from_bits_unchecked(r0);
 
         let result = f();
 
