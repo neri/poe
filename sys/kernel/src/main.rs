@@ -10,9 +10,9 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
-    arch::cpu::Cpu, drawing::*, fonts::FontManager, fonts::*, io::tty::*, mem::string::*,
-    mem::MemoryManager, system::System, task::scheduler::*, task::*, util::text::*,
-    window::terminal::Terminal, window::*, *,
+    arch::cpu::Cpu, drawing::*, fonts::*, io::tty::*, mem::string::*, mem::MemoryManager,
+    system::System, task::scheduler::*, task::*, util::text::*, window::terminal::Terminal,
+    window::*, *,
 };
 
 extern crate alloc;
@@ -73,7 +73,7 @@ impl Shell {
 
         loop {
             write!(stdout, "# ").unwrap();
-            if let Some(cmdline) = stdout.read_line_async(120).await {
+            if let Ok(cmdline) = stdout.read_line_async(120).await {
                 if cmdline.len() > 0 {
                     match &*cmdline {
                         // "test" => {

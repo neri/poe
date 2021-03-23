@@ -30,7 +30,7 @@ A hobby OS written in Rust, currently a subset of MYOS.
 | Paging              | Partial           | Never                         |
 | Segmentation        | 32bit App Only    | ???                           |
 | Boot mode           | UEFI              | Legacy BIOS                   |
-| Max processors      | 64                | Single                        |
+| Max processor cores | 64                | Single                        |
 | Color Mode          | 32bit ARGB(8888)  | 8bit Indexed / 32bit RGB(888) |
 | Transparency method | Alpha blending    | Chroma Keying                 |
 | App Runtime         | WASM, Haribote OS | WASM?                         |

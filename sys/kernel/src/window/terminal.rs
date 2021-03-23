@@ -6,27 +6,29 @@ use crate::{
 };
 use alloc::boxed::Box;
 // use alloc::sync::Arc;
-use core::fmt::Write;
-use core::future::Future;
-use core::pin::Pin;
-use core::task::{Context, Poll};
+use core::{
+    fmt::Write,
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 const DEFAULT_INSETS: EdgeInsets = EdgeInsets::new(4, 4, 4, 4);
-const DEFAULT_ATTRIBUTE: u8 = 0xF0;
+const DEFAULT_ATTRIBUTE: u8 = 0x0F;
 
 static mut TA: TerminalAgent = TerminalAgent::new();
 
 pub struct TerminalAgent {
-    n_instances: usize,
+    next_instance: usize,
 }
 
 impl TerminalAgent {
     const fn new() -> Self {
-        Self { n_instances: 0 }
+        Self { next_instance: 0 }
     }
 
     // pub(crate) unsafe fn init() {
-    //     SpawnOption::new().spawn(Self::console_thread, 0, "TerminalAgent");
+    //     SpawnOption::new().spawn(Self::terminal_thread, 0, "TerminalAgent");
     // }
 
     fn shared<'a>() -> &'a mut Self {
@@ -35,18 +37,18 @@ impl TerminalAgent {
 
     fn next_instance() -> usize {
         let shared = Self::shared();
-        let r = shared.n_instances;
-        shared.n_instances = r + 1;
+        let r = shared.next_instance;
+        shared.next_instance = r + 1;
         r
     }
 
-    // fn console_thread(_: usize) {
+    // fn terminal_thread(_: usize) {
     //     let shared = Self::shared();
-    //     Scheduler::spawn_async(Task::new(Self::console_manager()));
+    //     Scheduler::spawn_async(Task::new(Self::terminal_agent()));
     //     Scheduler::perform_tasks();
     // }
 
-    // async fn console_manager() {
+    // async fn terminal_agent() {
     //     loop {
     //         //
     //     }
@@ -238,7 +240,7 @@ impl TtyRead for Terminal {
     fn read_async(
         &self,
     ) -> core::pin::Pin<Box<dyn core::future::Future<Output = TtyReadResult> + '_>> {
-        Box::pin(ConsoleReader {
+        Box::pin(TerminalReader {
             window: self.window,
         })
     }
@@ -299,11 +301,11 @@ impl TtyWrite for Terminal {
 
 impl Tty for Terminal {}
 
-struct ConsoleReader {
+struct TerminalReader {
     window: WindowHandle,
 }
 
-impl Future for ConsoleReader {
+impl Future for TerminalReader {
     type Output = TtyReadResult;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

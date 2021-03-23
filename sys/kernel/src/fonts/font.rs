@@ -10,15 +10,21 @@ const SYSTEM_FONT: FixedFontDriver = FixedFontDriver::new(8, 16, &FONT_MEGH0816_
 include!("megh0608.rs");
 const SMALL_FONT: FixedFontDriver = FixedFontDriver::new(6, 8, &FONT_MEGH0608_DATA, None);
 
-include!("megmsgr2.rs");
+include!("megmsgr.rs");
 const SYSTEM_UI_FONT: FixedFontDriver =
-    FixedFontDriver::new(8, 12, &FONT_MEGMSGR2_DATA, Some(SYSTEM_UI_WIDTH_TABLE));
+    FixedFontDriver::new(8, 10, &FONT_MEGMSGR_DATA, Some(SYSTEM_UI_WIDTH_TABLE));
+// include!("megmsgr2.rs");
+// const SYSTEM_UI_FONT: FixedFontDriver =
+//     FixedFontDriver::new(8, 12, &FONT_MEGMSGR2_DATA, Some(SYSTEM_UI_WIDTH_TABLE));
 
 const SYSTEM_UI_WIDTH_TABLE: [u8; 96] = [
-    6, 4, 6, 7, 6, 7, 7, 3, 4, 4, 6, 6, 3, 6, 3, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 6, 5, 6,
-    7, 7, 7, 7, 7, 6, 6, 7, 7, 4, 6, 7, 6, 8, 7, 7, 7, 7, 7, 7, 6, 7, 6, 8, 7, 6, 7, 4, 5, 4, 7, 6,
-    3, 6, 6, 6, 6, 6, 5, 6, 6, 5, 5, 6, 5, 8, 6, 6, 6, 6, 5, 6, 5, 6, 6, 8, 6, 6, 6, 4, 2, 4, 6, 6,
+    6, 4, 6, 7, 6, 7, 7, 6, 4, 4, 6, 6, 6, 6, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 6, 6, 6, 6,
+    7, 7, 7, 7, 7, 7, 6, 7, 7, 4, 6, 7, 6, 8, 7, 7, 7, 7, 7, 7, 6, 7, 6, 8, 7, 6, 7, 4, 5, 4, 7, 6,
+    6, 6, 6, 6, 6, 6, 5, 6, 6, 5, 5, 6, 5, 8, 6, 6, 6, 6, 5, 6, 5, 6, 6, 8, 6, 6, 6, 5, 2, 5, 6, 6,
 ];
+// 6, 4, 6, 7, 6, 7, 7, 3, 4, 4, 6, 6, 3, 6, 3, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 6, 5, 6,
+// 7, 7, 7, 7, 7, 6, 6, 7, 7, 4, 6, 7, 6, 8, 7, 7, 7, 7, 7, 7, 6, 7, 6, 8, 7, 6, 7, 4, 5, 4, 7, 6,
+// 3, 6, 6, 6, 6, 6, 5, 6, 6, 5, 5, 6, 5, 8, 6, 6, 6, 6, 5, 6, 5, 6, 6, 8, 6, 6, 6, 4, 2, 4, 6, 6,
 
 static mut FONT_MANAGER: FontManager = FontManager::new();
 
@@ -60,11 +66,6 @@ impl FontManager {
     #[inline]
     pub const fn fixed_system_font() -> &'static FixedFontDriver<'static> {
         &SYSTEM_FONT
-    }
-
-    #[inline]
-    pub const fn fixed_ui_font() -> &'static FixedFontDriver<'static> {
-        &SYSTEM_UI_FONT
     }
 
     #[inline]

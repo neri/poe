@@ -1,10 +1,14 @@
 // A Computer System
 
-use crate::fonts::*;
-use crate::io::emcon::*;
-use crate::*;
-use crate::{drawing::*, mem::MemoryManager};
-use arch::cpu::Cpu;
+use crate::{
+    arch::cpu::Cpu,
+    drawing::*,
+    fonts::*,
+    io::emcon::*,
+    io::{null::Null, tty::Tty},
+    mem::MemoryManager,
+    *,
+};
 use core::fmt;
 use toeboot::*;
 
@@ -208,8 +212,13 @@ impl System {
     }
 
     /// Get standard output
-    pub fn stdout<'a>() -> &'a mut dyn Write {
-        Self::em_console()
+    pub fn stdout<'a>() -> &'a mut dyn Tty {
+        Null::null()
+    }
+
+    /// Get standard input
+    pub fn stdin<'a>() -> &'a mut dyn Tty {
+        Null::null()
     }
 
     // TODO:
