@@ -12,6 +12,8 @@
 %define KERNEL_DS           0x18
 %define STACK_SIZE          0x1000
 
+%define BEEF_MAGIC          0xBEEF
+%define CEEF_SKIP           16
 %define CEEF_MAGIC          0xCEEF
 %define CEEF_OFF_SECHDR     0x10
 %define CEEF_SIZE_SECHDR    0x10
@@ -280,8 +282,12 @@ _end_mem_check:
 .mem_ok:
 
     ;; kernel signature check
-    cmp word [es:_END - _HEAD], CEEF_MAGIC
+    lea bx, [_END - _HEAD]
+    cmp word [es:bx], BEEF_MAGIC
+    jnz .bad_magic
+    cmp word [es:bx + CEEF_SKIP], CEEF_MAGIC
     jz .kernel_ok
+.bad_magic:
     mov si, bad_kernel_mes
     call _puts
     jmp forever
@@ -618,6 +624,19 @@ _next32:
     xor eax, eax
     rep stosd
 
+    mov ecx, [ebp + 0x0C]
+    mov edi, [_memsz_mid]
+    add esi, [_kernel_end]
+    sub edi, ecx
+    and edi, 0xFFFFF000
+    mov esi, ebp
+    mov [_initrd_base], edi
+    mov [_initrd_size], ecx
+    shr ecx, 2
+    rep movsd
+
+    mov ebp, [_initrd_base]
+    add ebp, CEEF_SKIP
     mov edi, [ebp + CEEF_BASE]
     mov ecx, [ebp + CEEF_MINALLOC]
     xor al, al

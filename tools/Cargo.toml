@@ -2,6 +2,7 @@
 members = [
   "elf2ceef",
   "mkfdfs",
+  "mkinitrd",
 ]
 
 [profile.release]

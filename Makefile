@@ -5,7 +5,8 @@ TEMP		= temp/
 BOOT_IMG	= $(BIN)boot.img
 IPLS		= $(BIN)fdboot.bin $(BIN)cdboot.bin $(BIN)fmcdboot.bin
 KERNEL_LD	= sys/target/i586-unknown-linux-gnu/release/kernel
-KERNEL_BIN	= $(BIN)kernel.bin
+KERNEL_CEF	= $(BIN)kernel.ceef
+INITRD_IMG	= $(BIN)initrd.img
 KERNEL_SYS	= $(BIN)kernel.sys
 TARGETS		= $(IPLS) $(KERNEL_SYS)
 ISO_SRC		= $(TEMP)iso
@@ -40,10 +41,13 @@ $(BIN)loader.bin: boot/loader.asm
 $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs
 	(cd sys; cargo build -Zbuild-std --release)
 
-$(KERNEL_BIN): tools/elf2ceef/src/*.rs $(KERNEL_LD)
-	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_BIN)
+$(KERNEL_CEF): tools/elf2ceef/src/*.rs $(KERNEL_LD)
+	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_CEF)
 
-$(KERNEL_SYS): $(BIN)loader.bin $(KERNEL_BIN)
+$(INITRD_IMG): tools/mkinitrd/src/*.rs $(KERNEL_CEF)
+	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(KERNEL_CEF)
+
+$(KERNEL_SYS): $(BIN)loader.bin $(INITRD_IMG)
 	cat $^ > $@
 
 $(BOOT_IMG): install

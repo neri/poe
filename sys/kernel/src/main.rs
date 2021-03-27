@@ -97,7 +97,6 @@ impl Shell {
 
         let window = WindowBuilder::new("Activity Monitor")
             .style_add(WindowStyle::PINCHABLE)
-            // .style_add(WindowStyle::FLOATING)
             .frame(Rect::new(
                 -window_size.width - 8,
                 -window_size.height - 8,

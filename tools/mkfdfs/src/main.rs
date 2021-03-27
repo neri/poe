@@ -21,15 +21,18 @@ fn main() {
     let _ = args.next().unwrap();
 
     let mut volume_label = None;
-    let mut path_image = None;
     let mut current_bpb = None;
     let mut path_bootsector = None;
-    let mut root_dir = Vec::new();
+    let mut path_output = None;
 
     while let Some(arg) = args.next() {
         let arg = arg.as_str();
         if arg.chars().next().unwrap_or_default() == '-' {
             match arg {
+                "--" => {
+                    path_output = args.next();
+                    break;
+                }
                 "-bs" => {
                     path_bootsector = Some(args.next().expect("needs boot sector file name"));
                 }
@@ -44,17 +47,15 @@ fn main() {
                 "-l" => {
                     volume_label = Some(args.next().expect("needs volume label"));
                 }
-                _ => {
-                    panic!("unknown option: {}", arg);
-                }
+                _ => panic!("unknown option: {}", arg),
             }
         } else {
-            path_image = Some(arg.to_owned());
+            path_output = Some(arg.to_owned());
             break;
         }
     }
 
-    let path_image = match path_image {
+    let path_output = match path_output {
         Some(v) => v,
         None => usage(),
     };
@@ -71,6 +72,8 @@ fn main() {
     if let Some(bpb) = current_bpb {
         boot_sector.ebpb.bpb = bpb;
     }
+
+    let mut root_dir = Vec::new();
 
     if let Some(volume_label) = volume_label {
         let dir_ent =
@@ -127,7 +130,7 @@ fn main() {
     }
 
     fs.flush(&mut vd).unwrap();
-    let mut os = File::create(path_image).unwrap();
+    let mut os = File::create(path_output).unwrap();
     vd.flush(&mut os).unwrap();
 }
 

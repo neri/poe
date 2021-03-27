@@ -27,3 +27,10 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
 ]
+
+[[package]]
+name = "mkinitrd"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+]
