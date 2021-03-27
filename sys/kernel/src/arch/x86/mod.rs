@@ -8,9 +8,9 @@ pub mod pit;
 pub mod ps2;
 pub mod rtc;
 
-use crate::drawing::IndexedColor;
 use crate::system::{System, SystemTime};
 use cpu::Cpu;
+use megstd::drawing::IndexedColor;
 use toeboot::Platform;
 
 pub(crate) struct Arch;

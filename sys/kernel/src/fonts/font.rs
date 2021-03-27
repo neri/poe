@@ -1,8 +1,8 @@
 // Fonts
 
-use crate::drawing::*;
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
+use megstd::drawing::*;
 
 include!("megh0816.rs");
 const SYSTEM_FONT: FixedFontDriver = FixedFontDriver::new(8, 16, &FONT_MEGH0816_DATA, None);

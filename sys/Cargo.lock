@@ -13,7 +13,15 @@ name = "kernel"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "megstd",
  "toeboot",
+]
+
+[[package]]
+name = "megstd"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
 ]
 
 [[package]]

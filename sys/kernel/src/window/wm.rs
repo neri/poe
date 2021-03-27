@@ -1,9 +1,8 @@
 // A Window System
 
 use crate::{
-    arch::cpu::Cpu, drawing::*, fonts::*, io::hid::*, sync::atomicflags::AtomicBitflags,
-    sync::fifo::*, sync::semaphore::*, system::System, task::scheduler::*, task::AtomicWaker,
-    util::text::*, *,
+    arch::cpu::Cpu, fonts::*, io::hid::*, sync::atomicflags::AtomicBitflags, sync::fifo::*,
+    sync::semaphore::*, system::System, task::scheduler::*, task::AtomicWaker, util::text::*, *,
 };
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
@@ -18,6 +17,7 @@ use core::pin::Pin;
 use core::sync::atomic::*;
 use core::task::{Context, Poll};
 use core::time::Duration;
+use megstd::drawing::*;
 
 // use core::fmt::Write;
 
@@ -923,7 +923,7 @@ impl RawWindow<'_> {
                             - cmp::max(coords1.top, coords2.top),
                     );
 
-                    if let Some(bitmap) = window.bitmap() {
+                    if let Some(bitmap) = window.bitmap_const() {
                         if window.style.contains(WindowStyle::TRANSPARENT) {
                             target_bitmap.blt_transparent(
                                 &bitmap,
@@ -932,7 +932,7 @@ impl RawWindow<'_> {
                                 window.key_color,
                             );
                         } else {
-                            target_bitmap.blt(&bitmap, blt_origin, blt_rect);
+                            target_bitmap.blt(bitmap.as_ref(), blt_origin, blt_rect);
                         }
                     } else {
                         target_bitmap.fill_rect(blt_rect, window.bg_color.into());
@@ -998,6 +998,14 @@ impl<'a> RawWindow<'a> {
             .as_ref()
             .and_then(|v| unsafe { v.get().as_mut() })
             .map(|v| v.as_bitmap())
+    }
+
+    #[inline]
+    fn bitmap_const(&self) -> Option<ConstBitmap<'a>> {
+        self.bitmap
+            .as_ref()
+            .and_then(|v| unsafe { v.get().as_ref() })
+            .map(|v| v.as_const())
     }
 
     fn title<'b>(&self) -> Option<&'b str> {

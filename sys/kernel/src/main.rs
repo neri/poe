@@ -10,10 +10,10 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
-    arch::cpu::Cpu, drawing::*, fonts::*, io::tty::*, mem::string::*, mem::MemoryManager,
-    system::System, task::scheduler::*, task::*, util::text::*, window::terminal::Terminal,
-    window::*, *,
+    arch::cpu::Cpu, fonts::*, io::tty::*, mem::string::*, mem::MemoryManager, system::System,
+    task::scheduler::*, task::*, util::text::*, window::terminal::Terminal, window::*, *,
 };
+use megstd::drawing::*;
 
 extern crate alloc;
 

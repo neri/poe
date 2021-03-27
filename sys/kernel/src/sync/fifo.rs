@@ -46,6 +46,7 @@ where
         self.head.load(Ordering::SeqCst) == self.tail.load(Ordering::SeqCst)
     }
 
+    /// SAFETY: Thread unsafe
     pub unsafe fn enqueue(&self, data: T) -> Result<(), T> {
         let old_tail = self.tail.load(Ordering::SeqCst);
         let new_tail = (old_tail + 1) & self.mask();
@@ -59,6 +60,7 @@ where
         }
     }
 
+    /// SAFETY: Thread unsafe
     pub unsafe fn dequeue(&self) -> Option<T> {
         if self.is_empty() {
             None

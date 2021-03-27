@@ -2,7 +2,7 @@
 
 use alloc::boxed::Box;
 use alloc::string::String;
-use alloc::vec::*;
+use alloc::vec::Vec;
 use core::fmt::Write;
 use core::future::Future;
 use core::pin::Pin;

@@ -38,7 +38,7 @@ $(BIN)fmcdboot.bin: boot/fmcdboot.asm
 $(BIN)loader.bin: boot/loader.asm
 	nasm -f bin -I boot $< -o $@
 
-$(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs
+$(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs lib/megstd/src/*.rs lib/megstd/src/**/*.rs
 	(cd sys; cargo build -Zbuild-std --release)
 
 $(KERNEL_CEF): tools/elf2ceef/src/*.rs $(KERNEL_LD)

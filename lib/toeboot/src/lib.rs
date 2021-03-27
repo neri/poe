@@ -26,7 +26,6 @@ pub struct BootInfo {
 
     pub acpi_rsdptr: u32,
 
-    /// TODO: initrd
     pub initrd_base: u32,
     pub initrd_size: u32,
 

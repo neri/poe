@@ -41,6 +41,7 @@ fn main() {
     };
 
     let mut fs = InitRamfs::new();
+    println!("CREATING archive: {}", path_output);
 
     for arg in args {
         let path = Path::new(&arg);

@@ -2,7 +2,6 @@
 
 use crate::{
     arch::cpu::Cpu,
-    drawing::*,
     fonts::*,
     io::emcon::*,
     io::{null::Null, tty::Tty},
@@ -10,6 +9,7 @@ use crate::{
     *,
 };
 use core::fmt;
+use megstd::drawing::*;
 use toeboot::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -134,6 +134,10 @@ impl System {
     fn late_init(f: usize) {
         unsafe {
             MemoryManager::late_init();
+
+            let shared = Self::shared();
+            let _ = shared.initrd_base;
+            let _ = shared.initrd_size;
 
             FontManager::init();
             window::WindowManager::init();

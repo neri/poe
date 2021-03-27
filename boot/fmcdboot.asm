@@ -156,11 +156,9 @@ _readerror:
     mov si, disk_error_msg
     call _puts
 _forever:
-    hlt
-    jmp _forever
-    ; lss sp, [cs:exit_sssp]
-    ; stc
-    ; retf
+    lss sp, [cs:exit_sssp]
+    stc
+    retf
 
 _puts:
     push es
