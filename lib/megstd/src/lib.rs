@@ -6,6 +6,7 @@ mod osstr;
 pub use osstr::*;
 pub mod drawing;
 pub mod error;
+pub mod fs;
 pub mod io;
 pub mod path;
 pub mod sys;

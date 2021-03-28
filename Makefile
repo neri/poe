@@ -2,10 +2,11 @@
 
 BIN			= bin/
 TEMP		= temp/
+MISC		= misc/
 BOOT_IMG	= $(BIN)boot.img
 IPLS		= $(BIN)fdboot.bin $(BIN)cdboot.bin $(BIN)fmcdboot.bin
 KERNEL_LD	= sys/target/i586-unknown-linux-gnu/release/kernel
-KERNEL_CEF	= $(BIN)kernel.ceef
+KERNEL_CEF	= $(BIN)kernel
 INITRD_IMG	= $(BIN)initrd.img
 KERNEL_SYS	= $(BIN)kernel.sys
 TARGETS		= $(IPLS) $(KERNEL_SYS)
@@ -26,16 +27,16 @@ $(BIN):
 $(ISO_SRC):
 	mkdir -p $@
 
-$(BIN)cdboot.bin: boot/cdboot.asm
+$(BIN)cdboot.bin: boot/pc-bios/cdboot.asm
 	nasm -f bin $< -o $@
 
-$(BIN)fdboot.bin: boot/fdboot.asm
+$(BIN)fdboot.bin: boot/pc-bios/fdboot.asm
 	nasm -f bin $< -o $@
 
-$(BIN)fmcdboot.bin: boot/fmcdboot.asm
+$(BIN)fmcdboot.bin: boot/pc-bios/fmcdboot.asm
 	nasm -f bin $< -o $@
 
-$(BIN)loader.bin: boot/loader.asm
+$(BIN)loader.bin: boot/pc-bios/loader.asm
 	nasm -f bin -I boot $< -o $@
 
 $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs lib/megstd/src/*.rs lib/megstd/src/**/*.rs
@@ -44,8 +45,8 @@ $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.
 $(KERNEL_CEF): tools/elf2ceef/src/*.rs $(KERNEL_LD)
 	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_CEF)
 
-$(INITRD_IMG): tools/mkinitrd/src/*.rs $(KERNEL_CEF)
-	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(KERNEL_CEF)
+$(INITRD_IMG): tools/mkinitrd/src/*.rs $(KERNEL_CEF) $(MISC)initrd/*
+	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(KERNEL_CEF) $(MISC)initrd/*
 
 $(KERNEL_SYS): $(BIN)loader.bin $(INITRD_IMG)
 	cat $^ > $@
@@ -57,7 +58,7 @@ install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES)
 
 full: install iso
 	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 1232 $(BIN)boot.hdm $(IMG_SOURCES)
-	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 160 $(BIN)mini.img $(IMG_SOURCES)
+	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 320 $(BIN)mini.img $(IMG_SOURCES)
 
 iso: $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 	cp -r $(BIN)cdboot.bin $(IMG_SOURCES) $(ISO_SRC)

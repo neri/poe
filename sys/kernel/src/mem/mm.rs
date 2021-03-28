@@ -34,7 +34,8 @@ impl MemoryManager {
     pub(crate) unsafe fn init_first(info: &BootInfo) {
         let shared = Self::shared();
 
-        shared.total_memory_size = (info.smap.0 + info.smap.1 + info.initrd_size) as usize;
+        shared.total_memory_size =
+            (info.smap.0 + info.smap.1 + ((info.initrd_size + 0xFFF) & !0xFFF)) as usize;
         shared.pairs[0] = MemFreePair {
             base: info.smap.0 as usize,
             size: info.smap.1 as usize,

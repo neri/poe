@@ -5,7 +5,7 @@ use crate::error;
 use alloc::boxed::Box;
 use core::fmt;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[non_exhaustive]
 pub enum ErrorKind {
     NotFound,

@@ -5,13 +5,13 @@
 #![no_main]
 #![feature(asm)]
 
-// use crate::task::*;
 use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
-    arch::cpu::Cpu, fonts::*, io::tty::*, mem::string::*, mem::MemoryManager, system::System,
-    task::scheduler::*, task::*, util::text::*, window::terminal::Terminal, window::*, *,
+    arch::cpu::Cpu, fonts::*, fs::FileManager, io::tty::*, mem::string::*, mem::MemoryManager,
+    system::System, task::scheduler::*, task::*, util::text::*, window::terminal::Terminal,
+    window::*, *,
 };
 use megstd::drawing::*;
 
@@ -23,6 +23,11 @@ entry!(Shell::main);
 static mut MAIN: Shell = Shell::new();
 
 struct Shell {}
+
+enum ParsedCmdLine {
+    Empty,
+    InvalidQuote,
+}
 
 impl Shell {
     const fn new() -> Self {
@@ -52,7 +57,9 @@ impl Shell {
     async fn repl_main() {
         let mut terminal = Terminal::new(80, 24);
         let stdout = &mut terminal as &mut dyn Tty;
-        writeln!(stdout, "{} v{}", System::name(), System::version(),).unwrap();
+
+        Self::invoke_command(stdout, "ver");
+
         writeln!(stdout, "Platform {}", System::platform(),).unwrap();
         writeln!(stdout, "CPU ver {}", System::cpu_ver().0,).unwrap();
         writeln!(
@@ -74,15 +81,197 @@ impl Shell {
         loop {
             write!(stdout, "# ").unwrap();
             if let Ok(cmdline) = stdout.read_line_async(120).await {
-                if cmdline.len() > 0 {
-                    match &*cmdline {
-                        // "test" => {
-                        //     SpawnOption::new().spawn_f(Self::test_thread, 0, "loop");
-                        // }
-                        _ => writeln!(stdout, "ERROR: {}", cmdline).unwrap(),
+                Self::invoke_command(stdout, &cmdline);
+            }
+        }
+    }
+
+    fn invoke_command(stdout: &mut dyn Tty, cmdline: &str) {
+        match Self::parse_cmd(&cmdline, |cmd, args| match cmd {
+            "clear" | "cls" => stdout.reset().unwrap(),
+            "dir" => Self::cmd_dir(stdout, args),
+            "type" => Self::cmd_type(stdout, args),
+            "echo" => {
+                for (index, word) in args.iter().skip(1).enumerate() {
+                    if index > 0 {
+                        stdout.write_char(' ').unwrap();
+                    }
+                    stdout.write_str(word).unwrap();
+                }
+                stdout.write_str("\r\n").unwrap();
+            }
+            "ver" => {
+                writeln!(stdout, "{} v{}", System::name(), System::version(),).unwrap();
+            }
+            _ => writeln!(stdout, "Error: Command not found: {}", cmd).unwrap(),
+        }) {
+            Ok(_) => {}
+            Err(ParsedCmdLine::Empty) => (),
+            Err(ParsedCmdLine::InvalidQuote) => {
+                writeln!(stdout, "Error: Invalid quote").unwrap();
+            }
+        }
+    }
+
+    fn cmd_dir(stdout: &mut dyn Tty, _args: &[&str]) {
+        let dir = match FileManager::read_dir("/") {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let mut sb = Sb255::new();
+        let sb = &mut sb;
+        for dir_ent in dir {
+            sb.clear();
+            write!(sb, "{:4} {:16}", dir_ent.inode().get(), dir_ent.name(),).unwrap();
+            Self::format_bytes(sb, dir_ent.metadata().unwrap().len() as usize).unwrap();
+            writeln!(stdout, "{}", sb.as_str()).unwrap();
+        }
+    }
+
+    fn cmd_type(stdout: &mut dyn Tty, args: &[&str]) {
+        let len = 1024;
+        let mut sb = Vec::with_capacity(len);
+        sb.resize(len, 0);
+        for path in args.iter().skip(1) {
+            let mut file = match FileManager::open(path) {
+                Ok(v) => v,
+                Err(err) => {
+                    writeln!(stdout, "{:?}", err.kind()).unwrap();
+                    continue;
+                }
+            };
+            loop {
+                match file.read(sb.as_mut_slice()) {
+                    Ok(0) => break,
+                    Ok(size) => {
+                        for b in &sb[..size] {
+                            stdout.write_char(*b as char).unwrap();
+                        }
+                    }
+                    Err(err) => {
+                        writeln!(stdout, "Error: {:?}", err.kind()).unwrap();
+                        break;
                     }
                 }
             }
+            stdout.write_str("\r\n").unwrap();
+        }
+    }
+
+    fn parse_cmd<F, R>(cmdline: &str, f: F) -> Result<R, ParsedCmdLine>
+    where
+        F: FnOnce(&str, &[&str]) -> R,
+    {
+        enum CmdLinePhase {
+            LeadingSpace,
+            Token,
+            SingleQuote,
+            DoubleQuote,
+        }
+
+        if cmdline.len() == 0 {
+            return Err(ParsedCmdLine::Empty);
+        }
+        let mut sb = StringBuffer::with_capacity(cmdline.len());
+        let mut args = Vec::new();
+        let mut phase = CmdLinePhase::LeadingSpace;
+        sb.clear();
+        for c in cmdline.chars() {
+            match phase {
+                CmdLinePhase::LeadingSpace => match c {
+                    ' ' => (),
+                    '\'' => {
+                        phase = CmdLinePhase::SingleQuote;
+                    }
+                    '\"' => {
+                        phase = CmdLinePhase::DoubleQuote;
+                    }
+                    _ => {
+                        sb.write_char(c).unwrap();
+                        phase = CmdLinePhase::Token;
+                    }
+                },
+                CmdLinePhase::Token => match c {
+                    ' ' => {
+                        args.push(sb.as_str());
+                        phase = CmdLinePhase::LeadingSpace;
+                        sb.split();
+                    }
+                    _ => {
+                        sb.write_char(c).unwrap();
+                    }
+                },
+                CmdLinePhase::SingleQuote => match c {
+                    '\'' => {
+                        args.push(sb.as_str());
+                        phase = CmdLinePhase::LeadingSpace;
+                        sb.split();
+                    }
+                    _ => {
+                        sb.write_char(c).unwrap();
+                    }
+                },
+                CmdLinePhase::DoubleQuote => match c {
+                    '\"' => {
+                        args.push(sb.as_str());
+                        phase = CmdLinePhase::LeadingSpace;
+                        sb.split();
+                    }
+                    _ => {
+                        sb.write_char(c).unwrap();
+                    }
+                },
+            }
+        }
+        match phase {
+            CmdLinePhase::LeadingSpace | CmdLinePhase::Token => (),
+            CmdLinePhase::SingleQuote | CmdLinePhase::DoubleQuote => {
+                return Err(ParsedCmdLine::InvalidQuote)
+            }
+        }
+        if sb.len() > 0 {
+            args.push(sb.as_str());
+        }
+        if args.len() > 0 {
+            Ok(f(args[0], args.as_slice()))
+        } else {
+            Err(ParsedCmdLine::Empty)
+        }
+    }
+
+    fn format_bytes(sb: &mut dyn Write, val: usize) -> core::fmt::Result {
+        let kb = (val >> 10) & 0x3FF;
+        let mb = (val >> 20) & 0x3FF;
+        let gb = val >> 30;
+
+        if gb >= 10 {
+            // > 10G
+            write!(sb, "{:4}G", gb)
+        } else if gb >= 1 {
+            // 1G~10G
+            let mb0 = (mb * 100) >> 10;
+            write!(sb, "{}.{:02}G", gb, mb0)
+        } else if mb >= 100 {
+            // 100M~1G
+            write!(sb, "{:4}M", mb)
+        } else if mb >= 10 {
+            // 10M~100M
+            let kb00 = (kb * 10) >> 10;
+            write!(sb, "{:2}.{}M", mb, kb00)
+        } else if mb >= 1 {
+            // 1M~10M
+            let kb0 = (kb * 100) >> 10;
+            write!(sb, "{}.{:02}M", mb, kb0)
+        } else if kb >= 100 {
+            // 100K~1M
+            write!(sb, "{:4}K", kb)
+        } else if kb >= 10 {
+            // 10K~100K
+            let b00 = ((val & 0x3FF) * 10) >> 10;
+            write!(sb, "{:2}.{}K", kb, b00)
+        } else {
+            // 0~10K
+            write!(sb, "{:5}", val)
         }
     }
 
@@ -131,17 +320,20 @@ impl Shell {
                         (254 * usize::min(max_value, max_value - usage) / max_value) as u8;
                     usage_cursor = (usage_cursor + 1) % n_items;
 
-                    writeln!(
-                        sb,
-                        "Memory {} MB, {} KB Free, {} KB Used",
-                        MemoryManager::total_memory_size() >> 20,
-                        MemoryManager::free_memory_size() >> 10,
-                        (MemoryManager::total_memory_size()
+                    write!(sb, "MEM ").unwrap();
+                    Self::format_bytes(&mut sb, MemoryManager::total_memory_size()).unwrap();
+                    write!(sb, "B, ").unwrap();
+                    Self::format_bytes(&mut sb, MemoryManager::free_memory_size()).unwrap();
+                    write!(sb, "B Free, ").unwrap();
+                    Self::format_bytes(
+                        &mut sb,
+                        MemoryManager::total_memory_size()
                             - MemoryManager::free_memory_size()
-                            - 0x100000)
-                            >> 10,
+                            - 0x100000,
                     )
                     .unwrap();
+                    writeln!(sb, "B Used").unwrap();
+
                     Scheduler::print_statistics(&mut sb, true);
 
                     window.set_needs_display();

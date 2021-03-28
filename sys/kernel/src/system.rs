@@ -132,12 +132,11 @@ impl System {
     }
 
     fn late_init(f: usize) {
+        let shared = Self::shared();
         unsafe {
             MemoryManager::late_init();
 
-            let shared = Self::shared();
-            let _ = shared.initrd_base;
-            let _ = shared.initrd_size;
+            fs::FileManager::init(shared.initrd_base, shared.initrd_size);
 
             FontManager::init();
             window::WindowManager::init();

@@ -8,6 +8,8 @@ version = "0.1.0"
 
 [dependencies]
 bitflags = "1.2.1"
+byteorder = {version = "1", default-features = false}
 megstd = {path = "../../lib/megstd/"}
 toeboot = {path = "../../lib/toeboot/"}
+
 # futures-util = {default-features = false, features = ["alloc"], version = "0.3"}

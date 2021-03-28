@@ -625,10 +625,12 @@ _next32:
     rep stosd
 
     mov ecx, [ebp + 0x0C]
-    mov edi, [_memsz_mid]
-    add esi, [_kernel_end]
-    sub edi, ecx
-    and edi, 0xFFFFF000
+    mov edx, [_memsz_mid]
+    mov edi, [_start_mid]
+    sub edx, ecx
+    and edx, 0xFFFFF000
+    mov [_memsz_mid], edx
+    add edi, edx
     mov esi, ebp
     mov [_initrd_base], edi
     mov [_initrd_size], ecx
@@ -646,11 +648,15 @@ _next32:
     and edi, 0xFFFFF000
     lea esp, [edi + STACK_SIZE]
     mov ecx, esp
-    mov eax, [_kernel_end]
+    mov eax, [_start_mid]
+    mov [_kend], ecx
+    cmp eax, ecx
+    jae .skip
+    mov [_start_mid], ecx
     add eax, [_memsz_mid]
-    mov [_kernel_end], ecx
     sub eax, ecx
     mov [_memsz_mid], eax
+.skip:
 
     movzx edx, byte [ebp + CEEF_N_SECS]
     lea ebx, [ebp + CEEF_OFF_SECHDR]
@@ -718,8 +724,10 @@ _initrd_base    dd 0
 _initrd_size    dd 0
 
 _smap:
-_kernel_end     dd 0x00100000
+_start_mid      dd 0x00100000
 _memsz_mid      dd 0
+
+_kend           dd 0
 
 ; _memsz_lo       dw 0
 

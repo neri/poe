@@ -1,5 +1,5 @@
 [build]
-rustflags = ["-C", "relocation-model=static", "-C", "lto", "-C", "link-args=--image-base=0x00100000 --omagic"]
+rustflags = ["-C", "relocation-model=static", "-C", "lto", "-C", "link-args=--image-base=0x0010000 --omagic"]
 target = "i586-unknown-linux-gnu"
 
 [unstable]
