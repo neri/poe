@@ -145,17 +145,17 @@ impl FsRawMetaData {
 
 pub struct FsRawFileControlBlock {
     inode: Option<NonZeroINodeType>,
-    offset: OffsetType,
-    limit: OffsetType,
+    file_pos: OffsetType,
+    file_size: OffsetType,
 }
 
 impl FsRawFileControlBlock {
     #[inline]
-    const fn new(inode: NonZeroINodeType, limit: OffsetType) -> Self {
+    const fn new(inode: NonZeroINodeType, file_size: OffsetType) -> Self {
         Self {
             inode: Some(inode),
-            offset: 0,
-            limit,
+            file_pos: 0,
+            file_size,
         }
     }
 
@@ -165,15 +165,26 @@ impl FsRawFileControlBlock {
             .initramfs
             .as_ref()
             .ok_or(io::ErrorKind::NotConnected.into())
-            .and_then(|v| v.read_data(self.inode, self.offset, buf))
+            .and_then(|v| v.read_data(self.inode, self.file_pos, buf))
             .map(|v| {
-                self.offset += v as OffsetType;
+                self.file_pos += v as OffsetType;
                 v
             })
     }
 
-    pub fn lseek(&mut self, offset: OffsetType, whence: usize) -> OffsetType {
-        todo!()
+    pub fn lseek(&mut self, offset: OffsetType, whence: Whence) -> OffsetType {
+        match whence {
+            Whence::SeekSet => self.file_pos = offset,
+            Whence::SeekCur => self.file_pos = self.file_pos + offset,
+            Whence::SeekEnd => self.file_pos = self.file_size + offset,
+        }
+        self.file_pos
+    }
+
+    pub fn stat(&self) -> Option<FsRawMetaData> {
+        let shared = FileManager::shared();
+        self.inode
+            .and_then(|inode| shared.initramfs.as_ref().and_then(|v| v.stat(inode)))
     }
 }
 
@@ -182,4 +193,21 @@ pub struct FsFileHandle(NonZeroUsize);
 
 impl FsFileHandle {
     // TODO:
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Whence {
+    SeekSet = 0,
+    SeekCur,
+    SeekEnd,
+}
+
+impl From<usize> for Whence {
+    fn from(v: usize) -> Self {
+        match v {
+            1 => Self::SeekCur,
+            2 => Self::SeekEnd,
+            _ => Self::SeekSet,
+        }
+    }
 }

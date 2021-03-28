@@ -6,9 +6,9 @@ use byteorder::*;
 use core::{intrinsics::copy_nonoverlapping, ptr::slice_from_raw_parts_mut};
 use megstd::io;
 
-pub struct InitRamfs {
+pub(super) struct InitRamfs {
     data: Box<[u8]>,
-    dir: Vec<CurFsDirEntry>,
+    dir: Box<[MyFsDirEntry]>,
 }
 
 impl InitRamfs {
@@ -16,14 +16,19 @@ impl InitRamfs {
     const SIZE_OF_RAW_DIR: usize = 32;
     const OFFSET_DATA: usize = 16;
 
-    pub unsafe fn from_static(base: usize, len: usize) -> Option<Self> {
+    /// SAFETY: Must guarantee the existence of the data.
+    pub(super) unsafe fn from_static(base: usize, len: usize) -> Option<Self> {
         let boxed = Box::from_raw(slice_from_raw_parts_mut(base as *mut u8, len));
         let mut dir = Vec::new();
-        Self::parse_header(&boxed, &mut dir).then(|| Self { data: boxed, dir })
+        Self::parse_header(&boxed, &mut dir).then(|| Self {
+            data: boxed,
+            dir: dir.into_boxed_slice(),
+        })
     }
 
-    fn parse_header(data: &Box<[u8]>, dir: &mut Vec<CurFsDirEntry>) -> bool {
-        if Self::MAGIC_CURRENT != LE::read_u32(&data[0..4]) {
+    #[inline(always)]
+    fn parse_header(data: &Box<[u8]>, dir: &mut Vec<MyFsDirEntry>) -> bool {
+        if LE::read_u32(&data[0..4]) != Self::MAGIC_CURRENT {
             return false;
         }
 
@@ -36,8 +41,8 @@ impl InitRamfs {
             let name =
                 String::from_utf8(data[dir_offset + 1..dir_offset + name_len + 1].to_owned())
                     .unwrap_or("#NAME?".to_owned());
-            dir.push(CurFsDirEntry {
-                inode: NonZeroINodeType::new(index as INodeType + 1).unwrap(),
+            dir.push(MyFsDirEntry {
+                inode: unsafe { NonZeroINodeType::new_unchecked(index as INodeType + 1) },
                 name,
                 offset: LE::read_u32(&data[dir_offset + 0x18..dir_offset + 0x1C]) as usize,
                 size: LE::read_u32(&data[dir_offset + 0x1C..dir_offset + 0x20]) as usize,
@@ -59,12 +64,11 @@ impl InitRamfs {
 
     #[inline]
     pub fn stat(&self, inode: NonZeroINodeType) -> Option<FsRawMetaData> {
-        self.get_file(inode)
-            .and_then(|v| FsRawDirEntry::from(v).into_metadata())
+        self.get_file(inode).map(|v| v.into())
     }
 
     #[inline]
-    fn get_file(&self, inode: NonZeroINodeType) -> Option<&CurFsDirEntry> {
+    fn get_file(&self, inode: NonZeroINodeType) -> Option<&MyFsDirEntry> {
         self.dir.get(inode.get() as usize - 1)
     }
 
@@ -82,29 +86,36 @@ impl InitRamfs {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
         let size_left = dir_ent.size as OffsetType - offset;
-        let count = OffsetType::min(size_left, buf.len() as OffsetType) as usize;
-        unsafe {
-            let src = (&self.data[0] as *const _ as usize
-                + Self::OFFSET_DATA
-                + dir_ent.offset
-                + offset as usize) as *const u8;
-            let dst = &mut buf[0] as *mut _;
-            copy_nonoverlapping(src, dst, count);
+        let count = usize::min(size_left as usize, buf.len());
+        if count > 0 {
+            unsafe {
+                let src = (&self.data[0] as *const _ as usize
+                    + Self::OFFSET_DATA
+                    + dir_ent.offset
+                    + offset as usize) as *const u8;
+                let dst = &mut buf[0] as *mut _;
+                copy_nonoverlapping(src, dst, count);
+            }
         }
         Ok(count)
     }
 }
 
-struct CurFsDirEntry {
+struct MyFsDirEntry {
     inode: NonZeroINodeType,
     name: String,
     offset: usize,
     size: usize,
 }
 
-impl From<&CurFsDirEntry> for FsRawDirEntry {
-    fn from(src: &CurFsDirEntry) -> Self {
-        let metadata = FsRawMetaData::new(src.size as OffsetType);
-        FsRawDirEntry::new(src.inode, src.name.clone(), Some(metadata))
+impl From<&MyFsDirEntry> for FsRawDirEntry {
+    fn from(src: &MyFsDirEntry) -> Self {
+        FsRawDirEntry::new(src.inode, src.name.clone(), Some(src.into()))
+    }
+}
+
+impl From<&MyFsDirEntry> for FsRawMetaData {
+    fn from(src: &MyFsDirEntry) -> Self {
+        FsRawMetaData::new(src.size as OffsetType)
     }
 }

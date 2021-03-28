@@ -118,14 +118,10 @@ impl Shell {
             Ok(v) => v,
             Err(_) => return,
         };
-        let mut sb = Sb255::new();
-        let sb = &mut sb;
         for dir_ent in dir {
-            sb.clear();
-            write!(sb, "{:4} {:16}", dir_ent.inode().get(), dir_ent.name(),).unwrap();
-            Self::format_bytes(sb, dir_ent.metadata().unwrap().len() as usize).unwrap();
-            writeln!(stdout, "{}", sb.as_str()).unwrap();
+            write!(stdout, " {:<14} ", dir_ent.name()).unwrap();
         }
+        writeln!(stdout, "").unwrap();
     }
 
     fn cmd_type(stdout: &mut dyn Tty, args: &[&str]) {
