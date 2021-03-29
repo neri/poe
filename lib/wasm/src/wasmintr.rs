@@ -1259,11 +1259,11 @@ impl WasmInterpreter<'_> {
         block_stack.resize(block_stack.len() - target, 0);
         let block_position = block_stack
             .pop()
-            .ok_or(WasmRuntimeError::InternalInconsistency1)?;
+            .ok_or(WasmRuntimeError::InternalInconsistency)?;
         let block = code_block
             .info()
             .block_info(block_position)
-            .ok_or(WasmRuntimeError::InternalInconsistency2)?;
+            .ok_or(WasmRuntimeError::InternalInconsistency)?;
 
         let block_type = block.block_type;
         let new_len = block.stack_level;
@@ -1273,11 +1273,11 @@ impl WasmInterpreter<'_> {
         } else {
             let top_val = value_stack
                 .pop()
-                .ok_or(WasmRuntimeError::InternalInconsistency3)?;
+                .ok_or(WasmRuntimeError::InternalInconsistency)?;
             value_stack.resize(new_len, WasmStackValue::from_usize(0));
             value_stack
                 .push(top_val)
-                .map_err(|_| WasmRuntimeError::InternalInconsistency4)?;
+                .map_err(|_| WasmRuntimeError::InternalInconsistency)?;
         }
         code_block.set_position(new_position);
         Ok(())

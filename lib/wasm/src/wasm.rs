@@ -1315,11 +1315,6 @@ pub enum WasmRuntimeError {
     DivideByZero,
     TypeMismatch,
     InternalInconsistency,
-    InternalInconsistency1,
-    InternalInconsistency2,
-    InternalInconsistency3,
-    InternalInconsistency4,
-    InternalInconsistency5,
     WriteProtected,
 }
 
