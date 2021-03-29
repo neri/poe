@@ -13,6 +13,8 @@ static mut MM: MemoryManager = MemoryManager::new();
 
 pub struct MemoryManager {
     total_memory_size: usize,
+    reserved_memory_size: usize,
+    dummy_size: usize,
     n_free: usize,
     pairs: [MemFreePair; Self::MAX_FREE_PAIRS],
     slab: Option<SlabAllocator>,
@@ -25,6 +27,8 @@ impl MemoryManager {
     const fn new() -> Self {
         Self {
             total_memory_size: 0,
+            reserved_memory_size: 0,
+            dummy_size: 0,
             n_free: 0,
             pairs: [MemFreePair::empty(); Self::MAX_FREE_PAIRS],
             slab: None,
@@ -34,8 +38,8 @@ impl MemoryManager {
     pub(crate) unsafe fn init_first(info: &BootInfo) {
         let shared = Self::shared();
 
-        shared.total_memory_size =
-            (info.smap.0 + info.smap.1 + ((info.initrd_size + 0xFFF) & !0xFFF)) as usize;
+        shared.total_memory_size = info.total_memory_size as usize;
+        shared.reserved_memory_size = info.reserved_memory_size as usize;
         shared.pairs[0] = MemFreePair {
             base: info.smap.0 as usize,
             size: info.smap.1 as usize,
@@ -63,17 +67,24 @@ impl MemoryManager {
     }
 
     #[inline]
+    pub fn reserved_memory_size() -> usize {
+        let shared = Self::shared();
+        shared.reserved_memory_size
+    }
+
+    #[inline]
     pub fn free_memory_size() -> usize {
         let shared = Self::shared();
-        let size_slab = shared
+        let mut total = shared.dummy_size;
+        total += shared
             .slab
             .as_ref()
             .map(|v| v.free_memory_size())
             .unwrap_or(0);
-        size_slab
-            + shared.pairs[..shared.n_free]
-                .iter()
-                .fold(0, |v, i| v + i.size)
+        total += shared.pairs[..shared.n_free]
+            .iter()
+            .fold(0, |v, i| v + i.size);
+        total
     }
 
     #[inline]
@@ -109,10 +120,6 @@ impl MemoryManager {
             let shared = Self::shared();
             if let Some(slab) = &shared.slab {
                 let r = slab.alloc(layout);
-                // match r {
-                //     Ok(v) => println!("ALLOC_OK {:?} => {:08x}", layout, v),
-                //     Err(err) => println!("ALLOC_NG {:?} => {:?}", layout, err),
-                // }
                 match r {
                     Err(AllocationError::Unsupported) => (),
                     _ => return r,
@@ -134,8 +141,15 @@ impl MemoryManager {
 
                 let shared = Self::shared();
                 if let Some(slab) = &shared.slab {
-                    slab.free(base, layout)
+                    match slab.free(base, layout) {
+                        Ok(_) => Ok(()),
+                        Err(_) => {
+                            shared.dummy_size += layout.size();
+                            Ok(())
+                        }
+                    }
                 } else {
+                    shared.dummy_size += layout.size();
                     Ok(())
                 }
             })
@@ -147,7 +161,6 @@ impl MemoryManager {
     #[allow(dead_code)]
     pub fn statistics_slab(sb: &mut StringBuffer) {
         let shared = Self::shared();
-        // sb.clear();
         for slab in shared.slab.as_ref().unwrap().statistics() {
             writeln!(sb, "Slab {:4}: {:3} / {:3}", slab.0, slab.1, slab.2).unwrap();
         }

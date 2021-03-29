@@ -5,6 +5,7 @@ use super::*;
 use crate::{
     arch::cpu::{Cpu, CpuContextData},
     mem::string::StringBuffer,
+    rt::Personality,
     sync::atomicflags::AtomicBitflags,
     sync::fifo::*,
     sync::semaphore::Semaphore,
@@ -57,7 +58,7 @@ impl Scheduler {
 
         let mut pool = ThreadPool::default();
         let idle = {
-            let idle = RawThread::new(ProcessId(0), Priority::Idle, "Idle", None, 0);
+            let idle = RawThread::new(ProcessId(0), Priority::Idle, "Idle", None, 0, None);
             let handle = idle.handle;
             pool.add(Box::new(idle));
             handle
@@ -207,6 +208,16 @@ impl Scheduler {
                 }
             })
         }
+    }
+
+    /// Get the personality instance associated with the current thread
+    #[inline]
+    pub fn current_personality<F, R>(f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Box<dyn Personality>) -> R,
+    {
+        Self::current_thread()
+            .and_then(|thread| thread.update(|thread| thread.personality.as_mut().map(|v| f(v))))
     }
 
     pub(crate) unsafe fn reschedule() {
@@ -439,7 +450,14 @@ impl Scheduler {
         } else {
             Self::current_pid().unwrap_or(ProcessId(0))
         };
-        let thread = RawThread::new(pid, options.priority, name, Some(start), args);
+        let thread = RawThread::new(
+            pid,
+            options.priority,
+            name,
+            Some(start),
+            args,
+            options.personality,
+        );
         let thread = {
             let handle = thread.handle;
             ThreadPool::shared().add(Box::new(thread));
@@ -518,6 +536,7 @@ impl ThreadPool {
 pub struct SpawnOption {
     pub priority: Priority,
     pub raise_pid: bool,
+    pub personality: Option<Box<dyn Personality>>,
 }
 
 impl SpawnOption {
@@ -526,6 +545,7 @@ impl SpawnOption {
         Self {
             priority: Priority::Normal,
             raise_pid: false,
+            personality: None,
         }
     }
 
@@ -534,14 +554,15 @@ impl SpawnOption {
         Self {
             priority,
             raise_pid: false,
+            personality: None,
         }
     }
 
-    // #[inline]
-    // pub fn personality(mut self, personality: Box<dyn Personality>) -> Self {
-    //     self.personality = Some(personality);
-    //     self
-    // }
+    #[inline]
+    pub fn personality(mut self, personality: Box<dyn Personality>) -> Self {
+        self.personality = Some(personality);
+        self
+    }
 
     #[inline]
     pub fn spawn_f(self, start: fn(usize), args: usize, name: &str) -> Option<ThreadHandle> {
@@ -898,7 +919,7 @@ struct RawThread {
 
     // Properties
     sem: Semaphore,
-    // personality: Option<Box<dyn Personality>>,
+    personality: Option<Box<dyn Personality>>,
     attribute: AtomicBitflags<ThreadAttributes>,
     priority: Priority,
     quantum: Quantum,
@@ -961,6 +982,7 @@ impl RawThread {
         name: &str,
         start: Option<ThreadStart>,
         arg: usize,
+        personality: Option<Box<dyn Personality>>,
     ) -> Self {
         let handle = ThreadHandle::next();
 
@@ -981,6 +1003,7 @@ impl RawThread {
             load0: AtomicU32::new(0),
             load: AtomicU32::new(0),
             executor: None,
+            personality,
             name: name_array,
         };
         if let Some(start) = start {
@@ -1001,8 +1024,8 @@ impl RawThread {
 
     fn exit(&mut self) -> ! {
         self.sem.signal();
-        // self.personality.as_mut().map(|v| v.on_exit());
-        // self.personality = None;
+        self.personality.as_mut().map(|v| v.on_exit());
+        self.personality = None;
 
         // TODO:
         Timer::sleep(Duration::from_secs(2));

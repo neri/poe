@@ -624,6 +624,10 @@ _next32:
     xor eax, eax
     rep stosd
 
+    mov eax, [_memsz_mid]
+    add eax, [_start_mid]
+    mov [_total_memory_size], eax
+
     mov ecx, [ebp + 0x0C]
     mov edx, [_memsz_mid]
     mov edi, [_start_mid]
@@ -634,6 +638,7 @@ _next32:
     mov esi, ebp
     mov [_initrd_base], edi
     mov [_initrd_size], ecx
+    add [_reserved_memory_size], ecx
     shr ecx, 2
     rep movsd
 
@@ -720,6 +725,8 @@ _screen_height  dw 0
 _screen_stride  dw 0
 _boot_flags     dw 0
 _acpi_rsdptr    dd 0
+_total_memory_size      dd 0
+_reserved_memory_size   dd 0x00100000
 _initrd_base    dd 0
 _initrd_size    dd 0
 

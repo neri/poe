@@ -5,13 +5,15 @@
 #![no_main]
 #![feature(asm)]
 
+use alloc::boxed::Box;
+use alloc::string::*;
 use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
     arch::cpu::Cpu, fonts::*, fs::FileManager, io::tty::*, mem::string::*, mem::MemoryManager,
-    system::System, task::scheduler::*, task::*, util::text::*, window::terminal::Terminal,
-    window::*, *,
+    rt::RuntimeEnvironment, system::System, task::scheduler::*, task::*, util::text::*,
+    window::terminal::Terminal, window::*, *,
 };
 use megstd::drawing::*;
 
@@ -22,7 +24,9 @@ entry!(Shell::main);
 #[used]
 static mut MAIN: Shell = Shell::new();
 
-struct Shell {}
+struct Shell {
+    path_ext: Vec<String>,
+}
 
 enum ParsedCmdLine {
     Empty,
@@ -31,10 +35,19 @@ enum ParsedCmdLine {
 
 impl Shell {
     const fn new() -> Self {
-        Self {}
+        Self {
+            path_ext: Vec::new(),
+        }
+    }
+
+    fn shared<'a>() -> &'a mut Self {
+        unsafe { &mut MAIN }
     }
 
     fn main() {
+        let shared = Self::shared();
+        shared.path_ext.push("wasm".to_string());
+
         WindowManager::set_desktop_color(AmbiguousColor::from_rgb(0x2196F3));
         WindowManager::set_pointer_visible(true);
         // Timer::sleep(Duration::from_millis(100));
@@ -55,8 +68,8 @@ impl Shell {
     }
 
     async fn repl_main() {
-        let mut terminal = Terminal::new(80, 24);
-        let stdout = &mut terminal as &mut dyn Tty;
+        System::set_stdout(Box::new(Terminal::new(80, 24)));
+        let stdout = System::stdout();
 
         Self::invoke_command(stdout, "ver");
 
@@ -87,9 +100,9 @@ impl Shell {
     }
 
     fn invoke_command(stdout: &mut dyn Tty, cmdline: &str) {
-        match Self::parse_cmd(&cmdline, |cmd, args| match cmd {
+        match Self::parse_cmd(&cmdline, |name, args| match name {
             "clear" | "cls" => stdout.reset().unwrap(),
-            "dir" => Self::cmd_dir(stdout, args),
+            "dir" => Self::cmd_dir(args),
             "type" => Self::cmd_type(stdout, args),
             "echo" => {
                 for (index, word) in args.iter().skip(1).enumerate() {
@@ -103,7 +116,14 @@ impl Shell {
             "ver" => {
                 writeln!(stdout, "{} v{}", System::name(), System::version(),).unwrap();
             }
-            _ => writeln!(stdout, "Error: Command not found: {}", cmd).unwrap(),
+            "open" => {
+                let args = &args[1..];
+                let name = args[0];
+                Self::spawn(name, args, false);
+            }
+            _ => {
+                Self::spawn(name, args, true);
+            }
         }) {
             Ok(_) => {}
             Err(ParsedCmdLine::Empty) => (),
@@ -113,15 +133,67 @@ impl Shell {
         }
     }
 
-    fn cmd_dir(stdout: &mut dyn Tty, _args: &[&str]) {
+    fn spawn(name: &str, args: &[&str], wait_until: bool) -> usize {
+        Self::spawn_main(name, args, wait_until).unwrap_or_else(|| {
+            let mut sb = StringBuffer::new();
+            let shared = Self::shared();
+            for ext in &shared.path_ext {
+                sb.clear();
+                write!(sb, "{}.{}", name, ext).unwrap();
+                match Self::spawn_main(sb.as_str(), args, wait_until) {
+                    Some(v) => return v,
+                    None => (),
+                }
+            }
+            println!("Command not found: {}", name);
+            1
+        })
+    }
+
+    fn spawn_main(name: &str, args: &[&str], wait_until: bool) -> Option<usize> {
+        FileManager::open(name)
+            .map(|mut fcb| {
+                let stat = fcb.stat().unwrap();
+                let file_size = stat.len() as usize;
+                if file_size > 0 {
+                    let mut vec = Vec::with_capacity(file_size);
+                    vec.resize(file_size, 0);
+                    let act_size = fcb.read(vec.as_mut_slice()).unwrap();
+                    let blob = &vec[..act_size];
+                    if let Some(mut loader) = RuntimeEnvironment::recognize(blob) {
+                        loader.option().name = name.to_string();
+                        loader.option().argv = args.iter().map(|v| v.to_string()).collect();
+                        match loader.load(blob) {
+                            Ok(_) => {
+                                let child = loader.invoke_start();
+                                if wait_until {
+                                    child.map(|thread| thread.join());
+                                }
+                            }
+                            Err(_) => {
+                                println!("Load error");
+                                return 1;
+                            }
+                        }
+                    } else {
+                        println!("Bad executable");
+                        return 1;
+                    }
+                }
+                0
+            })
+            .ok()
+    }
+
+    fn cmd_dir(_args: &[&str]) {
         let dir = match FileManager::read_dir("/") {
             Ok(v) => v,
             Err(_) => return,
         };
         for dir_ent in dir {
-            write!(stdout, " {:<14} ", dir_ent.name()).unwrap();
+            print!(" {:<14} ", dir_ent.name());
         }
-        writeln!(stdout, "").unwrap();
+        println!("");
     }
 
     fn cmd_type(stdout: &mut dyn Tty, args: &[&str]) {
@@ -316,7 +388,7 @@ impl Shell {
                         (254 * usize::min(max_value, max_value - usage) / max_value) as u8;
                     usage_cursor = (usage_cursor + 1) % n_items;
 
-                    write!(sb, "MEM ").unwrap();
+                    write!(sb, "Memory ").unwrap();
                     Self::format_bytes(&mut sb, MemoryManager::total_memory_size()).unwrap();
                     write!(sb, "B, ").unwrap();
                     Self::format_bytes(&mut sb, MemoryManager::free_memory_size()).unwrap();
@@ -325,7 +397,7 @@ impl Shell {
                         &mut sb,
                         MemoryManager::total_memory_size()
                             - MemoryManager::free_memory_size()
-                            - 0x100000,
+                            - MemoryManager::reserved_memory_size(),
                     )
                     .unwrap();
                     writeln!(sb, "B Used").unwrap();

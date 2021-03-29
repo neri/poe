@@ -2,12 +2,11 @@
 
 use crate::{
     arch::cpu::Cpu,
-    fonts::*,
     io::emcon::*,
     io::{null::Null, tty::Tty},
-    mem::MemoryManager,
     *,
 };
+use alloc::boxed::Box;
 use core::fmt;
 use megstd::drawing::*;
 use toeboot::*;
@@ -25,7 +24,7 @@ impl Version {
     const VERSION: Version = Version::new(0, 0, 1, Self::RELEASE);
 
     #[inline]
-    const fn new(maj: u8, min: u8, patch: u16, rel: &'static str) -> Self {
+    pub const fn new(maj: u8, min: u8, patch: u16, rel: &'static str) -> Self {
         let versions = ((maj as u32) << 24) | ((min as u32) << 16) | (patch as u32);
         Version { versions, rel }
     }
@@ -76,6 +75,8 @@ impl fmt::Display for Version {
 pub struct System {
     main_screen: Option<OwnedBitmap<'static>>,
     em_console: EmConsole,
+    stdout: Option<Box<dyn Tty>>,
+
     platform: Platform,
     cpu_ver: CpuVersion,
     initrd_base: usize,
@@ -88,7 +89,8 @@ impl System {
     const fn new() -> Self {
         Self {
             main_screen: None,
-            em_console: EmConsole::new(FontManager::fixed_system_font()),
+            em_console: EmConsole::new(fonts::FontManager::fixed_system_font()),
+            stdout: None,
             platform: Platform::Unknown,
             cpu_ver: CpuVersion::UNSPECIFIED,
             initrd_base: 0,
@@ -134,11 +136,14 @@ impl System {
     fn late_init(f: usize) {
         let shared = Self::shared();
         unsafe {
-            MemoryManager::late_init();
+            mem::MemoryManager::late_init();
 
             fs::FileManager::init(shared.initrd_base, shared.initrd_size);
 
-            FontManager::init();
+            rt::RuntimeEnvironment::init();
+
+            fonts::FontManager::init();
+
             window::WindowManager::init();
 
             io::hid::HidManager::init();
@@ -214,9 +219,19 @@ impl System {
         &mut shared.em_console
     }
 
+    pub fn set_stdout(stdout: Box<dyn Tty>) {
+        let shared = Self::shared();
+        shared.stdout = Some(stdout);
+    }
+
     /// Get standard output
     pub fn stdout<'a>() -> &'a mut dyn Tty {
-        Null::null()
+        let shared = Self::shared();
+        shared
+            .stdout
+            .as_mut()
+            .map(|v| v.as_mut())
+            .unwrap_or(Null::null())
     }
 
     /// Get standard input

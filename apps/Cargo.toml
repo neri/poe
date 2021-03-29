@@ -1,0 +1,13 @@
+[workspace]
+members = [
+  "bench",
+  "blt",
+  "hello",
+  "hello2",
+  "life",
+  "winhello",
+]
+
+[profile.release]
+lto = true
+opt-level = "z"

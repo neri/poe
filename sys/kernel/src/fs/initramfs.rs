@@ -26,7 +26,7 @@ impl InitRamfs {
         })
     }
 
-    #[inline(always)]
+    #[inline]
     fn parse_header(data: &Box<[u8]>, dir: &mut Vec<MyFsDirEntry>) -> bool {
         if LE::read_u32(&data[0..4]) != Self::MAGIC_CURRENT {
             return false;

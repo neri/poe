@@ -14,6 +14,7 @@ ISO_SRC		= $(TEMP)iso
 TARGET_ISO	= $(BIN)megos.iso
 
 IMG_SOURCES	= $(KERNEL_SYS)
+INITRD_FILES	= $(KERNEL_CEF) $(MISC)initrd/* apps/target/wasm32-unknown-unknown/release/*.wasm
 
 all: $(BIN) $(TARGETS)
 
@@ -39,14 +40,14 @@ $(BIN)fmcdboot.bin: boot/pc-bios/fmcdboot.asm
 $(BIN)loader.bin: boot/pc-bios/loader.asm
 	nasm -f bin -I boot $< -o $@
 
-$(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs lib/megstd/src/*.rs lib/megstd/src/**/*.rs
+$(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs lib/megstd/src/*.rs lib/megstd/src/**/*.rs lib/wasm/src/*.rs
 	(cd sys; cargo build -Zbuild-std --release)
 
 $(KERNEL_CEF): tools/elf2ceef/src/*.rs $(KERNEL_LD)
 	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_CEF)
 
-$(INITRD_IMG): tools/mkinitrd/src/*.rs $(KERNEL_CEF) $(MISC)initrd/*
-	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(KERNEL_CEF) $(MISC)initrd/*
+$(INITRD_IMG): tools/mkinitrd/src/*.rs $(INITRD_FILES)
+	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(INITRD_FILES)
 
 $(KERNEL_SYS): $(BIN)loader.bin $(INITRD_IMG)
 	cat $^ > $@
@@ -68,5 +69,8 @@ iso: $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 		-hide boot.catalog -no-emul-boot -b cdboot.bin \
 		-o $(TARGET_ISO) $(ISO_SRC)
 	dd conv=notrunc if=$(BIN)fmcdboot.bin of=$(TARGET_ISO)
+
+apps:
+	cd apps; cargo build --target wasm32-unknown-unknown --release
 
 # run: install

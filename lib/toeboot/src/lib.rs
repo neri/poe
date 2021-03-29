@@ -26,6 +26,9 @@ pub struct BootInfo {
 
     pub acpi_rsdptr: u32,
 
+    pub total_memory_size: u32,
+    pub reserved_memory_size: u32,
+
     pub initrd_base: u32,
     pub initrd_size: u32,
 

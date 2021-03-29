@@ -18,6 +18,7 @@ pub mod fonts;
 pub mod fs;
 pub mod io;
 pub mod mem;
+pub mod rt;
 pub mod sync;
 pub mod system;
 pub mod task;

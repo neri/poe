@@ -4,45 +4,56 @@
 
 ### `apps`
 
-Applications
+Applications.
 
 ### `boot`
 
 Here you will find files related to the boot loader, such as the IPL and loader.
 
-- `fdboot.asm`
+- `/boot/pc-bios/fdboot.asm`
   - IPL for floppy
-- `loader.asm`
+- `/boot/pc-bios/loader.asm`
   - Standard boot loader
-
-### `common`
-
-Common library that spans multiple programs.
-
-- `common/toeboot`
-  - boot protocol
 
 ### `ext`
 
 Files imported from outside this project.
 
+### `lib`
+
+Common library that spans multiple programs.
+
+- `/lib/megstd/`
+  - MEG-OS Standard Library
+- `/lib/toeboot/`
+  - boot protocol
+
+### `misc`
+
+Miscellaneous.
+
+- `/misc/initrd/`
+  - Source of initrd
+
 ### `sys`
 
 The kernel and system sources.
 
-- `sys/kernel/src/arch`
+- `/sys/kernel/src/arch/`
   - Architecture-specific code
 
 ### `tools`
 
 Small tools used for building.
 
-## Kernel
+- `/tools/elf2ceef/`
+  - Convert format of the kernel
+- `/tools/mkfdfs/`
+  - Make a floppy disk image
+- `/tools/mkinitrd/`
+  - Make an initrd image
 
-- TBD
-
-
-## Boot Sequence (PC)
+## Boot Sequence (PC-BIOS)
 
 ``` plantuml
 @startuml
@@ -70,8 +81,9 @@ partition Loader_(Real_Mode) {
     :enter to Protected Mode;
 }
 partition Loader_(Protected_Mode) {
-    :relocate the kernel from KERNEL.SYS;
-    :invoke Kernel;
+    :Move the INITRD behind KERNEL.SYS to the end of memory;
+    :relocate the KERNEL from the INITRD;
+    :invoke KERNEL;
 }
 :Kernel entry point;
 stop
@@ -87,7 +99,7 @@ start
 :System::init();
 partition System::init() {
     :make main_screen;
-    :MemoryManager::init();
+    :MemoryManager::init_first();
     :Arch::init();
     :Scheduler::start();
 }
@@ -97,6 +109,9 @@ split
 split again
     :System::late_init();
     partition System::late_init() {
+        :MemoryManager::late_init();
+        :FileManager::init();
+        :FontManager::init();
         :WindowManager::init();
         :HidManager::init();
         :Arch::late_init();
@@ -107,6 +122,10 @@ end split
 
 @enduml
 ```
+
+## Kernel
+
+- TBD
 
 ## Memory Manager
 
