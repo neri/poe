@@ -299,8 +299,8 @@ impl TextProcessing {
             Coordinates::new(
                 origin.x,
                 origin.y,
-                to.width() as isize,
-                to.height() as isize,
+                to.width() as isize - origin.x,
+                to.height() as isize - origin.y,
             )
             .into(),
             color,
@@ -355,7 +355,10 @@ impl TextProcessing {
                     TextAlignment::Center => coords.left + (rect.width() - line.width) / 2,
                 };
                 for _ in line.start_position..line.end_position {
-                    let c = chars.next().unwrap();
+                    let c = match chars.next() {
+                        Some(c) => c,
+                        None => return,
+                    };
                     font.draw_char(c, to, cursor, color);
                     cursor.x += font.width_of(c);
                 }

@@ -1626,19 +1626,18 @@ impl SharedStack {
     where
         T: Sized + Copy + Clone,
     {
-        const PADDING: usize = 16;
-        let item_size = usize::max(size_of::<T>(), align_of::<T>());
-        let vec_size = item_size * len;
-        let succ = (vec_size + PADDING - 1) & !(PADDING - 1);
-        let new_size = self.stack_pointer + succ;
+        const MIN_PADDING: usize = 16;
+        let align = usize::max(MIN_PADDING, align_of::<T>());
+        let offset = (self.stack_pointer + align - 1) & !(align - 1);
+        let vec_size = size_of::<T>() * len;
+        let new_size = (offset + vec_size + MIN_PADDING - 1) & !(MIN_PADDING - 1);
 
         if self.vec.get_mut().len() < new_size {
             self.vec.get_mut().resize(new_size, 0);
         }
 
         let slice = unsafe {
-            let base =
-                self.vec.get_mut().as_mut_ptr().add(self.stack_pointer) as *const _ as *mut T;
+            let base = self.vec.get_mut().as_mut_ptr().add(offset) as *const _ as *mut T;
             slice::from_raw_parts_mut(base, len)
         };
 

@@ -21,7 +21,7 @@ pub enum Function {
     /// [7] Close a window
     CloseWindow = 7,
     /// [8] Draw a string in a window
-    DrawText = 8,
+    DrawString = 8,
     /// [9] Fill a rectangle in a window
     FillRect = 9,
     /// [10] Draw a rectangle in a window
@@ -61,7 +61,7 @@ impl TryFrom<u32> for Function {
             5 => Ok(Self::GetSystemInfo),
             6 => Ok(Self::NewWindow),
             7 => Ok(Self::CloseWindow),
-            8 => Ok(Self::DrawText),
+            8 => Ok(Self::DrawString),
             9 => Ok(Self::FillRect),
             10 => Ok(Self::DrawRect),
             11 => Ok(Self::Blt8),

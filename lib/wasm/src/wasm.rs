@@ -2355,7 +2355,7 @@ impl WasmRunnable<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Leb128Stream, WasmDecodeError, WasmLoader};
+    use super::{Leb128Stream, WasmLoader};
 
     #[test]
     fn instantiate() {
@@ -2365,8 +2365,15 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "BadExecutable")]
-    fn instantiate_bad_exec() {
+    fn instantiate_bad_exec1() {
         let too_small = [0, 97, 115, 109, 1, 0, 0];
+        WasmLoader::instantiate(&too_small, |_, _, _| unreachable!()).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "BadExecutable")]
+    fn instantiate_bad_exec2() {
+        let too_small = [0, 97, 115, 109, 2, 0, 0, 0];
         WasmLoader::instantiate(&too_small, |_, _, _| unreachable!()).unwrap();
     }
 
@@ -2387,9 +2394,7 @@ mod tests {
             0x41, 0x7E, 0x6A, 0x21, 0x00, 0x0C, 0x00, 0x0B, 0x0B, 0x20, 0x00, 0x20, 0x01, 0x6A,
             0x0B,
         ];
-        let module =
-            WasmLoader::instantiate(&slice, |_, _, _| Err(WasmDecodeError::DynamicLinkError))
-                .unwrap();
+        let module = WasmLoader::instantiate(&slice, |_, _, _| unreachable!()).unwrap();
         let _ = module.func_by_index(0).unwrap();
     }
 

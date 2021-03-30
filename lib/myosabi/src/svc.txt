@@ -7,7 +7,7 @@ usleep||Blocks a thread for the specified microseconds
 get_system_info||Get the system information
 new_window||Create a new window
 close_window||Close a window
-draw_text||Draw a string in a window
+draw_string||Draw a string in a window
 fill_rect||Fill a rectangle in a window
 draw_rect||Draw a rectangle in a window
 blt8||Draw a bitmap in a window

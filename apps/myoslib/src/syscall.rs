@@ -75,10 +75,10 @@ pub fn os_close_window(window: usize) {
 
 /// Draw a string in a window.
 #[inline]
-pub fn os_draw_text(window: usize, x: usize, y: usize, s: &str, color: u32) {
+pub fn os_draw_string(window: usize, x: usize, y: usize, s: &str, color: u32) {
     let ptr = s.as_ptr() as usize;
     let color = color as usize;
-    unsafe { svc6(Function::DrawText, window, x, y, ptr, s.len(), color) };
+    unsafe { svc6(Function::DrawString, window, x, y, ptr, s.len(), color) };
 }
 
 /// Fill a rectangle in a window.

@@ -20,7 +20,7 @@ all: $(BIN) $(TARGETS)
 
 clean:
 	-rm -rf $(TARGETS)
-	-rm -rf sys/target
+	-rm -rf sys/target apps/target
 
 $(BIN):
 	mkdir -p $@
@@ -54,7 +54,7 @@ $(KERNEL_SYS): $(BIN)loader.bin $(INITRD_IMG)
 
 $(BOOT_IMG): install
 
-install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES)
+install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES) apps
 	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
 
 full: install iso

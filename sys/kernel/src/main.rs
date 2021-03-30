@@ -548,7 +548,7 @@ impl Shell {
         let window = WindowBuilder::new("Status")
             .style(WindowStyle::BORDER | WindowStyle::FLOATING)
             .frame(window_rect)
-            // .bg_color(IndexedColor::from_rgb(0xCCCCFF))
+            .bg_color(AmbiguousColor::from_rgb(0xCCCCFF))
             .build();
         window
             .draw_in_rect(window_size.into(), |bitmap| {

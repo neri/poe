@@ -3,7 +3,7 @@
 use super::*;
 use crate::io::hid::*;
 use crate::util::rng::*;
-use crate::util::text::AttributedString;
+use crate::util::text::*;
 use alloc::collections::BTreeMap;
 use byteorder::*;
 use core::{convert::TryFrom, num::NonZeroU32, sync::atomic::*, time::Duration};
@@ -199,22 +199,23 @@ impl ArleRuntime {
                     self.windows.remove(&handle);
                 }
             }
-            svc::Function::DrawText => {
+            svc::Function::DrawString => {
                 if let Some(window) = params.get_window(self)? {
                     let max_lines = 0;
                     let origin = params.get_point()?;
                     let text = params.get_string(memory).unwrap_or("");
                     let color = params.get_color()?;
-                    let mut rect = window.frame();
+                    let mut rect = Rect::from(window.content_rect().size());
                     rect.origin = origin;
-                    rect.size.width -= origin.x * 2;
+                    rect.size.width -= origin.x;
                     rect.size.height -= origin.y;
                     let _ = window.draw_in_rect(rect, |bitmap| {
-                        AttributedString::props().color(color).text(text).draw_text(
-                            bitmap,
-                            rect.size.into(),
-                            max_lines,
-                        );
+                        AttributedString::props()
+                            .align(TextAlignment::Left)
+                            .valign(VerticalAlignment::Top)
+                            .color(color)
+                            .text(text)
+                            .draw_text(bitmap, rect.size.into(), max_lines);
                     });
                     window.set_needs_display();
                 }
@@ -266,7 +267,12 @@ impl ArleRuntime {
                         size: src.size(),
                     };
                     let _ = window.draw_in_rect(rect, |bitmap| {
-                        bitmap.blt(&src, Point::default(), src.size().into());
+                        bitmap.blt_transparent(
+                            &ConstBitmap::from(&src),
+                            Point::default(),
+                            src.size().into(),
+                            IndexedColor::DEFAULT_KEY,
+                        );
                     });
                     window.set_needs_display();
                 }

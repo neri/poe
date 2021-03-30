@@ -29,8 +29,8 @@ impl Window {
     }
 
     #[inline]
-    pub fn draw_text(&self, s: &str, origin: Point, color: Color) {
-        os_draw_text(
+    pub fn draw_string(&self, s: &str, origin: Point, color: Color) {
+        os_draw_string(
             self.handle.0,
             origin.x as usize,
             origin.y as usize,
