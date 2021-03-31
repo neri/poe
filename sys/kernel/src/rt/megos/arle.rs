@@ -6,7 +6,9 @@ use crate::util::rng::*;
 use crate::util::text::*;
 use alloc::collections::BTreeMap;
 use byteorder::*;
-use core::{convert::TryFrom, num::NonZeroU32, sync::atomic::*, time::Duration};
+use core::{
+    convert::TryFrom, intrinsics::transmute, num::NonZeroU32, sync::atomic::*, time::Duration,
+};
 use megstd::drawing::*;
 use myosabi::*;
 use wasm::{wasmintr::*, *};
@@ -100,7 +102,8 @@ impl ArleRuntime {
     }
 
     fn next_handle(&self) -> usize {
-        self.next_handle.fetch_add(1, Ordering::SeqCst)
+        let result = 1 + self.next_handle.load(Ordering::SeqCst);
+        self.next_handle.swap(result, Ordering::SeqCst)
     }
 
     fn start(&self) -> ! {
@@ -183,6 +186,7 @@ impl ArleRuntime {
                 let window = WindowBuilder::new(title)
                     .style_add(WindowStyle::NAKED)
                     .size(size)
+                    .bitmap_strategy(BitmapStrategy::Expressive)
                     .build();
                 window.make_active();
 
@@ -277,6 +281,33 @@ impl ArleRuntime {
                     window.set_needs_display();
                 }
             }
+            svc::Function::Blt32 => {
+                if let Some(window) = params.get_window(self)? {
+                    let origin = params.get_point()?;
+                    let src = params.get_bitmap32(memory)?;
+                    let rect = Rect {
+                        origin,
+                        size: src.size(),
+                    };
+                    let _ = window.draw_in_rect(rect, |bitmap| {
+                        bitmap.blt(
+                            &ConstBitmap::from(&src),
+                            Point::default(),
+                            src.size().into(),
+                        );
+                    });
+                    window.set_needs_display();
+                }
+            }
+            svc::Function::BlendRect => {
+                let bitmap = params.get_bitmap32(memory)?;
+                let origin = params.get_point()?;
+                let size = params.get_size()?;
+                let color = params.get_u32().map(|v| TrueColor::from_argb(v))?;
+                let rect = Rect { origin, size };
+                let mut bitmap: Bitmap32 = unsafe { transmute(bitmap) };
+                bitmap.blend_rect(rect, color);
+            }
             svc::Function::Blt1 => {
                 if let Some(window) = params.get_window(self)? {
                     let origin = params.get_point()?;
@@ -288,9 +319,6 @@ impl ArleRuntime {
                     });
                     window.set_needs_display();
                 }
-            }
-            svc::Function::Blt24 => {
-                unimplemented!()
             }
             svc::Function::FlashWindow => {
                 if let Some(window) = params.get_window(self)? {
@@ -440,25 +468,48 @@ impl ParamsDecoder<'_> {
     }
 
     fn get_color(&mut self) -> Result<AmbiguousColor, WasmRuntimeError> {
-        self.get_u32().map(|v| AmbiguousColor::from_argb(v))
+        self.get_u32().map(|v| IndexedColor::from(v as u8).into())
     }
 
     fn get_bitmap8<'a>(
         &mut self,
         memory: &'a WasmMemory,
     ) -> Result<ConstBitmap8<'a>, WasmRuntimeError> {
-        const SIZE_OF_BITMAP: usize = 16;
+        const SIZE_OF_BITMAP: usize = 20;
         let base = self.get_u32()? as usize;
         let array = memory.read_bytes(base as usize, SIZE_OF_BITMAP)?;
 
         let width = LE::read_u32(&array[0..4]) as usize;
         let height = LE::read_u32(&array[4..8]) as usize;
-        let base = LE::read_u32(&array[8..12]) as usize;
+        let _stride = LE::read_u32(&array[8..12]) as usize;
+        let base = LE::read_u32(&array[12..16]) as usize;
 
         let len = width * height;
         let slice = memory.read_bytes(base, len)?;
 
         Ok(ConstBitmap8::from_bytes(
+            slice,
+            Size::new(width as isize, height as isize),
+        ))
+    }
+
+    fn get_bitmap32<'a>(
+        &mut self,
+        memory: &'a WasmMemory,
+    ) -> Result<ConstBitmap32<'a>, WasmRuntimeError> {
+        const SIZE_OF_BITMAP: usize = 20;
+        let base = self.get_u32()? as usize;
+        let array = memory.read_bytes(base as usize, SIZE_OF_BITMAP)?;
+
+        let width = LE::read_u32(&array[0..4]) as usize;
+        let height = LE::read_u32(&array[4..8]) as usize;
+        let _stride = LE::read_u32(&array[8..12]) as usize;
+        let base = LE::read_u32(&array[12..16]) as usize;
+
+        let len = width * height;
+        let slice = memory.read_u32_array(base, len)?;
+
+        Ok(ConstBitmap32::from_bytes(
             slice,
             Size::new(width as isize, height as isize),
         ))

@@ -98,10 +98,13 @@ impl SlabCache {
         };
 
         unsafe {
-            let pages = usize::min(
+            let mut pages = usize::min(
                 (items_per_chunk / atomic_page_size) * atomic_page_size,
                 usize::max(atomic_page_size, 0x1000 / preferred_page_size),
             );
+            if block_size < 1024 && pages <= items_per_chunk {
+                pages *= 2;
+            }
             let alloc_size = preferred_page_size * pages;
             let blob = MemoryManager::zalloc(Layout::from_size_align_unchecked(
                 alloc_size,

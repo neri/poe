@@ -820,6 +820,22 @@ impl WasmMemory {
         }
     }
 
+    pub fn read_u32_array(&self, offset: usize, len: usize) -> Result<&[u32], WasmRuntimeError> {
+        let memory = self.memory();
+        let limit = memory.len();
+        let size = len * 4;
+        if offset < limit && size < limit && offset + size < limit {
+            unsafe {
+                Ok(slice::from_raw_parts(
+                    &memory[offset] as *const _ as *const u32,
+                    len,
+                ))
+            }
+        } else {
+            Err(WasmRuntimeError::OutOfBounds)
+        }
+    }
+
     /// Write slice to memory
     pub fn write_bytes(&mut self, offset: usize, src: &[u8]) -> Result<(), WasmRuntimeError> {
         let memory = self.memory_mut();

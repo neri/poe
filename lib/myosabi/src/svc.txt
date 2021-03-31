@@ -12,7 +12,8 @@ fill_rect||Fill a rectangle in a window
 draw_rect||Draw a rectangle in a window
 blt8||Draw a bitmap in a window
 blt1||Draw a bitmap in a window
-blt24||Draw a bitmap in a window
+blt32||Draw a bitmap in a window
+blend_rect||Blend (test)
 flash_window||Reflect the window's bitmap to the screen now
 wait_char||Wait for char event
 read_char||Read a char event

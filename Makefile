@@ -14,7 +14,8 @@ ISO_SRC		= $(TEMP)iso
 TARGET_ISO	= $(BIN)megos.iso
 
 IMG_SOURCES	= $(KERNEL_SYS)
-INITRD_FILES	= $(KERNEL_CEF) $(MISC)initrd/* apps/target/wasm32-unknown-unknown/release/*.wasm
+INITRD_FILES	= $(KERNEL_CEF) $(MISC)initrd/*
+INITRD_FILES2	= apps/target/wasm32-unknown-unknown/release/*.wasm
 
 all: $(BIN) $(TARGETS)
 
@@ -46,15 +47,15 @@ $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.
 $(KERNEL_CEF): tools/elf2ceef/src/*.rs $(KERNEL_LD)
 	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_CEF)
 
-$(INITRD_IMG): tools/mkinitrd/src/*.rs $(INITRD_FILES)
-	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(INITRD_FILES)
+$(INITRD_IMG): tools/mkinitrd/src/*.rs apps $(INITRD_FILES)
+	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(INITRD_FILES) $(INITRD_FILES2)
 
 $(KERNEL_SYS): $(BIN)loader.bin $(INITRD_IMG)
 	cat $^ > $@
 
 $(BOOT_IMG): install
 
-install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES) apps
+install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES)
 	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
 
 full: install iso

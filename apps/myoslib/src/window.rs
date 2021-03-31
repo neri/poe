@@ -1,11 +1,13 @@
 // myos Window API
 
 use super::*;
-use crate::graphics::*;
+use megstd::drawing::*;
 use myosabi::MyOsAbi;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct WindowHandle(pub usize);
+
+pub type WindowColor = IndexedColor;
 
 pub struct Window {
     handle: WindowHandle,
@@ -29,25 +31,45 @@ impl Window {
     }
 
     #[inline]
-    pub fn draw_string(&self, s: &str, origin: Point, color: Color) {
-        os_draw_string(
+    pub fn draw_string(&self, s: &str, origin: Point, color: WindowColor) {
+        os_win_draw_string(
             self.handle.0,
             origin.x as usize,
             origin.y as usize,
             s,
-            color.argb(),
+            color.0 as u32,
         );
     }
 
     #[inline]
-    pub fn fill_rect(&self, rect: Rect, color: Color) {
-        os_fill_rect(
+    pub fn fill_rect(&self, rect: Rect, color: WindowColor) {
+        os_win_fill_rect(
             self.handle.0,
             rect.x() as usize,
             rect.y() as usize,
             rect.width() as usize,
             rect.height() as usize,
-            color.argb(),
+            color.0 as u32,
+        )
+    }
+
+    #[inline]
+    pub fn blt8<'a, T: AsRef<ConstBitmap8<'a>>>(&self, bitmap: &T, origin: Point) {
+        os_blt8(
+            self.handle.0,
+            origin.x as usize,
+            origin.y as usize,
+            bitmap as *const _ as usize,
+        )
+    }
+
+    #[inline]
+    pub fn blt32<'a, T: AsRef<ConstBitmap32<'a>>>(&self, bitmap: &T, origin: Point) {
+        os_blt32(
+            self.handle.0,
+            origin.x as usize,
+            origin.y as usize,
+            bitmap as *const _ as usize,
         )
     }
 

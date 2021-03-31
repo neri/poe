@@ -75,7 +75,7 @@ pub fn os_close_window(window: usize) {
 
 /// Draw a string in a window.
 #[inline]
-pub fn os_draw_string(window: usize, x: usize, y: usize, s: &str, color: u32) {
+pub fn os_win_draw_string(window: usize, x: usize, y: usize, s: &str, color: u32) {
     let ptr = s.as_ptr() as usize;
     let color = color as usize;
     unsafe { svc6(Function::DrawString, window, x, y, ptr, s.len(), color) };
@@ -83,7 +83,14 @@ pub fn os_draw_string(window: usize, x: usize, y: usize, s: &str, color: u32) {
 
 /// Fill a rectangle in a window.
 #[inline]
-pub fn os_fill_rect(window: usize, x: usize, y: usize, width: usize, height: usize, color: u32) {
+pub fn os_win_fill_rect(
+    window: usize,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    color: u32,
+) {
     let color = color as usize;
     unsafe { svc6(Function::FillRect, window, x, y, width, height, color) };
 }
@@ -106,10 +113,31 @@ pub fn os_blt8(window: usize, x: usize, y: usize, bitmap: usize) {
     unsafe { svc4(Function::Blt8, window, x, y, bitmap) };
 }
 
+#[inline]
+pub fn os_blt32(window: usize, x: usize, y: usize, bitmap: usize) {
+    unsafe { svc4(Function::Blt32, window, x, y, bitmap) };
+}
+
 /// Draw a bitmap in a window
 #[inline]
 pub fn os_blt1(window: usize, x: usize, y: usize, bitmap: usize, color: u32, mode: usize) {
     unsafe { svc6(Function::Blt1, window, x, y, bitmap, color as usize, mode) };
+}
+
+/// TEST
+#[inline]
+pub fn os_blend_rect(bitmap: usize, x: usize, y: usize, width: usize, height: usize, color: u32) {
+    unsafe {
+        svc6(
+            Function::BlendRect,
+            bitmap,
+            x,
+            y,
+            width,
+            height,
+            color as usize,
+        );
+    }
 }
 
 /// Reflect the window's bitmap to the screen now.

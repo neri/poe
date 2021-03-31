@@ -614,6 +614,16 @@ impl<'a> Bitmap8<'a> {
         }
     }
 
+    #[inline]
+    pub fn from_bytes(bytes: &'a mut [u8], size: Size) -> Self {
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride: size.width() as usize,
+            slice: unsafe { transmute(bytes) },
+        }
+    }
+
     /// Clone a bitmap
     #[inline]
     pub fn clone(&self) -> Bitmap8<'a> {
@@ -1183,6 +1193,16 @@ impl<'a> Bitmap32<'a> {
             height: size.height() as usize,
             stride,
             slice: UnsafeCell::new(slice),
+        }
+    }
+
+    #[inline]
+    pub fn from_bytes(bytes: &'a mut [u32], size: Size) -> Self {
+        Self {
+            width: size.width() as usize,
+            height: size.height() as usize,
+            stride: size.width() as usize,
+            slice: unsafe { transmute(bytes) },
         }
     }
 
