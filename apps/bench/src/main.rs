@@ -41,7 +41,7 @@ fn _start() {
         //   br 0 (;@2;)
         let steps: u64 = 13 * BENCH_STEPS;
 
-        let bogomips = steps * 1_000_000 / time;
+        let bogomips = (steps * 1_000_000).checked_div(time).unwrap_or(0);
         println!("{} bogomips", bogomips);
     }
 }

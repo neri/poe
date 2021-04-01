@@ -29,16 +29,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #![no_main]
 #![no_std]
 
-use core::isize;
-
 use megstd::drawing::*;
 use myoslib::window::Window;
 use myoslib::*;
-
-const BITMAP_WIDTH: isize = 256;
-const BITMAP_HEIGHT: isize = 256;
-const BITMAP_SIZE: usize = (BITMAP_WIDTH * BITMAP_HEIGHT) as usize;
-static mut DATA: [u32; BITMAP_SIZE] = [0; BITMAP_SIZE];
 
 #[no_mangle]
 fn _start() {
@@ -60,7 +53,13 @@ struct App<'a> {
     board_rep_yn: isize,
 }
 
+const BITMAP_WIDTH: isize = 256;
+const BITMAP_HEIGHT: isize = 256;
+const BITMAP_SIZE: usize = (BITMAP_WIDTH * BITMAP_HEIGHT) as usize;
+static mut DATA: [u32; BITMAP_SIZE] = [0; BITMAP_SIZE];
+
 impl<'a> App<'a> {
+    #[inline]
     fn new() -> Self {
         let window = Window::new("Noiz2bg", Size::new(BITMAP_WIDTH, BITMAP_HEIGHT));
         let bitmap =
@@ -86,6 +85,7 @@ impl App<'_> {
     const BOARD_MAX: usize = 256;
     const FPS: usize = 30;
 
+    #[inline]
     fn run(&mut self) {
         self.set_stage();
         while self.window.read_char().is_none() {
@@ -95,24 +95,26 @@ impl App<'_> {
             if self.scene_count > 1 {
                 self.scene_count -= 1;
             } else {
-                self.scene.succ();
+                self.scene.next();
                 self.scene_count = Self::FPS * 20;
                 self.set_stage();
             }
         }
     }
 
+    #[inline]
     fn move_bg(&mut self) {
         for board in self.boards.iter_mut() {
             let board = match board {
                 Some(v) => v,
-                None => continue,
+                None => break,
             };
             board.x = (board.x + self.board_mx) & (self.board_repx - 1);
             board.y = (board.y + self.board_my) & (self.board_repy - 1);
         }
     }
 
+    #[inline]
     fn draw_bg(&mut self) {
         self.bitmap
             .fill_rect(self.bitmap.bounds(), TrueColor::WHITE);
@@ -122,14 +124,14 @@ impl App<'_> {
         for board in &self.boards {
             let board = match board {
                 Some(v) => v,
-                None => continue,
+                None => break,
             };
             let mut ox = osx;
             for _ in 0..self.board_rep_xn {
                 let mut oy = osy;
                 for _ in 0..self.board_rep_yn {
-                    let x = (board.x + ox) / board.z + BITMAP_WIDTH / 2;
-                    let y = (board.y + oy) / board.z + BITMAP_HEIGHT / 2;
+                    let x = (board.x + ox).checked_div(board.z).unwrap_or(0) + BITMAP_WIDTH / 2;
+                    let y = (board.y + oy).checked_div(board.z).unwrap_or(0) + BITMAP_HEIGHT / 2;
                     let width = board.width;
                     let height = board.height;
                     let color = board.color.argb();
@@ -148,6 +150,7 @@ impl App<'_> {
         }
     }
 
+    #[inline]
     fn set_stage(&mut self) {
         self.board_index = 0;
         self.boards.iter_mut().for_each(|p| *p = None);
@@ -309,20 +312,22 @@ impl App<'_> {
             return;
         }
 
-        self.boards[self.board_index] = Some(Board::new(
-            x,
-            y,
-            z,
-            width / z,
-            height / z,
-            ColorComponents {
-                a: 0x30,
-                r: (0x99 * 256 / (1 + z)) as u8,
-                g: (0xAA * 256 / (1 + z)) as u8,
-                b: 0xDD,
-            }
-            .into(),
-        ));
+        self.boards.get_mut(self.board_index).map(|v| {
+            *v = Some(Board::new(
+                x,
+                y,
+                z,
+                width.checked_div(z).unwrap_or(0),
+                height.checked_div(z).unwrap_or(0),
+                ColorComponents {
+                    a: 0x30,
+                    r: (0x99isize * 256).checked_div(1 + z).unwrap_or(0) as u8,
+                    g: (0xAAisize * 256).checked_div(1 + z).unwrap_or(0) as u8,
+                    b: 0xDD,
+                }
+                .into(),
+            ))
+        });
         self.board_index += 1;
     }
 }
@@ -374,7 +379,7 @@ impl Default for Scene {
 }
 
 impl Scene {
-    fn succ(&mut self) {
+    fn next(&mut self) {
         use Scene::*;
         match self {
             Scene0 => *self = Scene1,

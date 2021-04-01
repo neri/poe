@@ -42,6 +42,18 @@ impl Window {
     }
 
     #[inline]
+    pub fn draw_line(&self, c1: Point, c2: Point, color: WindowColor) {
+        os_win_draw_line(
+            self.handle.0,
+            c1.x as usize,
+            c1.y as usize,
+            c2.x as usize,
+            c2.y as usize,
+            color.0 as u32,
+        )
+    }
+
+    #[inline]
     pub fn fill_rect(&self, rect: Rect, color: WindowColor) {
         os_win_fill_rect(
             self.handle.0,
@@ -87,7 +99,7 @@ impl Window {
     }
 
     #[inline]
-    pub fn flash(&self) {
-        os_flash_window(self.handle.0)
+    pub fn refresh(&self) {
+        os_refresh_window(self.handle.0)
     }
 }

@@ -10,11 +10,12 @@ close_window||Close a window
 draw_string||Draw a string in a window
 fill_rect||Fill a rectangle in a window
 draw_rect||Draw a rectangle in a window
+draw_line||Draw a line in a window
 blt8||Draw a bitmap in a window
 blt1||Draw a bitmap in a window
 blt32||Draw a bitmap in a window
 blend_rect||Blend (test)
-flash_window||Reflect the window's bitmap to the screen now
+refresh_window||Reflect the window's bitmap if needed
 wait_char||Wait for char event
 read_char||Read a char event
 rand|100|Return a random number

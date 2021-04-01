@@ -248,6 +248,18 @@ impl ArleRuntime {
                     window.set_needs_display();
                 }
             }
+            svc::Function::DrawLine => {
+                if let Some(window) = params.get_window(self)? {
+                    let c1 = params.get_point()?;
+                    let c2 = params.get_point()?;
+                    let color = params.get_color()?;
+                    let rect = Rect::from(Coordinates::from_two(c1, c2)) + Size::new(1, 1);
+                    let _ = window.draw_in_rect(rect, |bitmap| {
+                        bitmap.draw_line(c1 - rect.origin, c2 - rect.origin, color);
+                    });
+                    window.set_needs_display();
+                }
+            }
             svc::Function::WaitChar => {
                 if let Some(window) = params.get_window(self)? {
                     let c = self.wait_key(window);
@@ -320,7 +332,7 @@ impl ArleRuntime {
                     window.set_needs_display();
                 }
             }
-            svc::Function::FlashWindow => {
+            svc::Function::RefreshWindow => {
                 if let Some(window) = params.get_window(self)? {
                     window.refresh_if_needed();
                 }

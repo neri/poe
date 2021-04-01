@@ -26,20 +26,22 @@ pub enum Function {
     FillRect = 9,
     /// [10] Draw a rectangle in a window
     DrawRect = 10,
-    /// [11] Draw a bitmap in a window
-    Blt8 = 11,
+    /// [11] Draw a line in a window
+    DrawLine = 11,
     /// [12] Draw a bitmap in a window
-    Blt1 = 12,
+    Blt8 = 12,
     /// [13] Draw a bitmap in a window
-    Blt32 = 13,
-    /// [14] Blend (test)
-    BlendRect = 14,
-    /// [15] Reflect the window's bitmap to the screen now
-    FlashWindow = 15,
-    /// [16] Wait for char event
-    WaitChar = 16,
-    /// [17] Read a char event
-    ReadChar = 17,
+    Blt1 = 13,
+    /// [14] Draw a bitmap in a window
+    Blt32 = 14,
+    /// [15] Blend (test)
+    BlendRect = 15,
+    /// [16] Reflect the window's bitmap if needed
+    RefreshWindow = 16,
+    /// [17] Wait for char event
+    WaitChar = 17,
+    /// [18] Read a char event
+    ReadChar = 18,
     /// [100] Return a random number
     Rand = 100,
     /// [101] Set the seed of the random number
@@ -66,13 +68,14 @@ impl TryFrom<u32> for Function {
             8 => Ok(Self::DrawString),
             9 => Ok(Self::FillRect),
             10 => Ok(Self::DrawRect),
-            11 => Ok(Self::Blt8),
-            12 => Ok(Self::Blt1),
-            13 => Ok(Self::Blt32),
-            14 => Ok(Self::BlendRect),
-            15 => Ok(Self::FlashWindow),
-            16 => Ok(Self::WaitChar),
-            17 => Ok(Self::ReadChar),
+            11 => Ok(Self::DrawLine),
+            12 => Ok(Self::Blt8),
+            13 => Ok(Self::Blt1),
+            14 => Ok(Self::Blt32),
+            15 => Ok(Self::BlendRect),
+            16 => Ok(Self::RefreshWindow),
+            17 => Ok(Self::WaitChar),
+            18 => Ok(Self::ReadChar),
             100 => Ok(Self::Rand),
             101 => Ok(Self::Srand),
             10000 => Ok(Self::Alloc),

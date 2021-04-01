@@ -559,13 +559,21 @@ impl WindowManager<'_> {
         });
     }
 
-    // pub fn set_desktop_bitmap(bitmap: Option<BoxedBitmap>) {
-    //     let shared = Self::shared();
-    //     let _ = shared.root.update_opt(|root| {
-    //         root.bitmap = bitmap.map(|v| UnsafeCell::new(v));
-    //         root.set_needs_display();
-    //     });
-    // }
+    pub fn set_desktop_bitmap(bitmap: &ConstBitmap) {
+        let shared = Self::shared();
+        let _ = shared.root.update_opt(|root| {
+            if root.bitmap.is_none() {
+                root.bitmap = Some(UnsafeCell::new(BoxedBitmap::same_format(
+                    &shared.main_screen,
+                    root.frame.size(),
+                    root.bg_color,
+                )));
+            }
+            root.bitmap()
+                .map(|mut v| v.blt(bitmap, Point::default(), bitmap.bounds()));
+            root.set_needs_display();
+        });
+    }
 
     fn window_at_point(point: Point) -> WindowHandle {
         unsafe {
@@ -752,7 +760,6 @@ impl RawWindow<'_> {
             })
         }
         WindowManager::invalidate_screen(self.frame);
-        // self.set_needs_display();
     }
 
     fn hide(&self) {

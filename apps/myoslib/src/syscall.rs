@@ -95,6 +95,12 @@ pub fn os_win_fill_rect(
     unsafe { svc6(Function::FillRect, window, x, y, width, height, color) };
 }
 
+#[inline]
+pub fn os_win_draw_line(window: usize, x1: usize, y1: usize, x2: usize, y2: usize, color: u32) {
+    let color = color as usize;
+    unsafe { svc6(Function::DrawLine, window, x1, y1, x2, y2, color) };
+}
+
 /// Wait for key event
 #[inline]
 pub fn os_wait_char(window: usize) -> u32 {
@@ -140,10 +146,10 @@ pub fn os_blend_rect(bitmap: usize, x: usize, y: usize, width: usize, height: us
     }
 }
 
-/// Reflect the window's bitmap to the screen now.
+/// Reflect the window's bitmap if needed.
 #[inline]
-pub fn os_flash_window(window: usize) {
-    unsafe { svc1(Function::FlashWindow, window) };
+pub fn os_refresh_window(window: usize) {
+    unsafe { svc1(Function::RefreshWindow, window) };
 }
 
 /// Return a random number

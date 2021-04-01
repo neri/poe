@@ -49,22 +49,21 @@ impl Shell {
         shared.path_ext.push("wasm".to_string());
 
         WindowManager::set_desktop_color(AmbiguousColor::from_rgb(0x2196F3));
+        if let Ok(mut file) = FileManager::open("wall.bmp") {
+            let stat = file.stat().unwrap();
+            let mut vec = Vec::with_capacity(stat.len() as usize);
+            file.read_to_end(&mut vec);
+            if let Some(dib) = ImageLoader::from_msdib(vec.as_slice()) {
+                WindowManager::set_desktop_bitmap(&dib.as_const());
+            }
+        }
         WindowManager::set_pointer_visible(true);
         // Timer::sleep(Duration::from_millis(100));
-
-        // SpawnOption::new().spawn_f(Self::test_thread, 0, "Test");
 
         Scheduler::spawn_async(Task::new(Self::status_bar_main()));
         Scheduler::spawn_async(Task::new(Self::activity_monitor_main()));
         Scheduler::spawn_async(Task::new(Self::repl_main()));
         Scheduler::perform_tasks();
-    }
-
-    #[allow(dead_code)]
-    fn test_thread(_: usize) {
-        loop {
-            Cpu::noop();
-        }
     }
 
     async fn repl_main() {

@@ -40,7 +40,7 @@ fn _start() {
             WindowColor::DARK_GRAY,
             DRAW_SCALE as usize,
         );
-        window.flash();
+        window.refresh();
 
         let w = BITMAP_WIDTH - 1;
         let h = BITMAP_HEIGHT - 1;

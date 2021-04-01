@@ -214,30 +214,3 @@ impl<'a> From<&'a OsMutBitmap1<'a>> for OsBitmap1<'a> {
         Self::from_slice(src.slice(), src.size())
     }
 }
-
-#[repr(C)]
-pub struct Bitmap32<'a> {
-    width: usize,
-    height: usize,
-    slice: &'a [u32],
-}
-
-impl BitmapTrait for Bitmap32<'_> {
-    type PixelType = u32;
-
-    fn bits_per_pixel(&self) -> usize {
-        32
-    }
-
-    fn width(&self) -> usize {
-        self.width
-    }
-
-    fn height(&self) -> usize {
-        self.height
-    }
-
-    fn slice(&self) -> &[Self::PixelType] {
-        self.slice
-    }
-}

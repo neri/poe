@@ -3,6 +3,13 @@
 version = 3
 
 [[package]]
+name = "bball"
+version = "0.1.0"
+dependencies = [
+ "myoslib",
+]
+
+[[package]]
 name = "bench"
 version = "0.1.0"
 dependencies = [
@@ -21,6 +28,12 @@ version = "0.1.0"
 dependencies = [
  "myoslib",
 ]
+
+[[package]]
+name = "byteorder"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "hello"
@@ -48,6 +61,7 @@ name = "megstd"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "byteorder",
 ]
 
 [[package]]
