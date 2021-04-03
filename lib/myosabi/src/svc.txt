@@ -22,3 +22,4 @@ rand|100|Return a random number
 srand||Set the seed of the random number
 alloc|10000|RESERVED
 free||RESERVED
+test||test_u64

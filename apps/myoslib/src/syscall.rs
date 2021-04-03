@@ -173,3 +173,8 @@ pub fn os_alloc(size: usize, align: usize) -> usize {
 pub fn os_free(ptr: usize) {
     unsafe { svc1(Function::Free, ptr) };
 }
+
+#[inline]
+pub fn os_test(val: usize) {
+    unsafe { svc1(Function::Test, val) };
+}

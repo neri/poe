@@ -1,8 +1,10 @@
 // WebAssembly Loader
 
 use super::opcode::*;
+use crate::intcode::*;
+use crate::wasmintr::*;
 use crate::*;
-use alloc::{boxed::Box, collections::BTreeMap, string::*, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::*, sync::Arc, vec::Vec};
 use bitflags::*;
 use byteorder::*;
 use core::{
@@ -53,6 +55,7 @@ impl WasmLoader {
         }
     }
 
+    /// Load wasm from slice
     pub fn load<F>(&mut self, blob: &[u8], resolver: F) -> Result<(), WasmDecodeError>
     where
         F: FnMut(&str, &str, &WasmType) -> Result<WasmDynFunc, WasmDecodeError> + Copy,
@@ -1567,7 +1570,9 @@ pub struct WasmBlockInfo {
     max_stack: usize,
     max_block_level: usize,
     flags: WasmBlockFlag,
-    blocks: BTreeMap<usize, WasmBlockContext>,
+    // blocks: BTreeMap<usize, WasmBlockContext>,
+    int_codes: Box<[WasmImc]>,
+    ext_params: Box<[usize]>,
 }
 
 bitflags! {
@@ -1577,6 +1582,36 @@ bitflags! {
 }
 
 impl WasmBlockInfo {
+    #[inline]
+    pub const fn func_index(&self) -> usize {
+        self.func_index
+    }
+
+    #[inline]
+    pub const fn max_stack(&self) -> usize {
+        self.max_stack
+    }
+
+    #[inline]
+    pub const fn max_block_level(&self) -> usize {
+        self.max_block_level
+    }
+
+    #[inline]
+    pub fn is_leaf(&self) -> bool {
+        self.flags.contains(WasmBlockFlag::LEAF_FUNCTION)
+    }
+
+    #[inline]
+    pub fn intermediate_codes<'a>(&'a self) -> &'a [WasmImc] {
+        self.int_codes.as_ref()
+    }
+
+    #[inline]
+    pub fn ext_params<'a>(&'a self) -> &'a [usize] {
+        self.ext_params.as_ref()
+    }
+
     /// Analyze block info
     pub fn analyze(
         func_index: usize,
@@ -1592,6 +1627,9 @@ impl WasmBlockInfo {
         let mut max_block_level = 0;
         let mut flags = WasmBlockFlag::LEAF_FUNCTION;
 
+        let mut int_codes: Vec<WasmImc> = Vec::new();
+        let mut ext_params = Vec::new();
+
         loop {
             max_stack = usize::max(max_stack, value_stack.len());
             max_block_level = usize::max(max_block_level, block_stack.len());
@@ -1600,7 +1638,8 @@ impl WasmBlockInfo {
             // let old_values = value_stack.clone();
 
             match opcode.proposal_type() {
-                WasmProposalType::Mvp | WasmProposalType::MvpI64 => {}
+                WasmProposalType::Mvp => {}
+                WasmProposalType::MvpI64 => {}
                 WasmProposalType::SignExtend => {}
                 #[cfg(feature = "float")]
                 WasmProposalType::MvpF32 | WasmProposalType::MvpF64 => {}
@@ -1608,7 +1647,9 @@ impl WasmBlockInfo {
             }
 
             match opcode {
-                WasmOpcode::Unreachable => (),
+                WasmOpcode::Unreachable => {
+                    int_codes.push(WasmIntMnemonic::Unreachable.into());
+                }
 
                 WasmOpcode::Nop => (),
 
@@ -1620,12 +1661,15 @@ impl WasmBlockInfo {
                         inst_type: BlockInstType::Block,
                         block_type,
                         stack_level: value_stack.len(),
-                        start_position: position,
+                        start_position: int_codes.len(),
                         end_position: 0,
                         else_position: 0,
                     });
                     block_stack.push(blocks.len());
                     blocks.push(block);
+                    if block_type != WasmBlockType::Empty {
+                        int_codes.push(WasmIntMnemonic::Unreachable.into());
+                    }
                 }
                 WasmOpcode::Loop => {
                     let block_type = code_block
@@ -1635,12 +1679,15 @@ impl WasmBlockInfo {
                         inst_type: BlockInstType::Loop,
                         block_type,
                         stack_level: value_stack.len(),
-                        start_position: position,
+                        start_position: int_codes.len(),
                         end_position: 0,
                         else_position: 0,
                     });
                     block_stack.push(blocks.len());
                     blocks.push(block);
+                    if block_type != WasmBlockType::Empty {
+                        int_codes.push(WasmIntMnemonic::Unreachable.into());
+                    }
                 }
                 WasmOpcode::If => {
                     let cc = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1654,12 +1701,13 @@ impl WasmBlockInfo {
                         inst_type: BlockInstType::If,
                         block_type,
                         stack_level: value_stack.len(),
-                        start_position: position,
+                        start_position: int_codes.len(),
                         end_position: 0,
                         else_position: 0,
                     });
                     block_stack.push(blocks.len());
                     blocks.push(block);
+                    int_codes.push(WasmIntMnemonic::Unreachable.into());
                 }
                 WasmOpcode::Else => {
                     let block_ref = block_stack.last().ok_or(WasmDecodeError::ElseWithoutIf)?;
@@ -1667,17 +1715,18 @@ impl WasmBlockInfo {
                     if block.inst_type != BlockInstType::If {
                         return Err(WasmDecodeError::ElseWithoutIf);
                     }
-                    block.else_position = position;
+                    block.else_position = int_codes.len();
                     let n_drops = value_stack.len() - block.stack_level;
                     for _ in 0..n_drops {
                         value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     }
+                    int_codes.push(WasmIntMnemonic::Unreachable.into());
                 }
                 WasmOpcode::End => {
                     if block_stack.len() > 0 {
                         let block_ref = block_stack.pop().ok_or(WasmDecodeError::BlockMismatch)?;
                         let mut block = blocks.get(block_ref).unwrap().borrow_mut();
-                        block.end_position = code_block.position();
+                        block.end_position = int_codes.len();
                         let n_drops = value_stack.len() - block.stack_level;
                         for _ in 0..n_drops {
                             value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1693,35 +1742,67 @@ impl WasmBlockInfo {
 
                 WasmOpcode::Br => {
                     let br = code_block.read_unsigned()? as usize;
-                    if block_stack.len() < br {
-                        return Err(WasmDecodeError::OutOfBranch);
-                    }
+                    let target = block_stack
+                        .get(block_stack.len() - br - 1)
+                        .ok_or(WasmDecodeError::OutOfBranch)?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::Br,
+                        value_stack.len(),
+                        *target as u64,
+                    ));
                 }
                 WasmOpcode::BrIf => {
                     let br = code_block.read_unsigned()? as usize;
+                    let target = block_stack
+                        .get(block_stack.len() - br - 1)
+                        .ok_or(WasmDecodeError::OutOfBranch)?;
                     let cc = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::BrIf,
+                        value_stack.len(),
+                        *target as u64,
+                    ));
                     if cc != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
-                    }
-                    if block_stack.len() < br {
-                        return Err(WasmDecodeError::OutOfBranch);
                     }
                 }
                 WasmOpcode::BrTable => {
                     let table_len = code_block.read_unsigned()? as usize;
+                    let param_position = ext_params.len();
+                    ext_params.push(table_len);
                     for _ in 0..table_len {
                         let br = code_block.read_unsigned()? as usize;
-                        if block_stack.len() < br {
+                        if block_stack.len() <= br {
                             return Err(WasmDecodeError::OutOfBranch);
                         }
+                        ext_params.push(block_stack.len() - br - 1);
                     }
                     let br = code_block.read_unsigned()? as usize;
-                    if block_stack.len() < br {
+                    if block_stack.len() <= br {
                         return Err(WasmDecodeError::OutOfBranch);
                     }
+                    ext_params.push(block_stack.len() - br - 1);
+                    let cc = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if cc != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::BrTable,
+                        value_stack.len(),
+                        param_position as u64,
+                    ));
                 }
 
                 WasmOpcode::Return => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::Return,
+                        value_stack.len() - 1,
+                        0,
+                    ));
                     // TODO: type check
                 }
 
@@ -1732,6 +1813,12 @@ impl WasmBlockInfo {
                         .functions
                         .get(func_index)
                         .ok_or(WasmDecodeError::InvalidParameter)?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::Call,
+                        value_stack.len(),
+                        func_index as u64,
+                    ));
                     // TODO: type check
                     for _param in function.param_types() {
                         value_stack.pop();
@@ -1751,6 +1838,12 @@ impl WasmBlockInfo {
                     if index != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::CallIndirect,
+                        value_stack.len(),
+                        type_ref as u64,
+                    ));
                     // TODO: type check
                     for _param in func_type.param_types() {
                         value_stack.pop();
@@ -1765,6 +1858,7 @@ impl WasmBlockInfo {
                 WasmOpcode::Drop => {
                     value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                 }
+
                 WasmOpcode::Select => {
                     let cc = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1772,6 +1866,12 @@ impl WasmBlockInfo {
                     if a != b || cc != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::Select,
+                        value_stack.len(),
+                        0,
+                    ));
                     value_stack.push(a);
                 }
 
@@ -1780,6 +1880,12 @@ impl WasmBlockInfo {
                     let val = *local_types
                         .get(local_ref)
                         .ok_or(WasmDecodeError::InvalidLocal)?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::LocalGet,
+                        value_stack.len(),
+                        local_ref as u64,
+                    ));
                     value_stack.push(val);
                 }
                 WasmOpcode::LocalSet => {
@@ -1791,6 +1897,12 @@ impl WasmBlockInfo {
                     if stack != val {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::LocalSet,
+                        value_stack.len(),
+                        local_ref as u64,
+                    ));
                 }
                 WasmOpcode::LocalTee => {
                     let local_ref = code_block.read_unsigned()? as usize;
@@ -1801,6 +1913,12 @@ impl WasmBlockInfo {
                     if stack != val {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::LocalSet,
+                        value_stack.len() - 1,
+                        local_ref as u64,
+                    ));
                 }
 
                 WasmOpcode::GlobalGet => {
@@ -1808,6 +1926,12 @@ impl WasmBlockInfo {
                     let global = module
                         .global(global_ref)
                         .ok_or(WasmDecodeError::InvalidGlobal)?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::GlobalGet,
+                        value_stack.len(),
+                        global_ref as u64,
+                    ));
                     value_stack.push(global.val_type);
                 }
                 WasmOpcode::GlobalSet => {
@@ -1822,56 +1946,285 @@ impl WasmBlockInfo {
                     if stack != global.val_type {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::GlobalSet,
+                        value_stack.len(),
+                        global_ref as u64,
+                    ));
                 }
 
-                WasmOpcode::I32Load
-                | WasmOpcode::I32Load8S
-                | WasmOpcode::I32Load8U
-                | WasmOpcode::I32Load16S
-                | WasmOpcode::I32Load16U => {
-                    let _ = code_block.read_memarg()?;
+                WasmOpcode::I32Load => {
+                    let arg = code_block.read_memarg()?;
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Load,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32Load8S => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Load8S,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32Load8U => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Load8U,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32Load16S => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Load16S,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32Load16U => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Load16U,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
                     value_stack.push(WasmValType::I32);
                 }
 
-                WasmOpcode::I64Load
-                | WasmOpcode::I64Load8S
-                | WasmOpcode::I64Load8U
-                | WasmOpcode::I64Load16S
-                | WasmOpcode::I64Load16U
-                | WasmOpcode::I64Load32S
-                | WasmOpcode::I64Load32U => {
-                    let _ = code_block.read_memarg()?;
+                WasmOpcode::I64Load => {
+                    let arg = code_block.read_memarg()?;
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Load,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I64);
+                }
+                WasmOpcode::I64Load8S => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Load8S,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I64);
+                }
+                WasmOpcode::I64Load8U => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Load8U,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I64);
+                }
+                WasmOpcode::I64Load16S => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Load16S,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I64);
+                }
+                WasmOpcode::I64Load16U => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Load16U,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I64);
+                }
+                WasmOpcode::I64Load32S => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Load32S,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                    value_stack.push(WasmValType::I64);
+                }
+                WasmOpcode::I64Load32U => {
+                    let arg = code_block.read_memarg()?;
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Load32U,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
                     value_stack.push(WasmValType::I64);
                 }
 
-                WasmOpcode::I32Store | WasmOpcode::I32Store8 | WasmOpcode::I32Store16 => {
-                    let _ = code_block.read_memarg()?;
+                WasmOpcode::I32Store => {
+                    let arg = code_block.read_memarg()?;
                     let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     let i = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if i != d && i != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Store,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
                 }
-                WasmOpcode::I64Store
-                | WasmOpcode::I64Store8
-                | WasmOpcode::I64Store16
-                | WasmOpcode::I64Store32 => {
-                    let _ = code_block.read_memarg()?;
+                WasmOpcode::I32Store8 => {
+                    let arg = code_block.read_memarg()?;
+                    let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let i = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if i != d && i != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Store8,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                }
+                WasmOpcode::I32Store16 => {
+                    let arg = code_block.read_memarg()?;
+                    let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let i = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if i != d && i != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Store16,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                }
+
+                WasmOpcode::I64Store => {
+                    let arg = code_block.read_memarg()?;
                     let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     let i = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if i != WasmValType::I32 && d != WasmValType::I64 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Store,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                }
+                WasmOpcode::I64Store8 => {
+                    let arg = code_block.read_memarg()?;
+                    let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let i = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if i != WasmValType::I32 && d != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Store8,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                }
+                WasmOpcode::I64Store16 => {
+                    let arg = code_block.read_memarg()?;
+                    let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let i = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if i != WasmValType::I32 && d != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Store16,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
+                }
+                WasmOpcode::I64Store32 => {
+                    let arg = code_block.read_memarg()?;
+                    let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let i = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if i != WasmValType::I32 && d != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Store32,
+                        value_stack.len(),
+                        arg.offset as u64,
+                    ));
                 }
 
+                #[cfg(feature = "float")]
                 WasmOpcode::F32Load => {
                     let _ = code_block.read_memarg()?;
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1880,6 +2233,7 @@ impl WasmBlockInfo {
                     }
                     value_stack.push(WasmValType::F32);
                 }
+                #[cfg(feature = "float")]
                 WasmOpcode::F64Load => {
                     let _ = code_block.read_memarg()?;
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1888,6 +2242,7 @@ impl WasmBlockInfo {
                     }
                     value_stack.push(WasmValType::F64);
                 }
+                #[cfg(feature = "float")]
                 WasmOpcode::F32Store => {
                     let _ = code_block.read_memarg()?;
                     let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1896,6 +2251,7 @@ impl WasmBlockInfo {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
                 }
+                #[cfg(feature = "float")]
                 WasmOpcode::F64Store => {
                     let _ = code_block.read_memarg()?;
                     let d = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1907,11 +2263,23 @@ impl WasmBlockInfo {
 
                 WasmOpcode::MemorySize => {
                     let _ = code_block.read_unsigned()?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::MemorySize,
+                        value_stack.len(),
+                        0,
+                    ));
                     value_stack.push(WasmValType::I32);
                 }
 
                 WasmOpcode::MemoryGrow => {
                     let _ = code_block.read_unsigned()?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::MemoryGrow,
+                        value_stack.len(),
+                        0,
+                    ));
                     let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
@@ -1923,141 +2291,918 @@ impl WasmBlockInfo {
                     if val < (i32::MIN as i64) || val > (i32::MAX as i64) {
                         return Err(WasmDecodeError::InvalidParameter);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Const,
+                        value_stack.len(),
+                        val as u64,
+                    ));
                     value_stack.push(WasmValType::I32);
                 }
                 WasmOpcode::I64Const => {
-                    let _ = code_block.read_signed()?;
+                    let val = code_block.read_signed()?;
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Const,
+                        value_stack.len(),
+                        val as u64,
+                    ));
                     value_stack.push(WasmValType::I64);
                 }
+                #[cfg(feature = "float")]
                 WasmOpcode::F32Const => {
                     let _ = code_block.get_bytes(4)?;
                     value_stack.push(WasmValType::F32);
                 }
+                #[cfg(feature = "float")]
                 WasmOpcode::F64Const => {
                     let _ = code_block.get_bytes(8)?;
                     value_stack.push(WasmValType::F64);
                 }
 
-                // [i32] -> [i32]
-                WasmOpcode::I32Eqz
-                | WasmOpcode::I32Clz
-                | WasmOpcode::I32Ctz
-                | WasmOpcode::I32Popcnt
-                | WasmOpcode::I32Extend8S
-                | WasmOpcode::I32Extend16S => {
+                // unary operator [i32] -> [i32]
+                WasmOpcode::I32Eqz => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Eqz,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I32Clz => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Clz,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I32Ctz => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Ctz,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I32Popcnt => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Popcnt,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I32Extend8S => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Extend8S,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I32Extend16S => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Extend16S,
+                        value_stack.len() - 1,
+                        0,
+                    ));
                     let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
                 }
 
-                // [i32, i32] -> [i32]
-                WasmOpcode::I32Eq
-                | WasmOpcode::I32Ne
-                | WasmOpcode::I32LtS
-                | WasmOpcode::I32LtU
-                | WasmOpcode::I32GtS
-                | WasmOpcode::I32GtU
-                | WasmOpcode::I32LeS
-                | WasmOpcode::I32LeU
-                | WasmOpcode::I32GeS
-                | WasmOpcode::I32GeU
-                | WasmOpcode::I32Add
-                | WasmOpcode::I32Sub
-                | WasmOpcode::I32Mul
-                | WasmOpcode::I32DivS
-                | WasmOpcode::I32DivU
-                | WasmOpcode::I32RemS
-                | WasmOpcode::I32RemU
-                | WasmOpcode::I32And
-                | WasmOpcode::I32Or
-                | WasmOpcode::I32Xor
-                | WasmOpcode::I32Shl
-                | WasmOpcode::I32ShrS
-                | WasmOpcode::I32ShrU
-                | WasmOpcode::I32Rotl
-                | WasmOpcode::I32Rotr => {
+                // binary operator [i32, i32] -> [i32]
+                WasmOpcode::I32Eq => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Eq,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32Ne => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Ne,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32LtS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32LtS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32LtU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32LtU,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32GtS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32GtS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32GtU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32GtU,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32LeS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32LeS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32LeU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32LeU,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32GeS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32GeS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32GeU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32GeU,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32Add => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != b || a != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Add,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32Sub => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Sub,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32Mul => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Mul,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32DivS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32DivS,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32DivU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32DivU,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32RemS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32RemS,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32RemU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32RemU,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32And => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32And,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32Or => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Or,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32Xor => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Xor,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32Shl => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Shl,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32ShrS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32ShrS,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32ShrU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32ShrU,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32Rotl => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Rotl,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I32Rotr => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32Rotr,
+                        value_stack.len() - 1,
+                        0,
+                    ));
                 }
 
-                // [i64, i64] -> [i32]
-                WasmOpcode::I64Eq
-                | WasmOpcode::I64Ne
-                | WasmOpcode::I64LtS
-                | WasmOpcode::I64LtU
-                | WasmOpcode::I64GtS
-                | WasmOpcode::I64GtU
-                | WasmOpcode::I64LeS
-                | WasmOpcode::I64LeU
-                | WasmOpcode::I64GeS
-                | WasmOpcode::I64GeU => {
+                // binary operator [i64, i64] -> [i32]
+                WasmOpcode::I64Eq => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != b || a != WasmValType::I64 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Eq,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64Ne => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Ne,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64LtS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64LtS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64LtU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64LtU,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64GtS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64GtS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64GtU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64GtU,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64LeS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64LeS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64LeU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64LeU,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64GeS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64GeS,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I64GeU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64GeU,
+                        value_stack.len(),
+                        0,
+                    ));
                     value_stack.push(WasmValType::I32);
                 }
 
-                // [i64] -> [i64]
-                WasmOpcode::I64Clz
-                | WasmOpcode::I64Ctz
-                | WasmOpcode::I64Popcnt
-                | WasmOpcode::I64Extend8S
-                | WasmOpcode::I64Extend16S
-                | WasmOpcode::I64Extend32S => {
+                // unary operator [i64] -> [i64]
+                WasmOpcode::I64Clz => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Clz,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I64Ctz => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Ctz,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I64Popcnt => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Popcnt,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I64Extend8S => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Extend8S,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I64Extend16S => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Extend16S,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                    let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                }
+                WasmOpcode::I64Extend32S => {
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Extend32S,
+                        value_stack.len() - 1,
+                        0,
+                    ));
                     let a = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I64 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
                 }
 
-                // [i64, i64] -> [i64]
-                WasmOpcode::I64Add
-                | WasmOpcode::I64Sub
-                | WasmOpcode::I64Mul
-                | WasmOpcode::I64DivS
-                | WasmOpcode::I64DivU
-                | WasmOpcode::I64RemS
-                | WasmOpcode::I64RemU
-                | WasmOpcode::I64And
-                | WasmOpcode::I64Or
-                | WasmOpcode::I64Xor
-                | WasmOpcode::I64Shl
-                | WasmOpcode::I64ShrS
-                | WasmOpcode::I64ShrU
-                | WasmOpcode::I64Rotl
-                | WasmOpcode::I64Rotr => {
+                // binary operator [i64, i64] -> [i64]
+                WasmOpcode::I64Add => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != b || a != WasmValType::I64 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Add,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64Sub => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Sub,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64Mul => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Mul,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64DivS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64DivS,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64DivU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64DivU,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64RemS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64RemS,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64RemU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64RemU,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64And => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64And,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64Or => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Or,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64Xor => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Xor,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64Shl => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Shl,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64ShrS => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64ShrS,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64ShrU => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64ShrU,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+                WasmOpcode::I64Rotl => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Rotl,
+                        value_stack.len() - 1,
+                        0,
+                    ));
+                }
+
+                WasmOpcode::I64Rotr => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    let b = *value_stack.last().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != b || a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Rotr,
+                        value_stack.len() - 1,
+                        0,
+                    ));
                 }
 
                 // [i64] -> [i32]
-                WasmOpcode::I64Eqz | WasmOpcode::I32WrapI64 => {
+                WasmOpcode::I64Eqz => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I64 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64Eqz,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I32);
+                }
+                WasmOpcode::I32WrapI64 => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I64 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I32WrapI64,
+                        value_stack.len(),
+                        0,
+                    ));
                     value_stack.push(WasmValType::I32);
                 }
 
                 // [i32] -> [i64]
-                WasmOpcode::I64ExtendI32S | WasmOpcode::I64ExtendI32U => {
+                WasmOpcode::I64ExtendI32S => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
                     }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64ExtendI32S,
+                        value_stack.len(),
+                        0,
+                    ));
+                    value_stack.push(WasmValType::I64);
+                }
+                WasmOpcode::I64ExtendI32U => {
+                    let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
+                    if a != WasmValType::I32 {
+                        return Err(WasmDecodeError::TypeMismatch);
+                    }
+                    int_codes.push(WasmImc::new(
+                        position,
+                        WasmIntMnemonic::I64ExtendI32U,
+                        value_stack.len(),
+                        0,
+                    ));
                     value_stack.push(WasmValType::I64);
                 }
 
                 // [f32] -> [i32]
+                #[cfg(feature = "float")]
                 WasmOpcode::I32TruncF32S
                 | WasmOpcode::I32TruncF32U
                 | WasmOpcode::I32ReinterpretF32 => {
@@ -2069,6 +3214,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f32, f32] -> [i32]
+                #[cfg(feature = "float")]
                 WasmOpcode::F32Eq
                 | WasmOpcode::F32Ne
                 | WasmOpcode::F32Lt
@@ -2084,6 +3230,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f32] -> [f32]
+                #[cfg(feature = "float")]
                 WasmOpcode::F32Abs
                 | WasmOpcode::F32Neg
                 | WasmOpcode::F32Ceil
@@ -2098,6 +3245,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f32, f32] -> [f32]
+                #[cfg(feature = "float")]
                 WasmOpcode::F32Add
                 | WasmOpcode::F32Sub
                 | WasmOpcode::F32Mul
@@ -2113,6 +3261,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f64] -> [i32]
+                #[cfg(feature = "float")]
                 WasmOpcode::I32TruncF64S | WasmOpcode::I32TruncF64U => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::F64 {
@@ -2122,6 +3271,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f64] -> [i64]
+                #[cfg(feature = "float")]
                 WasmOpcode::I64TruncF32S
                 | WasmOpcode::I64TruncF32U
                 | WasmOpcode::I64TruncF64S
@@ -2135,6 +3285,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f64, f64] -> [i32]
+                #[cfg(feature = "float")]
                 WasmOpcode::F64Eq
                 | WasmOpcode::F64Ne
                 | WasmOpcode::F64Lt
@@ -2150,6 +3301,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f64] -> [f64]
+                #[cfg(feature = "float")]
                 WasmOpcode::F64Abs
                 | WasmOpcode::F64Neg
                 | WasmOpcode::F64Ceil
@@ -2164,6 +3316,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f64, f64] -> [f64]
+                #[cfg(feature = "float")]
                 WasmOpcode::F64Add
                 | WasmOpcode::F64Sub
                 | WasmOpcode::F64Mul
@@ -2179,6 +3332,7 @@ impl WasmBlockInfo {
                 }
 
                 // [i32] -> [f32]
+                #[cfg(feature = "float")]
                 WasmOpcode::F32ConvertI32S
                 | WasmOpcode::F32ConvertI32U
                 | WasmOpcode::F32ReinterpretI32 => {
@@ -2190,6 +3344,7 @@ impl WasmBlockInfo {
                 }
 
                 // [i64] -> [f64]
+                #[cfg(feature = "float")]
                 WasmOpcode::F32ConvertI64S | WasmOpcode::F32ConvertI64U => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I64 {
@@ -2199,6 +3354,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f64] -> [f32]
+                #[cfg(feature = "float")]
                 WasmOpcode::F32DemoteF64 => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::F64 {
@@ -2208,6 +3364,7 @@ impl WasmBlockInfo {
                 }
 
                 // [i32] -> [f64]
+                #[cfg(feature = "float")]
                 WasmOpcode::F64ConvertI32S | WasmOpcode::F64ConvertI32U => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::I32 {
@@ -2217,6 +3374,7 @@ impl WasmBlockInfo {
                 }
 
                 // [i64] -> [f64]
+                #[cfg(feature = "float")]
                 WasmOpcode::F64ConvertI64S
                 | WasmOpcode::F64ConvertI64U
                 | WasmOpcode::F64ReinterpretI64 => {
@@ -2228,6 +3386,7 @@ impl WasmBlockInfo {
                 }
 
                 // [f32] -> [f64]
+                #[cfg(feature = "float")]
                 WasmOpcode::F64PromoteF32 => {
                     let a = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if a != WasmValType::F32 {
@@ -2239,17 +3398,6 @@ impl WasmBlockInfo {
                 #[allow(unreachable_patterns)]
                 _ => return Err(WasmDecodeError::UnreachableTrap),
             }
-
-            // println!(
-            //     "{}[{}]> {:04x} {:02x} {} {:?} -> {:?}",
-            //     block_stack.len(),
-            //     value_stack.len(),
-            //     position,
-            //     opcode as u8,
-            //     opcode.to_str(),
-            //     old_values,
-            //     value_stack
-            // );
         }
 
         if result_types.len() > 0 {
@@ -2269,47 +3417,45 @@ impl WasmBlockInfo {
             }
         }
 
-        let blocks = {
-            let mut output = BTreeMap::new();
-            for block in blocks {
-                let block = block.borrow();
-                output.insert(block.start_position, block.clone());
+        // fixes branching targets
+        for code in int_codes.iter_mut() {
+            match code.opcode() {
+                WasmIntMnemonic::Br | WasmIntMnemonic::BrIf => {
+                    let target = code.param1() as usize;
+                    let block = blocks.get(target).ok_or(WasmDecodeError::OutOfBranch)?;
+                    code.set_param1(block.borrow().preferred_target() as u64);
+                }
+                WasmIntMnemonic::BrTable => {
+                    let table_position = code.param1() as usize;
+                    let table_len = ext_params[table_position] + 1;
+                    for i in 0..table_len {
+                        let index = table_position + i + 1;
+                        let target = ext_params[index];
+                        let block = blocks.get(target).ok_or(WasmDecodeError::OutOfBranch)?;
+                        ext_params[index] = block.borrow().preferred_target();
+                    }
+                }
+                _ => (),
             }
-            output
-        };
+        }
+
+        // let blocks = {
+        //     let mut output = BTreeMap::new();
+        //     for block in blocks {
+        //         let block = block.borrow();
+        //         output.insert(block.start_position, block.clone());
+        //     }
+        //     output
+        // };
 
         Ok(Self {
             func_index,
             max_stack,
             max_block_level,
-            blocks,
             flags,
+            int_codes: int_codes.into_boxed_slice(),
+            ext_params: ext_params.into_boxed_slice(),
         })
-    }
-
-    #[inline]
-    pub const fn func_index(&self) -> usize {
-        self.func_index
-    }
-
-    #[inline]
-    pub const fn max_stack(&self) -> usize {
-        self.max_stack
-    }
-
-    #[inline]
-    pub const fn max_block_level(&self) -> usize {
-        self.max_block_level
-    }
-
-    #[inline]
-    pub fn block_info(&self, at: usize) -> Option<&WasmBlockContext> {
-        self.blocks.get(&at)
-    }
-
-    #[inline]
-    pub fn is_leaf(&self) -> bool {
-        self.flags.contains(WasmBlockFlag::LEAF_FUNCTION)
     }
 }
 

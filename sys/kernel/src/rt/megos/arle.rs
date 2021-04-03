@@ -136,6 +136,7 @@ impl ArleRuntime {
     }
 
     fn dispatch_syscall(&mut self, params: &[WasmValue]) -> Result<WasmValue, WasmRuntimeError> {
+        // println!("syscall {:?}", params[0]);
         let mut params = ParamsDecoder::new(params);
         // let module = &self.module;
         let memory = self.module.memory(0).ok_or(WasmRuntimeError::OutOfMemory)?;
@@ -348,6 +349,11 @@ impl ArleRuntime {
 
             svc::Function::Alloc | svc::Function::Free => {
                 // TODO:
+            }
+
+            svc::Function::Test => {
+                let val = params.get_u32()?;
+                println!("val: {}", val);
             }
         }
 

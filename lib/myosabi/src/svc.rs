@@ -50,6 +50,8 @@ pub enum Function {
     Alloc = 10000,
     /// [10001] RESERVED
     Free = 10001,
+    /// [10002] test_u64
+    Test = 10002,
 }
 
 impl TryFrom<u32> for Function {
@@ -80,6 +82,7 @@ impl TryFrom<u32> for Function {
             101 => Ok(Self::Srand),
             10000 => Ok(Self::Alloc),
             10001 => Ok(Self::Free),
+            10002 => Ok(Self::Test),
             _ => Err(()),
         }
     }
