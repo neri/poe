@@ -27,7 +27,8 @@
 %define CEEF_S_VADDR        0x08
 %define CEEF_S_MEMSZ        0x0C
 
-%define VESA_MODE_1         0x4112 ; 640x480x32
+%define VESA_MODE_1         0x4115 ; 800x600x32
+; %define VESA_MODE_1         0x4112 ; 640x480x32
 ; %define VESA_MODE_1         0x4103 ; 800x600x8
 %define VESA_MODE_2         0x4101 ; 640x480x8
 %define MAX_PALETTE         16

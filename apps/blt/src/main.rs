@@ -7,7 +7,10 @@ use myoslib::{os_rand, window::*, *};
 
 #[no_mangle]
 fn _start() {
-    let window = Window::new("Blt Test", Size::new(256, 224));
+    let window = WindowBuilder::new()
+        .size(Size::new(256, 224))
+        .bg_color(WindowColor::BLACK)
+        .build("Blt Test");
     let bitmap = ConstBitmap8::from_bytes(&BITMAP_DATA, Size::new(BITMAP_WIDTH, BITMAP_HEIGHT));
     loop {
         for _ in 0..100 {

@@ -30,7 +30,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #![no_std]
 
 use megstd::drawing::*;
-use myoslib::window::Window;
+use myoslib::window::*;
 use myoslib::*;
 
 #[no_mangle]
@@ -61,7 +61,10 @@ static mut DATA: [u32; BITMAP_SIZE] = [0; BITMAP_SIZE];
 impl<'a> App<'a> {
     #[inline]
     fn new() -> Self {
-        let window = Window::new("Noiz2bg", Size::new(BITMAP_WIDTH, BITMAP_HEIGHT));
+        let window = WindowBuilder::new()
+            .size(Size::new(BITMAP_WIDTH, BITMAP_HEIGHT))
+            .expressive()
+            .build("noiz2bg");
         let bitmap =
             Bitmap32::from_bytes(unsafe { &mut DATA }, Size::new(BITMAP_WIDTH, BITMAP_HEIGHT));
         Self {
@@ -150,7 +153,6 @@ impl App<'_> {
         }
     }
 
-    #[inline]
     fn set_stage(&mut self) {
         self.board_index = 0;
         self.boards.iter_mut().for_each(|p| *p = None);
@@ -343,6 +345,7 @@ struct Board {
 }
 
 impl Board {
+    #[inline]
     const fn new(
         x: isize,
         y: isize,
@@ -372,13 +375,8 @@ enum Scene {
     Scene5,
 }
 
-impl Default for Scene {
-    fn default() -> Self {
-        Self::Scene1
-    }
-}
-
 impl Scene {
+    #[inline]
     fn next(&mut self) {
         use Scene::*;
         match self {
@@ -389,5 +387,12 @@ impl Scene {
             Scene4 => *self = Scene5,
             Scene5 => *self = Scene0,
         }
+    }
+}
+
+impl Default for Scene {
+    #[inline]
+    fn default() -> Self {
+        Self::Scene1
     }
 }

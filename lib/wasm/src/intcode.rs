@@ -4,12 +4,12 @@
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone)]
 pub enum WasmIntMnemonic {
+    /// Undefined
+    Undefined,
     /// Unreachable
     Unreachable,
     /// No operation, Do nothing
     Nop,
-    /// If???
-    If,
     /// branch
     Br,
     /// branch if true

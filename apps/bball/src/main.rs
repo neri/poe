@@ -7,8 +7,10 @@ use myoslib::{window::*, *};
 
 #[no_mangle]
 fn _start() {
-    let window = Window::new("bball", Size::new(200, 200));
-    window.fill_rect(Rect::new(0, 0, 200, 200), WindowColor::BLACK);
+    let window = WindowBuilder::new()
+        .size(Size::new(200, 200))
+        .bg_color(WindowColor::BLACK)
+        .build("bball");
     for (i, t1) in TABLE[..14].iter().enumerate() {
         for (j, t2) in TABLE[i..].iter().enumerate() {
             let dis = if j < 8 { j } else { 15 - j };

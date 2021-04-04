@@ -31,7 +31,6 @@ const WINDOW_TITLE_HEIGHT: isize = 20;
 
 const WINDOW_DEFAULT_KEY_COLOR: IndexedColor = IndexedColor::DEFAULT_KEY;
 const WINDOW_BORDER_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x666666);
-const WINDOW_DEFAULT_BGCOLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
 const WINDOW_ACTIVE_TITLE_BG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xCCCCCC);
 const WINDOW_ACTIVE_TITLE_FG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x333333);
 const WINDOW_INACTIVE_TITLE_BG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
@@ -96,6 +95,8 @@ impl Into<usize> for WindowManagerAttributes {
 }
 
 impl WindowManager<'static> {
+    pub const DEFAULT_BGCOLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
+
     pub(crate) unsafe fn init() {
         let main_screen = System::main_screen();
         let pointer_x = AtomicIsize::new(main_screen.width() as isize / 2);
@@ -1072,7 +1073,7 @@ impl WindowBuilder {
             frame: Rect::new(isize::MIN, isize::MIN, 300, 300),
             level: WindowLevel::NORMAL,
             style: WindowStyle::DEFAULT,
-            bg_color: WINDOW_DEFAULT_BGCOLOR,
+            bg_color: WindowManager::DEFAULT_BGCOLOR,
             key_color: WINDOW_DEFAULT_KEY_COLOR,
             title: [0; WINDOW_TITLE_LENGTH],
             queue_size: 32,

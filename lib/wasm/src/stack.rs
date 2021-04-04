@@ -96,8 +96,18 @@ impl WasmStackValue {
     }
 
     #[inline]
+    pub fn get_i8(&self) -> i8 {
+        unsafe { self.usize as i8 }
+    }
+
+    #[inline]
     pub fn get_u8(&self) -> u8 {
         unsafe { self.usize as u8 }
+    }
+
+    #[inline]
+    pub fn get_i16(&self) -> i16 {
+        unsafe { self.usize as i16 }
     }
 
     #[inline]

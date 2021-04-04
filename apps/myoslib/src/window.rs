@@ -15,8 +15,12 @@ pub struct Window {
 
 impl Window {
     #[inline]
-    pub fn new(s: &str, size: Size) -> Self {
-        let handle = WindowHandle(os_new_window(s, size.width as usize, size.height as usize));
+    pub fn new(title: &str, size: Size) -> Self {
+        let handle = WindowHandle(os_new_window1(
+            title,
+            size.width as usize,
+            size.height as usize,
+        ));
         Self { handle }
     }
 
@@ -37,7 +41,7 @@ impl Window {
             origin.x as usize,
             origin.y as usize,
             s,
-            color.0 as u32,
+            color.0 as usize,
         );
     }
 
@@ -49,7 +53,7 @@ impl Window {
             c1.y as usize,
             c2.x as usize,
             c2.y as usize,
-            color.0 as u32,
+            color.0 as usize,
         )
     }
 
@@ -61,7 +65,7 @@ impl Window {
             rect.y() as usize,
             rect.width() as usize,
             rect.height() as usize,
-            color.0 as u32,
+            color.0 as usize,
         )
     }
 
@@ -101,5 +105,56 @@ impl Window {
     #[inline]
     pub fn refresh(&self) {
         os_refresh_window(self.handle.0)
+    }
+}
+
+pub struct WindowBuilder {
+    size: Size,
+    bg_color: WindowColor,
+    flag: u32,
+}
+
+impl WindowBuilder {
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            size: Size::new(240, 240),
+            bg_color: WindowColor::WHITE,
+            flag: 0,
+        }
+    }
+
+    /// Create a window from the specified options.
+    #[inline]
+    pub fn build(self, title: &str) -> Window {
+        let handle = WindowHandle(os_new_window2(
+            title,
+            self.size.width() as usize,
+            self.size.height() as usize,
+            self.bg_color.0 as usize,
+            self.flag as usize,
+        ));
+        Window { handle }
+    }
+
+    /// Set window size
+    #[inline]
+    pub const fn size(mut self, size: Size) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Set background color
+    #[inline]
+    pub const fn bg_color(mut self, bg_color: WindowColor) -> Self {
+        self.bg_color = bg_color;
+        self
+    }
+
+    /// Make window's bitmap to expressive (32bit)
+    #[inline]
+    pub const fn expressive(mut self) -> Self {
+        self.flag |= MyOsAbi::WINDOW_32BIT_BITMAP;
+        self
     }
 }

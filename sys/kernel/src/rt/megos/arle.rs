@@ -136,9 +136,7 @@ impl ArleRuntime {
     }
 
     fn dispatch_syscall(&mut self, params: &[WasmValue]) -> Result<WasmValue, WasmRuntimeError> {
-        // println!("syscall {:?}", params[0]);
         let mut params = ParamsDecoder::new(params);
-        // let module = &self.module;
         let memory = self.module.memory(0).ok_or(WasmRuntimeError::OutOfMemory)?;
         let func_no = params.get_u32().and_then(|v| {
             svc::Function::try_from(v).map_err(|_| WasmRuntimeError::InvalidParameter)
@@ -183,11 +181,18 @@ impl ArleRuntime {
             svc::Function::NewWindow => {
                 let title = params.get_string(memory).unwrap_or("");
                 let size = params.get_size()?;
+                let bg_color = params.get_color().unwrap_or(WindowManager::DEFAULT_BGCOLOR);
+                let window_option = params.get_u32().unwrap_or(0);
 
                 let window = WindowBuilder::new(title)
                     .style_add(WindowStyle::NAKED)
                     .size(size)
-                    .bitmap_strategy(BitmapStrategy::Expressive)
+                    .bg_color(bg_color)
+                    .bitmap_strategy(if (window_option & MyOsAbi::WINDOW_32BIT_BITMAP) != 0 {
+                        BitmapStrategy::Expressive
+                    } else {
+                        BitmapStrategy::Compact
+                    })
                     .build();
                 window.make_active();
 

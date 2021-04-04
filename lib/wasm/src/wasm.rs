@@ -813,6 +813,7 @@ impl WasmMemory {
     }
 
     /// Read the specified range of memory
+    #[inline]
     pub fn read_bytes(&self, offset: usize, size: usize) -> Result<&[u8], WasmRuntimeError> {
         let memory = self.memory();
         let limit = memory.len();
@@ -823,6 +824,7 @@ impl WasmMemory {
         }
     }
 
+    #[inline]
     pub fn read_u32_array(&self, offset: usize, len: usize) -> Result<&[u32], WasmRuntimeError> {
         let memory = self.memory();
         let limit = memory.len();
@@ -840,6 +842,7 @@ impl WasmMemory {
     }
 
     /// Write slice to memory
+    #[inline]
     pub fn write_bytes(&mut self, offset: usize, src: &[u8]) -> Result<(), WasmRuntimeError> {
         let memory = self.memory_mut();
         let size = src.len();
@@ -856,6 +859,7 @@ impl WasmMemory {
         }
     }
 
+    #[inline]
     pub fn read_u8(&self, offset: usize) -> Result<u8, WasmRuntimeError> {
         let slice = self.memory();
         slice
@@ -864,6 +868,7 @@ impl WasmMemory {
             .ok_or(WasmRuntimeError::OutOfBounds)
     }
 
+    #[inline]
     pub fn write_u8(&self, offset: usize, val: u8) -> Result<(), WasmRuntimeError> {
         let slice = self.memory_mut();
         slice
@@ -872,6 +877,7 @@ impl WasmMemory {
             .ok_or(WasmRuntimeError::OutOfBounds)
     }
 
+    #[inline]
     pub fn read_u16(&self, offset: usize) -> Result<u16, WasmRuntimeError> {
         let slice = self.memory();
         let limit = slice.len();
@@ -882,6 +888,7 @@ impl WasmMemory {
         }
     }
 
+    #[inline]
     pub fn write_u16(&self, offset: usize, val: u16) -> Result<(), WasmRuntimeError> {
         let slice = self.memory_mut();
         let limit = slice.len();
@@ -893,6 +900,7 @@ impl WasmMemory {
         }
     }
 
+    #[inline]
     pub fn read_u32(&self, offset: usize) -> Result<u32, WasmRuntimeError> {
         let slice = self.memory();
         let limit = slice.len();
@@ -903,6 +911,7 @@ impl WasmMemory {
         }
     }
 
+    #[inline]
     pub fn write_u32(&self, offset: usize, val: u32) -> Result<(), WasmRuntimeError> {
         let slice = self.memory_mut();
         let limit = slice.len();
@@ -914,6 +923,7 @@ impl WasmMemory {
         }
     }
 
+    #[inline]
     pub fn read_u64(&self, offset: usize) -> Result<u64, WasmRuntimeError> {
         let slice = self.memory();
         let limit = slice.len();
@@ -924,6 +934,7 @@ impl WasmMemory {
         }
     }
 
+    #[inline]
     pub fn write_u64(&self, offset: usize, val: u64) -> Result<(), WasmRuntimeError> {
         let slice = self.memory_mut();
         let limit = slice.len();
@@ -1328,6 +1339,7 @@ pub enum WasmRuntimeError {
     UnexpectedToken,
     InvalidParameter,
     InvalidBytecode,
+    Unreachable,
     OutOfBounds,
     OutOfMemory,
     NoMethod,
@@ -1667,8 +1679,10 @@ impl WasmBlockInfo {
                     });
                     block_stack.push(blocks.len());
                     blocks.push(block);
-                    if block_type != WasmBlockType::Empty {
-                        int_codes.push(WasmIntMnemonic::Unreachable.into());
+                    if block_type == WasmBlockType::Empty {
+                        int_codes.push(WasmIntMnemonic::Nop.into());
+                    } else {
+                        int_codes.push(WasmIntMnemonic::Undefined.into());
                     }
                 }
                 WasmOpcode::Loop => {
@@ -1685,8 +1699,10 @@ impl WasmBlockInfo {
                     });
                     block_stack.push(blocks.len());
                     blocks.push(block);
-                    if block_type != WasmBlockType::Empty {
-                        int_codes.push(WasmIntMnemonic::Unreachable.into());
+                    if block_type == WasmBlockType::Empty {
+                        int_codes.push(WasmIntMnemonic::Nop.into());
+                    } else {
+                        int_codes.push(WasmIntMnemonic::Undefined.into());
                     }
                 }
                 WasmOpcode::If => {
@@ -1707,7 +1723,7 @@ impl WasmBlockInfo {
                     });
                     block_stack.push(blocks.len());
                     blocks.push(block);
-                    int_codes.push(WasmIntMnemonic::Unreachable.into());
+                    int_codes.push(WasmIntMnemonic::Undefined.into());
                 }
                 WasmOpcode::Else => {
                     let block_ref = block_stack.last().ok_or(WasmDecodeError::ElseWithoutIf)?;
@@ -1720,7 +1736,7 @@ impl WasmBlockInfo {
                     for _ in 0..n_drops {
                         value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     }
-                    int_codes.push(WasmIntMnemonic::Unreachable.into());
+                    int_codes.push(WasmIntMnemonic::Undefined.into());
                 }
                 WasmOpcode::End => {
                     if block_stack.len() > 0 {
@@ -1769,21 +1785,16 @@ impl WasmBlockInfo {
                     }
                 }
                 WasmOpcode::BrTable => {
-                    let table_len = code_block.read_unsigned()? as usize;
+                    let table_len = 1 + code_block.read_unsigned()? as usize;
                     let param_position = ext_params.len();
                     ext_params.push(table_len);
                     for _ in 0..table_len {
                         let br = code_block.read_unsigned()? as usize;
-                        if block_stack.len() <= br {
-                            return Err(WasmDecodeError::OutOfBranch);
-                        }
-                        ext_params.push(block_stack.len() - br - 1);
+                        let target = block_stack
+                            .get(block_stack.len() - br - 1)
+                            .ok_or(WasmDecodeError::OutOfBranch)?;
+                        ext_params.push(*target);
                     }
-                    let br = code_block.read_unsigned()? as usize;
-                    if block_stack.len() <= br {
-                        return Err(WasmDecodeError::OutOfBranch);
-                    }
-                    ext_params.push(block_stack.len() - br - 1);
                     let cc = value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
                     if cc != WasmValType::I32 {
                         return Err(WasmDecodeError::TypeMismatch);
@@ -3427,7 +3438,7 @@ impl WasmBlockInfo {
                 }
                 WasmIntMnemonic::BrTable => {
                     let table_position = code.param1() as usize;
-                    let table_len = ext_params[table_position] + 1;
+                    let table_len = ext_params[table_position];
                     for i in 0..table_len {
                         let index = table_position + i + 1;
                         let target = ext_params[index];

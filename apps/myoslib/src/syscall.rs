@@ -55,14 +55,36 @@ pub fn os_version() -> u32 {
 
 /// Create a new window.
 #[inline]
-pub fn os_new_window(s: &str, width: usize, height: usize) -> usize {
+pub fn os_new_window1(title: &str, width: usize, height: usize) -> usize {
     unsafe {
         svc4(
             Function::NewWindow,
-            s.as_ptr() as usize,
-            s.len(),
+            title.as_ptr() as usize,
+            title.len(),
             width,
             height,
+        )
+    }
+}
+
+/// Create a new window.
+#[inline]
+pub fn os_new_window2(
+    title: &str,
+    width: usize,
+    height: usize,
+    bg_color: usize,
+    flag: usize,
+) -> usize {
+    unsafe {
+        svc6(
+            Function::NewWindow,
+            title.as_ptr() as usize,
+            title.len(),
+            width,
+            height,
+            bg_color,
+            flag,
         )
     }
 }
@@ -75,9 +97,8 @@ pub fn os_close_window(window: usize) {
 
 /// Draw a string in a window.
 #[inline]
-pub fn os_win_draw_string(window: usize, x: usize, y: usize, s: &str, color: u32) {
+pub fn os_win_draw_string(window: usize, x: usize, y: usize, s: &str, color: usize) {
     let ptr = s.as_ptr() as usize;
-    let color = color as usize;
     unsafe { svc6(Function::DrawString, window, x, y, ptr, s.len(), color) };
 }
 
@@ -89,15 +110,13 @@ pub fn os_win_fill_rect(
     y: usize,
     width: usize,
     height: usize,
-    color: u32,
+    color: usize,
 ) {
-    let color = color as usize;
     unsafe { svc6(Function::FillRect, window, x, y, width, height, color) };
 }
 
 #[inline]
-pub fn os_win_draw_line(window: usize, x1: usize, y1: usize, x2: usize, y2: usize, color: u32) {
-    let color = color as usize;
+pub fn os_win_draw_line(window: usize, x1: usize, y1: usize, x2: usize, y2: usize, color: usize) {
     unsafe { svc6(Function::DrawLine, window, x1, y1, x2, y2, color) };
 }
 
