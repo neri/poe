@@ -8,14 +8,23 @@ pub enum WasmIntMnemonic {
     Nop,
     /// branch
     Br,
+    /// branch if true
+    BrIf,
+    /// Fused check and branch
+    FusedI32BrZ,
+    FusedI64BrZ,
+
+    /// branch table
+    BrTable,
+
+    /// Block Marker
+    Block,
+    End,
+
     /// Undefined
     Undefined,
     /// Unreachable
     Unreachable,
-    /// branch if true
-    BrIf,
-    /// branch table
-    BrTable,
     /// return from function
     Return,
     /// call function
@@ -130,10 +139,19 @@ pub enum WasmIntMnemonic {
     I32Extend16S,
 
     // Fused Instructions
-    FusedI32BrZ,
-    FusedI64BrZ,
     FusedI32AddI,
     FusedI32SubI,
     FusedI64AddI,
     FusedI64SubI,
+}
+
+impl WasmIntMnemonic {
+    #[inline]
+    pub fn is_branch(&self) -> bool {
+        use WasmIntMnemonic::*;
+        match *self {
+            Br | BrIf | FusedI32BrZ | FusedI64BrZ => true,
+            _ => false,
+        }
+    }
 }

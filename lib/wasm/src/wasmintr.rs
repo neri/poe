@@ -1282,26 +1282,10 @@ impl<'a> WasmIntermediateCodeBlock<'a> {
 impl WasmIntermediateCodeBlock<'_> {
     #[inline]
     fn fetch(&mut self) -> Option<&WasmImc> {
-        let mut position = self.position;
-        loop {
-            match self.codes.get(position) {
-                Some(ref code) => match code.mnemonic() {
-                    WasmIntMnemonic::Nop => {
-                        position += 1;
-                        continue;
-                    }
-                    WasmIntMnemonic::Br => {
-                        let br = code.param1() as usize;
-                        position = br;
-                    }
-                    _ => {
-                        self.position = position + 1;
-                        break Some(code);
-                    }
-                },
-                None => return None,
-            }
-        }
+        self.codes.get(self.position).map(|v| {
+            self.position += 1;
+            v
+        })
     }
 
     #[allow(dead_code)]

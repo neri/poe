@@ -288,7 +288,7 @@ impl Cpu {
 
 /// Architecture-specific context data
 #[repr(C)]
-pub struct CpuContextData {
+pub(crate) struct CpuContextData {
     _repr: [u8; Self::SIZE_OF_CONTEXT],
 }
 

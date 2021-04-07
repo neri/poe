@@ -4,6 +4,7 @@ use super::opcode::*;
 use crate::intcode::*;
 use crate::wasmintr::*;
 use crate::*;
+use _core::borrow::BorrowMut;
 use alloc::{boxed::Box, string::*, sync::Arc, vec::Vec};
 use bitflags::*;
 use byteorder::*;
@@ -1644,7 +1645,7 @@ impl WasmBlockInfo {
         let mut max_block_level = 0;
         let mut flags = WasmBlockFlag::LEAF_FUNCTION;
 
-        let mut int_codes: Vec<WasmImc> = Vec::with_capacity(code_block.len() / 2);
+        let mut int_codes: Vec<WasmImc> = Vec::new();
         let mut ext_params = Vec::new();
 
         loop {
@@ -1671,6 +1672,7 @@ impl WasmBlockInfo {
                 WasmOpcode::Nop => (),
 
                 WasmOpcode::Block => {
+                    let target = blocks.len();
                     let block_type = code_block
                         .read_signed()
                         .and_then(|v| WasmBlockType::from_i64(v))?;
@@ -1678,19 +1680,25 @@ impl WasmBlockInfo {
                         inst_type: BlockInstType::Block,
                         block_type,
                         stack_level: value_stack.len(),
-                        start_position: int_codes.len(),
+                        start_position: 0,
                         end_position: 0,
                         else_position: 0,
                     });
-                    block_stack.push(blocks.len());
+                    block_stack.push(target);
                     blocks.push(block);
                     if block_type == WasmBlockType::Empty {
-                        int_codes.push(WasmIntMnemonic::Nop.into());
+                        int_codes.push(WasmImc::new(
+                            position,
+                            WasmIntMnemonic::Block,
+                            value_stack.len(),
+                            target as u64,
+                        ));
                     } else {
                         int_codes.push(WasmIntMnemonic::Undefined.into());
                     }
                 }
                 WasmOpcode::Loop => {
+                    let target = blocks.len();
                     let block_type = code_block
                         .read_signed()
                         .and_then(|v| WasmBlockType::from_i64(v))?;
@@ -1698,14 +1706,19 @@ impl WasmBlockInfo {
                         inst_type: BlockInstType::Loop,
                         block_type,
                         stack_level: value_stack.len(),
-                        start_position: int_codes.len(),
+                        start_position: 0,
                         end_position: 0,
                         else_position: 0,
                     });
-                    block_stack.push(blocks.len());
+                    block_stack.push(target);
                     blocks.push(block);
                     if block_type == WasmBlockType::Empty {
-                        int_codes.push(WasmIntMnemonic::Nop.into());
+                        int_codes.push(WasmImc::new(
+                            position,
+                            WasmIntMnemonic::Block,
+                            value_stack.len(),
+                            target as u64,
+                        ));
                     } else {
                         int_codes.push(WasmIntMnemonic::Undefined.into());
                     }
@@ -1722,7 +1735,7 @@ impl WasmBlockInfo {
                         inst_type: BlockInstType::If,
                         block_type,
                         stack_level: value_stack.len(),
-                        start_position: int_codes.len(),
+                        start_position: 0,
                         end_position: 0,
                         else_position: 0,
                     });
@@ -1732,11 +1745,10 @@ impl WasmBlockInfo {
                 }
                 WasmOpcode::Else => {
                     let block_ref = block_stack.last().ok_or(WasmDecodeError::ElseWithoutIf)?;
-                    let mut block = blocks.get(*block_ref).unwrap().borrow_mut();
+                    let block = blocks.get(*block_ref).unwrap().borrow();
                     if block.inst_type != BlockInstType::If {
                         return Err(WasmDecodeError::ElseWithoutIf);
                     }
-                    block.else_position = int_codes.len();
                     let n_drops = value_stack.len() - block.stack_level;
                     for _ in 0..n_drops {
                         value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1746,8 +1758,7 @@ impl WasmBlockInfo {
                 WasmOpcode::End => {
                     if block_stack.len() > 0 {
                         let block_ref = block_stack.pop().ok_or(WasmDecodeError::BlockMismatch)?;
-                        let mut block = blocks.get(block_ref).unwrap().borrow_mut();
-                        block.end_position = int_codes.len();
+                        let block = blocks.get(block_ref).unwrap().borrow();
                         let n_drops = value_stack.len() - block.stack_level;
                         for _ in 0..n_drops {
                             value_stack.pop().ok_or(WasmDecodeError::OutOfStack)?;
@@ -1755,9 +1766,20 @@ impl WasmBlockInfo {
                         block.block_type.into_type().map(|v| {
                             value_stack.push(v);
                         });
-                        int_codes.push(WasmIntMnemonic::Nop.into());
+                        int_codes.push(WasmImc::new(
+                            position,
+                            WasmIntMnemonic::End,
+                            value_stack.len(),
+                            block_ref as u64,
+                        ));
                     // TODO: type check
                     } else {
+                        int_codes.push(WasmImc::new(
+                            position,
+                            WasmIntMnemonic::Return,
+                            value_stack.len() - 1,
+                            0,
+                        ));
                         break;
                     }
                 }
@@ -3480,37 +3502,58 @@ impl WasmBlockInfo {
             }
         }
 
+        // compaction
+        let mut actual_len = 0;
+        for index in 0..int_codes.len() {
+            use WasmIntMnemonic::*;
+            let code = int_codes[index];
+            match code.mnemonic() {
+                Nop => (),
+                Block => {
+                    let target = code.param1() as usize;
+                    let ref mut block = blocks[target].borrow_mut();
+                    block.start_position = actual_len;
+                }
+                End => {
+                    let target = code.param1() as usize;
+                    let ref mut block = blocks[target].borrow_mut();
+                    block.end_position = actual_len;
+                }
+                _ => {
+                    int_codes[actual_len] = code;
+                    actual_len += 1;
+                }
+            }
+        }
+        int_codes.resize(
+            actual_len,
+            WasmImc::from_mnemonic(WasmIntMnemonic::Unreachable),
+        );
+
         // fixes branching targets
         for code in int_codes.iter_mut() {
             use WasmIntMnemonic::*;
-            match code.mnemonic() {
-                Br | BrIf | FusedI32BrZ | FusedI64BrZ => {
-                    let target = code.param1() as usize;
-                    let block = blocks.get(target).ok_or(WasmDecodeError::OutOfBranch)?;
-                    code.set_param1(block.borrow().preferred_target() as u64);
-                }
-                BrTable => {
-                    let table_position = code.param1() as usize;
-                    let table_len = ext_params[table_position];
-                    for i in 0..table_len {
-                        let index = table_position + i + 1;
-                        let target = ext_params[index];
-                        let block = blocks.get(target).ok_or(WasmDecodeError::OutOfBranch)?;
-                        ext_params[index] = block.borrow().preferred_target();
+            let mnemonic = code.mnemonic();
+            if mnemonic.is_branch() {
+                let target = code.param1() as usize;
+                let block = blocks.get(target).ok_or(WasmDecodeError::OutOfBranch)?;
+                code.set_param1(block.borrow().preferred_target() as u64);
+            } else {
+                match code.mnemonic() {
+                    BrTable => {
+                        let table_position = code.param1() as usize;
+                        let table_len = ext_params[table_position];
+                        for i in 0..table_len {
+                            let index = table_position + i + 1;
+                            let target = ext_params[index];
+                            let block = blocks.get(target).ok_or(WasmDecodeError::OutOfBranch)?;
+                            ext_params[index] = block.borrow().preferred_target();
+                        }
                     }
+                    _ => (),
                 }
-                _ => (),
             }
         }
-
-        // let blocks = {
-        //     let mut output = BTreeMap::new();
-        //     for block in blocks {
-        //         let block = block.borrow();
-        //         output.insert(block.start_position, block.clone());
-        //     }
-        //     output
-        // };
 
         Ok(Self {
             func_index,

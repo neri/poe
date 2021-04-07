@@ -16,6 +16,7 @@ TARGET_ISO	= $(BIN)megos.iso
 IMG_SOURCES	= $(KERNEL_SYS)
 INITRD_FILES	= $(KERNEL_CEF) $(MISC)initrd/*
 INITRD_FILES2	= apps/target/wasm32-unknown-unknown/release/*.wasm
+MKFDFS		= cargo run --manifest-path ./tools/mkfdfs/Cargo.toml --
 
 all: $(BIN) $(TARGETS)
 
@@ -42,7 +43,7 @@ $(BIN)loader.bin: boot/pc-bios/loader.asm
 	nasm -f bin -I boot $< -o $@
 
 $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs lib/megstd/src/*.rs lib/megstd/src/**/*.rs lib/wasm/src/*.rs
-	(cd sys; cargo build -Zbuild-std --release)
+	cd sys; cargo build -Zbuild-std --release
 
 $(KERNEL_CEF): tools/elf2ceef/src/*.rs $(KERNEL_LD)
 	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_CEF)
@@ -55,12 +56,15 @@ $(KERNEL_SYS): $(BIN)loader.bin $(INITRD_IMG)
 
 $(BOOT_IMG): install
 
+apps:
+	cd apps; cargo build --target wasm32-unknown-unknown --release
+
 install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES)
-	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
+	$(MKFDFS) -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
 
 full: install iso
-	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 1232 $(BIN)boot.hdm $(IMG_SOURCES)
-	cargo run --manifest-path ./tools/mkfdfs/Cargo.toml -- -bs $(BIN)fdboot.bin -f 320 $(BIN)mini.img $(IMG_SOURCES)
+	$(MKFDFS) -bs $(BIN)fdboot.bin -f 1232 $(BIN)boot.hdm $(IMG_SOURCES)
+	$(MKFDFS) -bs $(BIN)fdboot.bin -f 320 $(BIN)mini.img $(IMG_SOURCES)
 
 iso: $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 	cp -r $(BIN)cdboot.bin $(IMG_SOURCES) $(ISO_SRC)
@@ -71,7 +75,7 @@ iso: $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 		-o $(TARGET_ISO) $(ISO_SRC)
 	dd conv=notrunc if=$(BIN)fmcdboot.bin of=$(TARGET_ISO)
 
-apps:
-	cd apps; cargo build --target wasm32-unknown-unknown --release
+test:
+	cargo test --manifest-path lib/wasm/Cargo.toml
 
 # run: install

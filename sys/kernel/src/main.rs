@@ -73,13 +73,6 @@ impl Shell {
         Self::invoke_command(stdout, "ver");
 
         writeln!(stdout, "Platform {}", System::platform(),).unwrap();
-        writeln!(stdout, "CPU ver {}", System::cpu_ver().0,).unwrap();
-        writeln!(
-            stdout,
-            "Memory {} MB",
-            MemoryManager::total_memory_size() >> 20,
-        )
-        .unwrap();
         let screen = System::main_screen();
         writeln!(
             stdout,
