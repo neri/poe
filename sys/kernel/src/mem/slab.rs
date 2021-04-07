@@ -62,12 +62,14 @@ impl SlabAllocator {
     pub(super) fn statistics(&self) -> Vec<(usize, usize, usize)> {
         let mut vec = Vec::with_capacity(self.vec.len());
         for item in &self.vec {
+            let count = item.items_per_chunk() * item.count();
             vec.push((
                 item.block_size(),
-                item.chunks[..item.count as usize].iter().fold(0, |v, i| {
-                    v + i.bitmap.load(Ordering::Relaxed).count_ones() as usize
-                }),
-                item.items_per_chunk() * item.count(),
+                count
+                    - item.chunks[..item.count as usize].iter().fold(0, |v, i| {
+                        v + i.bitmap.load(Ordering::Relaxed).count_ones() as usize
+                    }),
+                count,
             ));
         }
         vec
@@ -102,9 +104,9 @@ impl SlabCache {
                 (items_per_chunk / atomic_page_size) * atomic_page_size,
                 usize::max(atomic_page_size, 0x1000 / preferred_page_size),
             );
-            if block_size < 1024 && pages <= items_per_chunk {
-                pages *= 2;
-            }
+            // if block_size < 1024 && pages <= items_per_chunk {
+            //     pages *= 2;
+            // }
             let alloc_size = preferred_page_size * pages;
             let blob = MemoryManager::zalloc(Layout::from_size_align_unchecked(
                 alloc_size,

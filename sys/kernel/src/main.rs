@@ -486,64 +486,6 @@ impl Shell {
     }
 
     #[allow(dead_code)]
-    async fn about_main() {
-        let window_size = Size::new(240, 180);
-        let window = WindowBuilder::new("About").size(window_size).build();
-        window.show();
-
-        let mut sb = StringBuffer::new();
-        let interval = 5000;
-        window.create_timer(0, Duration::from_millis(0));
-        while let Some(message) = window.get_message().await {
-            match message {
-                WindowMessage::Timer(_timer) => {
-                    window.set_needs_display();
-                    window.create_timer(0, Duration::from_millis(interval));
-                }
-                WindowMessage::Draw => {
-                    let font = FontManager::ui_font();
-                    sb.clear();
-
-                    writeln!(sb, "{} v{}", System::name(), System::version(),).unwrap();
-                    writeln!(sb, "Platform {}", System::platform(),).unwrap();
-                    writeln!(sb, "CPU ver {}", System::cpu_ver().0,).unwrap();
-                    writeln!(sb, "Memory {} MB", MemoryManager::total_memory_size() >> 20,)
-                        .unwrap();
-                    let screen = System::main_screen();
-                    writeln!(
-                        sb,
-                        "Screen {}x{} {} bit color",
-                        screen.width(),
-                        screen.height(),
-                        screen.color_mode(),
-                    )
-                    .unwrap();
-
-                    window
-                        .draw(|bitmap| {
-                            bitmap.fill_rect(bitmap.bounds(), window.bg_color());
-                            let rect = bitmap.bounds().insets_by(EdgeInsets::new(0, 8, 2, 8));
-                            TextProcessing::draw_text(
-                                bitmap,
-                                sb.as_str(),
-                                font,
-                                rect,
-                                IndexedColor::BLACK.into(),
-                                0,
-                                LineBreakMode::default(),
-                                TextAlignment::Center,
-                                util::text::VerticalAlignment::Bottom,
-                            );
-                        })
-                        .unwrap();
-                }
-                _ => window.handle_default_message(message),
-            }
-        }
-        unimplemented!()
-    }
-
-    #[allow(dead_code)]
     async fn status_bar_main() {
         const STATUS_BAR_HEIGHT: isize = 24;
         let screen_size = System::main_screen().size();

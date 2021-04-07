@@ -4,14 +4,14 @@
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone)]
 pub enum WasmIntMnemonic {
-    /// Undefined
-    Undefined,
-    /// Unreachable
-    Unreachable,
     /// No operation, Do nothing
     Nop,
     /// branch
     Br,
+    /// Undefined
+    Undefined,
+    /// Unreachable
+    Unreachable,
     /// branch if true
     BrIf,
     /// branch table
@@ -28,6 +28,8 @@ pub enum WasmIntMnemonic {
     LocalGet,
     /// Set a value to a local variable
     LocalSet,
+    /// Duplicate a value to local variable
+    LocalTee,
     /// Get a value from a global variable
     GlobalGet,
     /// Set a value to a global variable
@@ -126,4 +128,12 @@ pub enum WasmIntMnemonic {
     I32WrapI64,
     I32Extend8S,
     I32Extend16S,
+
+    // Fused Instructions
+    FusedI32BrZ,
+    FusedI64BrZ,
+    FusedI32AddI,
+    FusedI32SubI,
+    FusedI64AddI,
+    FusedI64SubI,
 }

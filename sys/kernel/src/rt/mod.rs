@@ -33,15 +33,6 @@ impl RuntimeEnvironment {
         unsafe { &mut RE }
     }
 
-    // pub(crate) fn raise_pid() -> ProcessId {
-    //     static NEXT_PID: AtomicUsize = AtomicUsize::new(1);
-    //     let pid = ProcessId(NEXT_PID.fetch_add(1, Ordering::SeqCst));
-
-    //     // TODO:
-
-    //     pid
-    // }
-
     pub fn recognize(blob: &[u8]) -> Option<Box<dyn BinaryLoader>> {
         let shared = Self::shared();
         for recognizer in &shared.image_loaders {
@@ -56,10 +47,6 @@ impl RuntimeEnvironment {
         let _ = exit_code;
         Scheduler::exit();
     }
-
-    // pub unsafe fn invoke_legacy(context: &LegacyAppContext) -> ! {
-    //     Cpu::invoke_legacy(context);
-    // }
 }
 
 pub trait Personality {

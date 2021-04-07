@@ -10,6 +10,7 @@ use crate::{
     sync::fifo::*,
     sync::semaphore::Semaphore,
     window::*,
+    *,
 };
 use alloc::collections::btree_map::BTreeMap;
 use alloc::sync::Arc;
@@ -269,10 +270,12 @@ impl Scheduler {
     pub fn sleep() {
         unsafe {
             Cpu::without_interrupts(|| {
-                let shared = Self::shared();
-                let current = shared.current;
-                current.update_statistics();
-                current.as_ref().attribute.insert(ThreadAttributes::ASLEEP);
+                {
+                    let shared = Self::shared();
+                    let current = shared.current;
+                    current.update_statistics();
+                    current.as_ref().attribute.insert(ThreadAttributes::ASLEEP);
+                }
                 Self::switch_context(Self::next());
             })
         }
@@ -307,7 +310,13 @@ impl Scheduler {
     }
 
     pub fn exit() -> ! {
-        Self::current_thread().unwrap().update(|t| t.exit());
+        let current = Self::current_thread().unwrap();
+        ThreadPool::synchronized(|| {
+            let shared = Self::shared();
+            unsafe {
+                shared.pool.unsafe_weak(current).unwrap().exit();
+            }
+        });
         unreachable!()
     }
 
@@ -346,6 +355,7 @@ impl Scheduler {
         if thread.priority == Priority::Idle {
             return;
         } else if thread.attribute.contains(ThreadAttributes::ZOMBIE) {
+            drop(thread);
             ThreadPool::drop_thread(handle);
         } else if thread.attribute.test_and_clear(ThreadAttributes::AWAKE) {
             thread.attribute.remove(ThreadAttributes::ASLEEP);
@@ -420,10 +430,16 @@ impl Scheduler {
         shared.retired = Some(current);
         shared.current = next;
 
-        current.update(|current| {
-            let next = &next.as_ref().context;
+        {
+            let current = shared.pool.unsafe_weak(current).unwrap();
+            let next = &shared.pool.unsafe_weak(next).unwrap().context;
             current.context.switch(next);
-        });
+        }
+
+        // current.update(|current| {
+        //     let next = &next.as_ref().context;
+        //     current.context.switch(next);
+        // });
 
         let current = shared.current;
         //-//-//-//-//
@@ -512,8 +528,12 @@ impl ThreadPool {
     fn drop_thread(handle: ThreadHandle) {
         Self::synchronized(|| {
             let shared = Self::shared();
-            shared.data.remove(&handle);
+            let _removed = shared.data.remove(&handle).unwrap();
         });
+    }
+
+    unsafe fn unsafe_weak<'a>(&self, key: ThreadHandle) -> Option<&'a mut Box<RawThread>> {
+        Self::synchronized(|| self.data.get(&key).map(|v| &mut *(&*Arc::as_ptr(v)).get()))
     }
 
     fn get<'a>(&self, key: &ThreadHandle) -> Option<&'a Box<RawThread>> {
@@ -1059,6 +1079,12 @@ impl RawThread {
         }
     }
 }
+
+// impl Drop for RawThread {
+//     fn drop(&mut self) {
+//         println!("DROP THREAD {}", self.handle.0.get());
+//     }
+// }
 
 struct ThreadQueue(Fifo<usize>);
 

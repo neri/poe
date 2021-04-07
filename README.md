@@ -7,6 +7,7 @@ A hobby OS written in Rust, one version of which is about 20,000 lines of code a
 * A hobby OS written in Rust
 * Not a POSIX clone system
 * Support for WebAssembly
+* TOE does not support any features of the MMU to protect the system
 
 ## Requirements
 
