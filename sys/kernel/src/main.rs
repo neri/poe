@@ -108,10 +108,10 @@ impl Shell {
             "ver" => {
                 writeln!(stdout, "{} v{}", System::name(), System::version(),).unwrap();
             }
-            "slab" => {
+            "memory" => {
                 let mut sb = StringBuffer::with_capacity(0x1000);
-                MemoryManager::statistics_slab(&mut sb);
-                println!("{}", sb.as_str());
+                MemoryManager::statistics(&mut sb);
+                print!("{}", sb.as_str());
             }
             "open" => {
                 let args = &args[1..];
@@ -156,7 +156,8 @@ impl Shell {
                     let mut vec = Vec::with_capacity(file_size);
                     vec.resize(file_size, 0);
                     let act_size = fcb.read(vec.as_mut_slice()).unwrap();
-                    let blob = &vec[..act_size];
+                    vec.resize(act_size, 0);
+                    let blob = vec.as_slice();
                     if let Some(mut loader) = RuntimeEnvironment::recognize(blob) {
                         loader.option().name = name.to_string();
                         loader.option().argv = args.iter().map(|v| v.to_string()).collect();

@@ -58,10 +58,12 @@ impl dyn Tty {
                         _ => {
                             if buffer.len() < max_length {
                                 if c < ' ' {
+                                    // Control char
                                     self.write_char('^').unwrap();
                                     self.write_char((c as u8 | 0x40) as char).unwrap();
                                     buffer.push(c);
                                 } else if c < '\x7F' {
+                                    // Printable ascii
                                     self.write_char(c).unwrap();
                                     buffer.push(c);
                                 } else {

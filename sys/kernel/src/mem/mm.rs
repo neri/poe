@@ -159,10 +159,30 @@ impl MemoryManager {
     }
 
     #[allow(dead_code)]
-    pub fn statistics_slab(sb: &mut StringBuffer) {
+    pub fn statistics(sb: &mut StringBuffer) {
         let shared = Self::shared();
-        for slab in shared.slab.as_ref().unwrap().statistics() {
-            writeln!(sb, "Slab {:4}: {:3} / {:3}", slab.0, slab.1, slab.2).unwrap();
+
+        let dummy = shared.dummy_size;
+        let free = shared.pairs[..shared.n_free]
+            .iter()
+            .fold(0, |v, i| v + i.size);
+        let total = free + dummy;
+        writeln!(
+            sb,
+            "Pages {} ({} + {})",
+            total / Self::PAGE_SIZE_MIN,
+            free / Self::PAGE_SIZE_MIN,
+            dummy / Self::PAGE_SIZE_MIN,
+        )
+        .unwrap();
+
+        for chunk in shared.slab.as_ref().unwrap().statistics().chunks(2) {
+            writeln!(
+                sb,
+                "Slab {:4}: {:3} / {:3} :: {:4}: {:3} / {:3}",
+                chunk[0].0, chunk[0].1, chunk[0].2, chunk[1].0, chunk[1].1, chunk[1].2,
+            )
+            .unwrap();
         }
     }
 }

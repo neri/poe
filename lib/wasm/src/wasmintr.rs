@@ -84,6 +84,7 @@ pub struct WasmInterpreter<'a> {
 }
 
 impl<'a> WasmInterpreter<'a> {
+    #[inline]
     pub fn new(module: &'a WasmModule) -> Self {
         Self {
             module,
@@ -1274,6 +1275,7 @@ struct WasmIntermediateCodeBlock<'a> {
 }
 
 impl<'a> WasmIntermediateCodeBlock<'a> {
+    #[inline]
     fn from_codes(codes: &'a [WasmImc]) -> Self {
         Self { codes, position: 0 }
     }
@@ -1323,7 +1325,7 @@ impl WasmInvocation for WasmRunnable<'_> {
             locals.push(WasmStackValue::from(param.clone()));
         }
         for _ in body.local_types() {
-            locals.push(WasmStackValue::from_u64(0));
+            locals.push(WasmStackValue::zero());
         }
 
         let result_types = function.result_types();
@@ -1353,6 +1355,7 @@ impl WasmIntrError {
 }
 
 impl From<WasmRuntimeError> for WasmIntrError {
+    #[inline]
     fn from(kind: WasmRuntimeError) -> Self {
         Self {
             kind,

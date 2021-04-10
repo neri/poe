@@ -2,7 +2,7 @@
 
 /// Wasm Interpreter Intermediate Mnemonic
 #[non_exhaustive]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WasmIntMnemonic {
     /// No operation, Do nothing
     Nop,

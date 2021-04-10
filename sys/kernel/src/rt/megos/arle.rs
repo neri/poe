@@ -30,9 +30,7 @@ impl ArleBinaryLoader {
         Scheduler::current_personality(|personality| match personality.context() {
             PersonalityContext::Arlequin(rt) => rt.start(),
             _ => unreachable!(),
-        })
-        .unwrap();
-        RuntimeEnvironment::exit(0);
+        });
     }
 }
 
@@ -104,12 +102,12 @@ impl ArleRuntime {
         self.next_handle.swap(result, Ordering::SeqCst)
     }
 
-    fn start(&self) {
+    fn start(&self) -> ! {
         let function = match self.module.func(Self::ENTRY_FUNC_NAME) {
             Ok(v) => v,
             Err(err) => {
                 println!("error: {:?}", err);
-                return;
+                RuntimeEnvironment::exit(1);
             }
         };
 
@@ -120,6 +118,8 @@ impl ArleRuntime {
                 _ => println!("error: {:?}", err),
             },
         }
+
+        RuntimeEnvironment::exit(0);
     }
 
     fn syscall(_: &WasmModule, params: &[WasmValue]) -> Result<WasmValue, WasmRuntimeError> {
@@ -140,8 +140,6 @@ impl ArleRuntime {
         match func_no {
             svc::Function::Exit => {
                 return Err(WasmRuntimeError::NoError);
-                // let v = params.get_usize()?;
-                // RuntimeEnvironment::exit(v);
             }
 
             svc::Function::Monotonic => {
