@@ -4,6 +4,7 @@ use super::cpu::*;
 use crate::system::*;
 use crate::task::scheduler::*;
 use alloc::boxed::Box;
+use core::arch::asm;
 use toeboot::Platform;
 
 static mut RTC: Rtc = Rtc::new();

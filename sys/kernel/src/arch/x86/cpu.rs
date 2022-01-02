@@ -3,6 +3,7 @@
 
 use crate::*;
 use bitflags::*;
+use core::arch::asm;
 use core::ffi::c_void;
 use core::intrinsics::*;
 use core::sync::atomic::*;

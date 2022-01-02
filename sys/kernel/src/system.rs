@@ -185,6 +185,32 @@ impl System {
         arch::Arch::system_time()
     }
 
+    /// Returns whether the kernel is multiprocessor-capable.
+    #[inline]
+    pub const fn is_multi_processor_capable_kernel() -> bool {
+        false
+    }
+
+    /// Returns the number of logical CPU cores.
+    #[inline]
+    pub fn num_of_cpus() -> usize {
+        1
+    }
+
+    /// Returns the number of performance CPU cores.
+    /// Returns less than `num_of_cpus` for SMT-enabled processors or heterogeneous computing.
+    #[inline]
+    pub fn num_of_performance_cpus() -> usize {
+        1
+    }
+
+    /// Returns the number of active logical CPU cores.
+    /// Returns the same value as `num_of_cpus` except during SMP initialization.
+    #[inline]
+    pub fn num_of_active_cpus() -> usize {
+        1
+    }
+
     #[inline]
     pub fn platform() -> Platform {
         let shared = Self::shared();

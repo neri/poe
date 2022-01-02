@@ -1,8 +1,8 @@
 // Programmable Interrupt Controller
 
-use crate::task::scheduler::Scheduler;
-
 use super::cpu::{Cpu, InterruptDescriptorTable, InterruptVector, Selector};
+use crate::task::scheduler::Scheduler;
+use core::arch::asm;
 use core::num::NonZeroUsize;
 use toeboot::*;
 

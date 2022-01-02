@@ -1,11 +1,9 @@
 #![no_std]
-#![feature(asm)]
-#![feature(global_asm)]
 #![feature(alloc_error_handler)]
-#![feature(const_fn)]
 #![feature(associated_type_bounds)]
-#![feature(option_result_contains)]
+#![feature(const_fn_trait_bound)]
 #![feature(core_intrinsics)]
+#![feature(option_result_contains)]
 
 use arch::cpu::Cpu;
 use core::fmt::Write;

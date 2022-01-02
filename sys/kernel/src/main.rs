@@ -3,7 +3,6 @@
 
 #![no_std]
 #![no_main]
-#![feature(asm)]
 
 use alloc::boxed::Box;
 use alloc::string::*;
@@ -11,7 +10,7 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
-    arch::cpu::Cpu, fonts::*, fs::FileManager, io::tty::*, mem::string::*, mem::MemoryManager,
+    fonts::*, fs::FileManager, io::tty::*, mem::string::*, mem::MemoryManager,
     rt::RuntimeEnvironment, system::System, task::scheduler::*, task::*, util::text::*,
     window::terminal::Terminal, window::*, *,
 };
@@ -52,7 +51,7 @@ impl Shell {
         if let Ok(mut file) = FileManager::open("wall.bmp") {
             let stat = file.stat().unwrap();
             let mut vec = Vec::with_capacity(stat.len() as usize);
-            file.read_to_end(&mut vec);
+            file.read_to_end(&mut vec).unwrap();
             if let Some(dib) = ImageLoader::from_msdib(vec.as_slice()) {
                 WindowManager::set_desktop_bitmap(&dib.as_const());
             }

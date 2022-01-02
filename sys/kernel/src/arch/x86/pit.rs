@@ -2,6 +2,7 @@
 
 use super::{cpu::Cpu, pic::Irq};
 use crate::{audio::*, task::scheduler::*, System};
+use core::arch::asm;
 use core::time::Duration;
 use toeboot::Platform;
 

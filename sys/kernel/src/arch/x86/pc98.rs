@@ -2,6 +2,7 @@
 
 use super::pic::Irq;
 use crate::io::hid::*;
+use core::arch::asm;
 
 static mut PC98: Pc98 = Pc98::new();
 

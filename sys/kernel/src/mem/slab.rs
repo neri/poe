@@ -100,7 +100,7 @@ impl SlabCache {
         };
 
         unsafe {
-            let mut pages = usize::min(
+            let pages = usize::min(
                 (items_per_chunk / atomic_page_size) * atomic_page_size,
                 usize::max(atomic_page_size, 0x1000 / preferred_page_size),
             );

@@ -9,6 +9,7 @@ pub mod ps2;
 pub mod rtc;
 
 use crate::system::{System, SystemTime};
+use core::arch::asm;
 use cpu::Cpu;
 use megstd::drawing::IndexedColor;
 use toeboot::Platform;

@@ -1,11 +1,20 @@
-// Wasm Intermediate Mnemonic
+//! Intermediate code for Webassembly runtime
 
-/// Wasm Interpreter Intermediate Mnemonic
+/// Intermediate code for Webassembly runtime
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WasmIntMnemonic {
-    /// No operation, Do nothing
+    /// Undefined
+    Undefined,
+    /// Unreachable
+    Unreachable,
+    /// No operation, this mnemonic will be removed during the compaction phase.
     Nop,
+    /// Block Marker, this mnemonic will be removed during the compaction phase.
+    Block,
+    /// End of block marker, this mnemonic will be removed during the compaction phase.
+    End,
+
     /// branch
     Br,
     /// branch if true
@@ -17,14 +26,6 @@ pub enum WasmIntMnemonic {
     /// branch table
     BrTable,
 
-    /// Block Marker
-    Block,
-    End,
-
-    /// Undefined
-    Undefined,
-    /// Unreachable
-    Unreachable,
     /// return from function
     Return,
     /// call function
@@ -37,8 +38,6 @@ pub enum WasmIntMnemonic {
     LocalGet,
     /// Set a value to a local variable
     LocalSet,
-    /// Duplicate a value to local variable
-    LocalTee,
     /// Get a value from a global variable
     GlobalGet,
     /// Set a value to a global variable
@@ -143,6 +142,12 @@ pub enum WasmIntMnemonic {
     FusedI32SubI,
     FusedI64AddI,
     FusedI64SubI,
+    FusedI32AndI,
+    FusedI32OrI,
+    FusedI32XorI,
+    FusedI32ShlI,
+    FusedI32ShrSI,
+    FusedI32ShrUI,
 }
 
 impl WasmIntMnemonic {

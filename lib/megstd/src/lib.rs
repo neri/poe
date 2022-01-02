@@ -1,6 +1,5 @@
 // MEG-OS standard library
 #![no_std]
-#![feature(const_fn_transmute)]
 
 mod osstr;
 pub use osstr::*;

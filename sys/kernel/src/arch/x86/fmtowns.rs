@@ -3,9 +3,7 @@
 use super::pic::*;
 use crate::io::hid::*;
 use bitflags::*;
-
-// use crate::*;
-// use core::fmt::Write;
+use core::arch::asm;
 
 static mut TOWNS: FmTowns = FmTowns::new();
 

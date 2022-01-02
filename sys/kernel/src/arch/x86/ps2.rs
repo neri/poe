@@ -6,6 +6,7 @@ use crate::task::scheduler::*;
 use crate::*;
 use arch::cpu::Cpu;
 use bitflags::*;
+use core::arch::asm;
 use core::time::Duration;
 
 static mut PS2: Ps2 = Ps2::new();

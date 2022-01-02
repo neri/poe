@@ -5,7 +5,7 @@ A WebAssembly Runtime written in Rust
 
 - Support for `no_std`
 - A subset of WebAssembly MVP
-  - Floating point operations and some features are not supported.
+  - Most of the integer instructions among the WebAssembly MVPs are supported.
 
 ## requirements
 

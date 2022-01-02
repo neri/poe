@@ -59,7 +59,7 @@ $(BOOT_IMG): install
 apps:
 	cd apps; cargo build --target wasm32-unknown-unknown --release
 
-install: tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES)
+install: $(BIN) tools/mkfdfs/src/*.rs $(IPLS) $(IMG_SOURCES)
 	$(MKFDFS) -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
 
 full: install iso

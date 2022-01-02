@@ -44,6 +44,7 @@ pub enum Platform {
     Nec98 = 1,
     PcCompatible = 2,
     FmTowns = 3,
+    UEFI = 4,
 }
 
 impl fmt::Display for Platform {
