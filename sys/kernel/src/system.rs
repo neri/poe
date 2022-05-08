@@ -89,7 +89,7 @@ impl System {
     const fn new() -> Self {
         Self {
             main_screen: None,
-            em_console: EmConsole::new(fonts::FontManager::fixed_system_font()),
+            em_console: EmConsole::new(ui::font::FontManager::fixed_system_font()),
             stdout: None,
             platform: Platform::Unknown,
             cpu_ver: CpuVersion::UNSPECIFIED,
@@ -142,9 +142,9 @@ impl System {
 
             rt::RuntimeEnvironment::init();
 
-            fonts::FontManager::init();
+            ui::font::FontManager::init();
 
-            window::WindowManager::init();
+            ui::window::WindowManager::init();
 
             io::hid::HidManager::init();
 

@@ -3,7 +3,7 @@ mod arle;
 pub use arle::*;
 
 use super::*;
-use crate::window::*;
+use crate::ui::window::*;
 use crate::*;
 use alloc::boxed::Box;
 use alloc::string::String;

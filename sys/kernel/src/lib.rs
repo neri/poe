@@ -1,7 +1,6 @@
 #![no_std]
 #![feature(alloc_error_handler)]
 #![feature(associated_type_bounds)]
-#![feature(const_fn_trait_bound)]
 #![feature(core_intrinsics)]
 #![feature(option_result_contains)]
 
@@ -12,7 +11,6 @@ use system::System;
 
 pub mod arch;
 pub mod audio;
-pub mod fonts;
 pub mod fs;
 pub mod io;
 pub mod mem;
@@ -20,8 +18,8 @@ pub mod rt;
 pub mod sync;
 pub mod system;
 pub mod task;
+pub mod ui;
 pub mod util;
-pub mod window;
 
 extern crate alloc;
 

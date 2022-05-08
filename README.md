@@ -1,12 +1,12 @@
 # codename TOE
 
-A hobby OS written in Rust, one version of which is about 20,000 lines of code and supports multitasking, windows, WebAssembly runtime, and simple applications.
+A hobby operating system written in Rust that supports WebAssembly.
 
 ## Features
 
-* A hobby OS written in Rust
+* A hobby operating system written in Rust
 * Not a POSIX clone system
-* Support for WebAssembly
+* Supports applications in WebAssembly format
 * TOE does not support any features of the MMU to protect the system
 
 ## Requirements

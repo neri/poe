@@ -9,7 +9,7 @@ use crate::{
     sync::atomicflags::AtomicBitflags,
     sync::fifo::*,
     sync::semaphore::Semaphore,
-    window::*,
+    ui::window::*,
     *,
 };
 use alloc::collections::btree_map::BTreeMap;

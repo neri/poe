@@ -10,9 +10,9 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
-    fonts::*, fs::FileManager, io::tty::*, mem::string::*, mem::MemoryManager,
-    rt::RuntimeEnvironment, system::System, task::scheduler::*, task::*, util::text::*,
-    window::terminal::Terminal, window::*, *,
+    fs::FileManager, io::tty::*, mem::string::*, mem::MemoryManager, rt::RuntimeEnvironment,
+    system::System, task::scheduler::*, task::*, ui::font::*, ui::terminal::Terminal, ui::text::*,
+    ui::window::*, *,
 };
 use megstd::drawing::*;
 
@@ -467,7 +467,7 @@ impl Shell {
                                 0,
                                 LineBreakMode::default(),
                                 TextAlignment::Left,
-                                util::text::VerticalAlignment::Top,
+                                ui::text::VerticalAlignment::Top,
                             );
                         })
                         .unwrap();

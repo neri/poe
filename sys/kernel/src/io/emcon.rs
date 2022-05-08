@@ -1,7 +1,7 @@
 // Emergency debugging console
 
-use crate::fonts::*;
 use crate::system::*;
+use crate::ui::font::*;
 use core::fmt;
 use megstd::drawing::*;
 

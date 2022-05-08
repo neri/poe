@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::io::hid::*;
+use crate::ui::text::*;
 use crate::util::rng::*;
-use crate::util::text::*;
 use alloc::collections::BTreeMap;
 use byteorder::*;
 use core::{
@@ -11,7 +11,7 @@ use core::{
 };
 use megstd::drawing::*;
 use myosabi::*;
-use wasm::{wasmintr::*, *};
+use wasm::{intr::*, *};
 
 pub(super) struct ArleBinaryLoader {
     loader: WasmLoader,
@@ -122,7 +122,10 @@ impl ArleRuntime {
         RuntimeEnvironment::exit(0);
     }
 
-    fn syscall(_: &WasmModule, params: &[WasmValue]) -> Result<WasmValue, WasmRuntimeErrorKind> {
+    fn syscall(
+        _: &WasmModule,
+        params: &[WasmUnsafeValue],
+    ) -> Result<WasmValue, WasmRuntimeErrorKind> {
         Scheduler::current_personality(|personality| match personality.context() {
             PersonalityContext::Arlequin(rt) => rt.dispatch_syscall(&params),
             _ => unreachable!(),
@@ -132,7 +135,7 @@ impl ArleRuntime {
 
     fn dispatch_syscall(
         &mut self,
-        params: &[WasmValue],
+        params: &[WasmUnsafeValue],
     ) -> Result<WasmValue, WasmRuntimeErrorKind> {
         let mut params = ParamsDecoder::new(params);
         let memory = self
@@ -417,13 +420,13 @@ impl Personality for ArleRuntime {
 }
 
 struct ParamsDecoder<'a> {
-    params: &'a [WasmValue],
+    params: &'a [WasmUnsafeValue],
     index: usize,
 }
 
 impl<'a> ParamsDecoder<'a> {
     #[inline]
-    pub const fn new(params: &'a [WasmValue]) -> Self {
+    pub const fn new(params: &'a [WasmUnsafeValue]) -> Self {
         Self { params, index: 0 }
     }
 }
@@ -435,7 +438,7 @@ impl ParamsDecoder<'_> {
         self.params
             .get(index)
             .ok_or(WasmRuntimeErrorKind::InvalidParameter)
-            .and_then(|v| v.get_u32())
+            .map(|v| unsafe { v.get_u32() })
             .map(|v| {
                 self.index += 1;
                 v
@@ -448,7 +451,7 @@ impl ParamsDecoder<'_> {
         self.params
             .get(index)
             .ok_or(WasmRuntimeErrorKind::InvalidParameter)
-            .and_then(|v| v.get_i32())
+            .map(|v| unsafe { v.get_i32() })
             .map(|v| {
                 self.index += 1;
                 v
@@ -471,7 +474,7 @@ impl ParamsDecoder<'_> {
     fn get_string<'a>(&mut self, memory: &'a WasmMemory) -> Option<&'a str> {
         self.get_memarg()
             .ok()
-            .and_then(|memarg| memory.read_bytes(memarg.base(), memarg.len()).ok())
+            .and_then(|memarg| unsafe { memory.slice(memarg.base(), memarg.len()) }.ok())
             .and_then(|v| core::str::from_utf8(v).ok())
     }
 
@@ -480,7 +483,7 @@ impl ParamsDecoder<'_> {
     fn get_string16(&mut self, memory: &WasmMemory) -> Option<String> {
         self.get_memarg()
             .ok()
-            .and_then(|memarg| memory.read_bytes(memarg.base(), memarg.len() * 2).ok())
+            .and_then(|memarg| unsafe { memory.slice(memarg.base(), memarg.len() * 2) }.ok())
             .and_then(|v| unsafe { core::mem::transmute(v) })
             .and_then(|p| String::from_utf16(p).ok())
     }
@@ -510,7 +513,7 @@ impl ParamsDecoder<'_> {
     ) -> Result<ConstBitmap8<'a>, WasmRuntimeErrorKind> {
         const SIZE_OF_BITMAP: usize = 20;
         let base = self.get_u32()? as usize;
-        let array = memory.read_bytes(base as usize, SIZE_OF_BITMAP)?;
+        let array = unsafe { memory.slice(base as usize, SIZE_OF_BITMAP) }?;
 
         let width = LE::read_u32(&array[0..4]) as usize;
         let height = LE::read_u32(&array[4..8]) as usize;
@@ -518,7 +521,7 @@ impl ParamsDecoder<'_> {
         let base = LE::read_u32(&array[12..16]) as usize;
 
         let len = width * height;
-        let slice = memory.read_bytes(base, len)?;
+        let slice = unsafe { memory.slice(base, len) }?;
 
         Ok(ConstBitmap8::from_bytes(
             slice,
@@ -532,7 +535,7 @@ impl ParamsDecoder<'_> {
     ) -> Result<ConstBitmap32<'a>, WasmRuntimeErrorKind> {
         const SIZE_OF_BITMAP: usize = 20;
         let base = self.get_u32()? as usize;
-        let array = memory.read_bytes(base as usize, SIZE_OF_BITMAP)?;
+        let array = unsafe { memory.slice(base as usize, SIZE_OF_BITMAP) }?;
 
         let width = LE::read_u32(&array[0..4]) as usize;
         let height = LE::read_u32(&array[4..8]) as usize;
@@ -597,7 +600,7 @@ struct OsBitmap1<'a> {
 impl<'a> OsBitmap1<'a> {
     fn from_memory(memory: &'a WasmMemory, base: u32) -> Result<Self, WasmRuntimeErrorKind> {
         const SIZE_OF_BITMAP: usize = 16;
-        let array = memory.read_bytes(base as usize, SIZE_OF_BITMAP)?;
+        let array = unsafe { memory.slice(base as usize, SIZE_OF_BITMAP) }?;
 
         let width = LE::read_u32(&array[0..4]) as usize;
         let height = LE::read_u32(&array[4..8]) as usize;
@@ -606,7 +609,7 @@ impl<'a> OsBitmap1<'a> {
 
         let dim = Size::new(width as isize, height as isize);
         let size = stride * height;
-        let slice = memory.read_bytes(base, size)?;
+        let slice = unsafe { memory.slice(base, size) }?;
 
         Ok(Self { slice, dim, stride })
     }

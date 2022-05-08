@@ -1,8 +1,9 @@
 // A Window System
 
 use crate::{
-    arch::cpu::Cpu, fonts::*, io::hid::*, sync::atomicflags::AtomicBitflags, sync::fifo::*,
-    sync::semaphore::*, system::System, task::scheduler::*, task::AtomicWaker, util::text::*, *,
+    arch::cpu::Cpu, io::hid::*, sync::atomicflags::AtomicBitflags, sync::fifo::*,
+    sync::semaphore::*, system::System, task::scheduler::*, task::AtomicWaker, ui::font::*,
+    ui::text::*, *,
 };
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
