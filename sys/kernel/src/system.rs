@@ -224,12 +224,12 @@ impl System {
     }
 
     /// SAFETY: IT DESTROYS EVERYTHING.
-    pub unsafe fn reset() -> ! {
+    pub fn reset() -> ! {
         Cpu::reset();
     }
 
     /// SAFETY: IT DESTROYS EVERYTHING.
-    pub unsafe fn shutdown() -> ! {
+    pub fn shutdown() -> ! {
         todo!();
     }
 

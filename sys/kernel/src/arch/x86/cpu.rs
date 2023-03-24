@@ -5,7 +5,6 @@ use crate::*;
 use bitflags::*;
 use core::arch::asm;
 use core::ffi::c_void;
-use core::intrinsics::*;
 use core::sync::atomic::*;
 use toeboot::Platform;
 
@@ -45,9 +44,8 @@ impl Cpu {
     pub fn interlocked_add(p: &AtomicUsize, val: usize) -> usize {
         unsafe {
             Self::without_interrupts(|| {
-                let p = p as *const _ as *mut usize;
-                let r = val + atomic_load(p);
-                atomic_xchg(p, r)
+                let r = val + p.load(Ordering::SeqCst);
+                p.swap(r, Ordering::SeqCst)
             })
         }
     }
@@ -56,9 +54,8 @@ impl Cpu {
     pub fn interlocked_or(p: &AtomicUsize, val: usize) -> usize {
         unsafe {
             Self::without_interrupts(|| {
-                let p = p as *const _ as *mut usize;
-                let r = val | atomic_load(p);
-                atomic_xchg(p, r)
+                let r = val | p.load(Ordering::SeqCst);
+                p.swap(r, Ordering::SeqCst)
             })
         }
     }
@@ -67,9 +64,8 @@ impl Cpu {
     pub fn interlocked_add_clamp(p: &AtomicIsize, delta: isize, min: isize, max: isize) -> bool {
         unsafe {
             Self::without_interrupts(|| {
-                let p = p as *const _ as *mut isize;
-                let r = (delta + atomic_load(p)).clamp(min, max);
-                let s = atomic_xchg(p, r);
+                let r = (delta + p.load(Ordering::SeqCst)).clamp(min, max);
+                let s = p.swap(r, Ordering::SeqCst);
                 r != s
             })
         }
@@ -83,10 +79,9 @@ impl Cpu {
     ) -> (bool, usize) {
         unsafe {
             Self::without_interrupts(|| {
-                let p = p as *const _ as *mut usize;
-                let v = atomic_load(p);
+                let v = p.load(Ordering::SeqCst);
                 if v == expected {
-                    let r = atomic_xchg(p, desired);
+                    let r = p.swap(desired, Ordering::SeqCst);
                     (true, r)
                 } else {
                     (false, v)
@@ -100,29 +95,22 @@ impl Cpu {
     where
         F: FnMut(usize) -> Option<usize>,
     {
-        unsafe {
-            let _p = p;
-            let p = p as *const _ as *mut usize;
-            let mut expected = atomic_load(p);
-            loop {
-                let r = match f(expected) {
-                    Some(v) => v,
-                    None => break Err(expected),
-                };
-                match Self::interlocked_compare_and_swap(_p, expected, r) {
-                    (true, v) => break Ok(v),
-                    (false, v) => expected = v,
-                }
+        let mut expected = p.load(Ordering::SeqCst);
+        loop {
+            let r = match f(expected) {
+                Some(v) => v,
+                None => break Err(expected),
+            };
+            match Self::interlocked_compare_and_swap(p, expected, r) {
+                (true, v) => break Ok(v),
+                (false, v) => expected = v,
             }
         }
     }
 
     #[inline]
     pub fn interlocked_swap(p: &AtomicUsize, val: usize) -> usize {
-        unsafe {
-            let p = p as *const _ as *mut usize;
-            atomic_xchg(p, val)
-        }
+        p.swap(val, Ordering::SeqCst)
     }
 
     #[inline]
@@ -172,10 +160,12 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) unsafe fn stop() -> ! {
+    pub fn stop() -> ! {
         loop {
-            Self::disable_interrupt();
-            Self::halt();
+            unsafe {
+                Self::disable_interrupt();
+                Self::halt();
+            }
         }
     }
 
@@ -184,25 +174,27 @@ impl Cpu {
         unsafe { asm!("int3") };
     }
 
-    pub unsafe fn reset() -> ! {
-        match System::platform() {
-            Platform::PcCompatible => {
-                Self::out8(0x0CF9, 0x06);
-                asm!("out 0x92, al", in("al") 0x01u8);
+    pub fn reset() -> ! {
+        unsafe {
+            match System::platform() {
+                Platform::PcCompatible => {
+                    Self::out8(0x0CF9, 0x06);
+                    asm!("out 0x92, al", in("al") 0x01u8);
+                }
+                Platform::Nec98 => {
+                    asm!("out 0x37, al", in("al") 0x0Fu8);
+                    asm!("out 0x37, al", in("al") 0x0Bu8);
+                    asm!("out 0xF0, al", in("al") 0x00u8);
+                }
+                Platform::FmTowns => {
+                    asm!("out 0x20, al", in("al") 0x01u8);
+                    asm!("out 0x22, al", in("al") 0x00u8);
+                }
+                _ => unreachable!(),
             }
-            Platform::Nec98 => {
-                asm!("out 0x37, al", in("al") 0x0Fu8);
-                asm!("out 0x37, al", in("al") 0x0Bu8);
-                asm!("out 0xF0, al", in("al") 0x00u8);
-            }
-            Platform::FmTowns => {
-                asm!("out 0x20, al", in("al") 0x01u8);
-                asm!("out 0x22, al", in("al") 0x00u8);
-            }
-            _ => unreachable!(),
-        }
 
-        Self::stop();
+            Self::stop();
+        }
     }
 
     #[inline]

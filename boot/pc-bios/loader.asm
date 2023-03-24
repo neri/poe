@@ -27,9 +27,9 @@
 %define CEEF_S_VADDR        0x08
 %define CEEF_S_MEMSZ        0x0C
 
-%define VESA_MODE_1         0x4115 ; 800x600x32
-; %define VESA_MODE_1         0x4112 ; 640x480x32
-; %define VESA_MODE_1         0x4103 ; 800x600x8
+; %define VESA_MODE_1         0x4115 ; 800x600x32
+%define VESA_MODE_1         0x4112 ; 640x480x32
+; %define VESA_MODE_2         0x4103 ; 800x600x8
 %define VESA_MODE_2         0x4101 ; 640x480x8
 %define MAX_PALETTE         16
 
@@ -155,35 +155,20 @@ _check_cpu:
     pop ax
     and ax, dx
     jz short .bad_cpu
-    mov di, 3
 
-    ;; is 486 or later
-    pushfd
-    pop eax
-    mov ecx, eax
-    xor eax, 0x00040000 ; AC
-    push eax
-    popfd
-    pushfd
-    pop eax
-    cmp eax, ecx
-    jz .end_cpu
-    inc di
+    ; ;; is 486 or later
+    ; pushfd
+    ; pop eax
+    ; mov ecx, eax
+    ; xor eax, 0x00040000 ; AC
+    ; push eax
+    ; popfd
+    ; pushfd
+    ; pop eax
+    ; cmp eax, ecx
+    ; jz .386
 
-    ; has cpuid?
-    mov eax, ecx
-    xor eax, 0x00200000 ; ID
-    push eax
-    popfd
-    pushfd
-    pop eax
-    xor eax, ecx
-    jz .end_cpu
-    inc di
-
-.end_cpu:
-    mov ax, di
-    mov [_cpu_ver], al
+.cpu_ok:
 
 _mem_check:
     mov al, [_platform]
@@ -718,7 +703,7 @@ _RSDPtr:
 _boot_info:
 _platform       db 0
 _boot_drive     db 0
-_cpu_ver        db 0
+                db 0
 _screen_bpp     db 8
 _vram_base      dd 0
 _screen_width   dw 0

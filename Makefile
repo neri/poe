@@ -78,4 +78,5 @@ iso: $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 test:
 	cargo test --manifest-path lib/wasm/Cargo.toml
 
-# run: install
+run:
+	qemu-system-i386 -fda $(BOOT_IMG) -rtc base=localtime,clock=host -serial mon:stdio

@@ -10,11 +10,11 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
-    fs::FileManager, io::tty::*, mem::string::*, mem::MemoryManager, rt::RuntimeEnvironment,
-    system::System, task::scheduler::*, task::*, ui::font::*, ui::terminal::Terminal, ui::text::*,
-    ui::window::*, *,
+    fs::FileManager, io::tty::*, mem::MemoryManager, rt::RuntimeEnvironment, system::System,
+    task::scheduler::*, task::*, ui::font::*, ui::terminal::Terminal, ui::text::*, ui::window::*,
+    *,
 };
-use megstd::drawing::*;
+use megstd::{drawing::*, string::*};
 
 extern crate alloc;
 
@@ -47,7 +47,7 @@ impl Shell {
         let shared = Self::shared();
         shared.path_ext.push("wasm".to_string());
 
-        WindowManager::set_desktop_color(AmbiguousColor::from_rgb(0x2196F3));
+        WindowManager::set_desktop_color(Color::from_rgb(0x2196F3));
         if let Ok(mut file) = FileManager::open("wall.bmp") {
             let stat = file.stat().unwrap();
             let mut vec = Vec::with_capacity(stat.len() as usize);
@@ -60,7 +60,7 @@ impl Shell {
         // Timer::sleep(Duration::from_millis(100));
 
         Scheduler::spawn_async(Task::new(Self::status_bar_main()));
-        Scheduler::spawn_async(Task::new(Self::activity_monitor_main()));
+        // Scheduler::spawn_async(Task::new(Self::activity_monitor_main()));
         Scheduler::spawn_async(Task::new(Self::repl_main()));
         Scheduler::perform_tasks();
     }
@@ -111,6 +111,9 @@ impl Shell {
                 let mut sb = StringBuffer::with_capacity(0x1000);
                 MemoryManager::statistics(&mut sb);
                 print!("{}", sb.as_str());
+            }
+            "reboot" => {
+                System::reset();
             }
             "open" => {
                 let args = &args[1..];
@@ -343,11 +346,11 @@ impl Shell {
     #[allow(dead_code)]
     async fn activity_monitor_main() {
         let window_size = Size::new(280, 160);
-        let bg_color = AmbiguousColor::from(IndexedColor::BLACK);
-        let fg_color = AmbiguousColor::from(IndexedColor::YELLOW);
-        let graph_sub_color = AmbiguousColor::from(IndexedColor::LIGHT_GREEN);
-        let graph_main_color = AmbiguousColor::from(IndexedColor::YELLOW);
-        let graph_border_color = AmbiguousColor::from(IndexedColor::LIGHT_GRAY);
+        let bg_color = Color::from(IndexedColor::BLACK);
+        let fg_color = Color::from(IndexedColor::YELLOW);
+        let graph_sub_color = Color::from(IndexedColor::LIGHT_GREEN);
+        let graph_main_color = Color::from(IndexedColor::YELLOW);
+        let graph_border_color = Color::from(IndexedColor::LIGHT_GRAY);
 
         let window = WindowBuilder::new("Activity Monitor")
             .style_add(WindowStyle::PINCHABLE)
@@ -374,7 +377,7 @@ impl Shell {
 
         let interval = 1000;
         window.create_timer(0, Duration::from_millis(0));
-        while let Some(message) = window.get_message().await {
+        while let Some(message) = window.await_message().await {
             match message {
                 WindowMessage::Timer(_timer) => {
                     sb.clear();
@@ -461,7 +464,7 @@ impl Shell {
                             TextProcessing::draw_text(
                                 bitmap,
                                 sb.as_str(),
-                                font,
+                                &font,
                                 rect,
                                 fg_color.into(),
                                 0,
@@ -480,87 +483,74 @@ impl Shell {
 
     #[allow(dead_code)]
     async fn status_bar_main() {
-        const STATUS_BAR_HEIGHT: isize = 24;
+        const STATUS_BAR_HEIGHT: isize = 20;
+        const STATUS_BAR_PADDING: EdgeInsets = EdgeInsets::new(0, 0, 0, 0);
+        const INNER_PADDING: EdgeInsets = EdgeInsets::new(1, 16, 1, 16);
+
+        let bg_color = Color::WHITE;
+        let fg_color = Color::BLACK;
+
         let screen_size = System::main_screen().size();
-        let window_size = Size::new(screen_size.width(), STATUS_BAR_HEIGHT);
         let window_rect = Rect::new(0, 0, screen_size.width(), STATUS_BAR_HEIGHT);
         let window = WindowBuilder::new("Status")
-            // .style(WindowStyle::BORDER | WindowStyle::FLOATING)
             .style(WindowStyle::FLOATING)
             .frame(window_rect)
-            // .bg_color(AmbiguousColor::from_rgb(0xCCCCFF))
+            .bg_color(bg_color)
             .build();
-        window
-            .draw_in_rect(window_size.into(), |bitmap| {
-                let font = FontManager::ui_font();
-                let s = System::short_name();
-                {
-                    TextProcessing::write_str(
-                        bitmap,
-                        s,
-                        font,
-                        Point::new(9, (STATUS_BAR_HEIGHT - font.line_height()) / 2),
-                        IndexedColor::BLACK.into(),
-                    );
-                }
-            })
-            .unwrap();
         window.show();
         WindowManager::add_screen_insets(EdgeInsets::new(STATUS_BAR_HEIGHT, 0, 0, 0));
 
-        let mut sb = StringBuffer::new();
+        let font = FontDescriptor::new(FontFamily::SmallFixed, 0).unwrap();
+        let mut sb0 = Sb255::new();
+        let mut sb1 = Sb255::new();
 
-        window.create_timer(0, Duration::from_millis(0));
-        while let Some(message) = window.get_message().await {
+        window.create_timer(0, Duration::from_secs(0));
+        while let Some(message) = window.await_message().await {
             match message {
-                WindowMessage::Timer(_timer) => {
-                    let time = System::system_time();
-                    let interval = 1_000_000_000 - time.nanos as u64;
-                    window.create_timer(0, Duration::from_nanos(interval));
-                    window.set_needs_display();
-                }
-                WindowMessage::Draw => {
-                    sb.clear();
+                WindowMessage::Timer(_) => {
                     let time = System::system_time();
                     let tod = time.secs % 86400;
                     let min = tod / 60 % 60;
                     let hour = tod / 3600;
-                    if true {
-                        let sec = tod % 60;
-                        if sec % 2 == 0 {
-                            write!(sb, "{:2} {:02} {:02}", hour, min, sec).unwrap();
-                        } else {
-                            write!(sb, "{:2}:{:02}:{:02}", hour, min, sec).unwrap();
-                        };
-                    } else {
-                        write!(sb, "{:2}:{:02}", hour, min).unwrap();
-                    }
+                    sb0.clear();
+                    write!(sb0, "{:2}:{:02}", hour, min).unwrap();
 
-                    let font = FontManager::system_font();
-                    let clock_width = font.width_of('0') * 8;
-                    let clock_rect = Rect::new(
-                        window_size.width() - clock_width - 8,
-                        (window_size.height() - font.line_height()) / 2,
-                        clock_width,
-                        font.line_height(),
-                    );
-                    window
-                        .draw_in_rect(clock_rect, |bitmap| {
-                            bitmap.fill_rect(bitmap.bounds(), window.bg_color());
-                            TextProcessing::write_str(
-                                bitmap,
-                                sb.as_str(),
-                                font,
-                                Point::default(),
-                                IndexedColor::BLACK.into(),
-                            );
-                        })
-                        .unwrap();
-                    window.invalidate_rect(clock_rect);
+                    if sb0 != sb1 {
+                        let ats = AttributedString::new()
+                            .font(font)
+                            .color(fg_color)
+                            .middle_center()
+                            .text(sb0.as_str());
+
+                        let bounds = Rect::from(window.content_size())
+                            .insets_by(STATUS_BAR_PADDING)
+                            .insets_by(INNER_PADDING);
+                        let width = ats
+                            .bounding_size(Size::new(isize::MAX, isize::MAX), 1)
+                            .width;
+                        let rect = Rect::new(
+                            bounds.max_x() - width,
+                            bounds.min_y(),
+                            width,
+                            bounds.height(),
+                        );
+
+                        window
+                            .draw_in_rect(rect, |bitmap| {
+                                bitmap.fill_rect(bitmap.bounds(), bg_color);
+                                ats.draw_text(bitmap, bitmap.bounds(), 1);
+                            })
+                            .unwrap();
+
+                        window.set_needs_display();
+                        sb1 = sb0;
+                    }
+                    window.create_timer(0, Duration::from_millis(500));
                 }
                 _ => window.handle_default_message(message),
             }
         }
+
         unimplemented!()
     }
 }

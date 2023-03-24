@@ -55,5 +55,5 @@ macro_rules! entry {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     let _ = write!(System::em_console(), "{}", info);
-    unsafe { Cpu::stop() };
+    Cpu::stop();
 }

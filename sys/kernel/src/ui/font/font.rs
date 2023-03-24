@@ -149,15 +149,15 @@ impl FontDescriptor {
     }
 
     #[inline]
-    pub fn draw_char(
-        &self,
-        character: char,
-        bitmap: &mut Bitmap,
-        origin: Point,
-        color: AmbiguousColor,
-    ) {
+    pub fn draw_char(&self, character: char, bitmap: &mut Bitmap, origin: Point, color: Color) {
         self.driver
             .draw_char(character, bitmap, origin, self.point(), color)
+    }
+
+    #[inline]
+    pub fn kern(&self, _c1: char, _c2: char) -> isize {
+        // TODO:
+        0
     }
 }
 
@@ -178,7 +178,7 @@ pub trait FontDriver {
         bitmap: &mut Bitmap,
         origin: Point,
         height: isize,
-        color: AmbiguousColor,
+        color: Color,
     );
 }
 
@@ -283,7 +283,7 @@ impl FontDriver for FixedFontDriver<'_> {
         bitmap: &mut Bitmap,
         origin: Point,
         _height: isize,
-        color: AmbiguousColor,
+        color: Color,
     ) {
         if let Some(font) = self.glyph_for(character) {
             let origin = Point::new(origin.x, origin.y + self.leading);

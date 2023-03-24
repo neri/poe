@@ -40,15 +40,15 @@ pub enum WasmIntMnemonic {
     LocalSet(usize),
     LocalTee(usize),
 
-    /// Gets a 32-bit value from local variables
+    /// Gets a 32-bit value from a local variable
     LocalGet32(usize),
-    /// Sets a 32-bit value value to a local variable
+    /// Sets a 32-bit value to a local variable
     LocalSet32(usize),
     LocalTee32(usize),
 
-    /// Get a value from a global variable
+    /// Gets a value from a global variable
     GlobalGet(usize),
-    /// Set a value to a global variable
+    /// Sets a value to a global variable
     GlobalSet(usize),
 
     I32Load(u32),
@@ -163,6 +163,15 @@ pub enum WasmIntMnemonic {
     FusedI32BrZ(usize),
     FusedI32BrEq(usize),
     FusedI32BrNe(usize),
+    FusedI32BrLtS(usize),
+    FusedI32BrLtU(usize),
+    FusedI32BrGtS(usize),
+    FusedI32BrGtU(usize),
+    FusedI32BrLeS(usize),
+    FusedI32BrLeU(usize),
+    FusedI32BrGeS(usize),
+    FusedI32BrGeU(usize),
+
     FusedI64BrZ(usize),
     FusedI64BrEq(usize),
     FusedI64BrNe(usize),
@@ -222,6 +231,11 @@ impl WasmImc {
     }
 
     #[inline]
+    pub const fn mnemonic_mut(&mut self) -> &mut WasmIntMnemonic {
+        &mut self.mnemonic
+    }
+
+    #[inline]
     pub const fn stack_level(&self) -> usize {
         self.stack_level as usize
     }
@@ -231,33 +245,56 @@ impl WasmImc {
         F: FnMut(WasmOpcode, usize) -> Result<usize, E>,
     {
         use WasmIntMnemonic::*;
-        let mnemonic = self.mnemonic();
-        match mnemonic {
+        match self.mnemonic_mut() {
             Br(target) => {
-                self.mnemonic = Br(f(WasmOpcode::Br, *target)?);
+                *target = f(WasmOpcode::Br, *target)?;
             }
             BrIf(target) => {
-                self.mnemonic = BrIf(f(WasmOpcode::BrIf, *target)?);
+                *target = f(WasmOpcode::BrIf, *target)?;
             }
 
             FusedI32BrZ(target) => {
-                self.mnemonic = FusedI32BrZ(f(WasmOpcode::BrIf, *target)?);
+                *target = f(WasmOpcode::BrIf, *target)?;
             }
             FusedI32BrEq(target) => {
-                self.mnemonic = FusedI32BrEq(f(WasmOpcode::BrIf, *target)?);
+                *target = f(WasmOpcode::BrIf, *target)?;
             }
             FusedI32BrNe(target) => {
-                self.mnemonic = FusedI32BrNe(f(WasmOpcode::BrIf, *target)?);
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrLtS(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrLtU(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrGtS(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrGtU(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrLeS(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrLeU(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrGeS(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
+            }
+            FusedI32BrGeU(target) => {
+                *target = f(WasmOpcode::BrIf, *target)?;
             }
 
             FusedI64BrZ(target) => {
-                self.mnemonic = FusedI64BrZ(f(WasmOpcode::BrIf, *target)?);
+                *target = f(WasmOpcode::BrIf, *target)?;
             }
             FusedI64BrEq(target) => {
-                self.mnemonic = FusedI64BrEq(f(WasmOpcode::BrIf, *target)?);
+                *target = f(WasmOpcode::BrIf, *target)?;
             }
             FusedI64BrNe(target) => {
-                self.mnemonic = FusedI64BrNe(f(WasmOpcode::BrIf, *target)?);
+                *target = f(WasmOpcode::BrIf, *target)?;
             }
 
             BrTable(table) => {
@@ -265,7 +302,7 @@ impl WasmImc {
                 for target in table.iter() {
                     vec.push(f(WasmOpcode::BrTable, *target)?);
                 }
-                self.mnemonic = BrTable(vec.into_boxed_slice());
+                *table = vec.into_boxed_slice();
             }
             _ => (),
         }

@@ -4,7 +4,6 @@ use super::executor::Executor;
 use super::*;
 use crate::{
     arch::cpu::{Cpu, CpuContextData},
-    mem::string::StringBuffer,
     rt::Personality,
     sync::atomicflags::AtomicBitflags,
     sync::fifo::*,
@@ -23,6 +22,7 @@ use core::num::NonZeroUsize;
 use core::ops::Add;
 use core::sync::atomic::*;
 use core::time::Duration;
+use megstd::string::*;
 
 static mut SCHEDULER: Option<Box<Scheduler>> = None;
 

@@ -543,6 +543,11 @@ impl WasmModule {
     }
 
     #[inline]
+    pub fn data_count(&self) -> Option<usize> {
+        self.data_count
+    }
+
+    #[inline]
     pub fn names(&self) -> Option<&WasmName> {
         self.names.as_ref()
     }
@@ -690,7 +695,7 @@ impl Leb128Stream<'_> {
     #[inline]
     pub fn read_opcode(&mut self) -> Result<WasmOpcode, WasmDecodeErrorKind> {
         self.read_byte()
-            .and_then(|v| WasmOpcode::new(v).ok_or(WasmDecodeErrorKind::InvalidBytecode))
+            .and_then(|v| WasmOpcode::new(v).ok_or(WasmDecodeErrorKind::InvalidBytecode(v)))
     }
 
     #[inline]
@@ -1469,7 +1474,7 @@ impl WasmExportIndex {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WasmDecodeErrorKind {
     /// Not an executable file.
     BadExecutable,
@@ -1478,9 +1483,9 @@ pub enum WasmDecodeErrorKind {
     /// Unexpected token detected during decoding.
     UnexpectedToken,
     /// Detected a bytecode that cannot be decoded.
-    InvalidBytecode,
-    /// Unsupported byte codes
-    UnsupportedByteCode,
+    InvalidBytecode(u8),
+    /// Unsupported opcode
+    UnsupportedOpCode(WasmOpcode),
     /// Unsupported global data type
     UnsupportedGlobalType,
     /// Invalid parameter was specified.
@@ -1506,9 +1511,9 @@ pub enum WasmDecodeErrorKind {
     /// The `else` block and the `if` block do not match.
     ElseWithoutIf,
     /// Imported function does not exist.
-    NoMethod,
+    NoMethod(String),
     /// Imported module does not exist.
-    NoModule,
+    NoModule(String),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -1788,7 +1793,7 @@ impl WasmUnsafeValue {
 
     #[inline]
     pub unsafe fn write_i64(&mut self, val: i64) {
-        self.i64 = val;
+        *self = Self::from(val);
     }
 
     #[inline]
@@ -2184,9 +2189,9 @@ impl WasmCodeBlock {
                 WasmProposalType::Mvp => {}
                 WasmProposalType::MvpI64 => {}
                 WasmProposalType::SignExtend => {}
-                #[cfg(feature = "float")]
+                #[cfg(not(feature = "float"))]
                 WasmProposalType::MvpF32 | WasmProposalType::MvpF64 => {}
-                _ => return Err(WasmDecodeErrorKind::UnsupportedByteCode),
+                _ => return Err(WasmDecodeErrorKind::UnsupportedOpCode(opcode)),
             }
 
             match opcode {
@@ -4071,7 +4076,7 @@ impl WasmCodeBlock {
                 }
 
                 #[allow(unreachable_patterns)]
-                _ => return Err(WasmDecodeErrorKind::UnsupportedByteCode),
+                _ => return Err(WasmDecodeErrorKind::UnsupportedOpCode(opcode)),
             }
         }
 
@@ -4155,6 +4160,31 @@ impl WasmCodeBlock {
                     (I32Ne, BrIf(target)) => {
                         fused_inst!(int_codes, i, FusedI32BrNe(*target));
                     }
+                    (I32LtS, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrLtS(*target));
+                    }
+                    (I32LtU, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrLtU(*target));
+                    }
+                    (I32GtS, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrGtS(*target));
+                    }
+                    (I32GtU, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrGtU(*target));
+                    }
+                    (I32LeS, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrLeS(*target));
+                    }
+                    (I32LeU, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrLeU(*target));
+                    }
+                    (I32GeS, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrGeS(*target));
+                    }
+                    (I32GeU, BrIf(target)) => {
+                        fused_inst!(int_codes, i, FusedI32BrGeU(*target));
+                    }
+
                     (I64Eqz, BrIf(target)) => {
                         fused_inst!(int_codes, i, FusedI64BrZ(*target));
                     }
@@ -4169,7 +4199,7 @@ impl WasmCodeBlock {
             }
         }
 
-        // compaction
+        // compaction and block adjustment
         let mut actual_len = 0;
         for index in 0..int_codes.len() {
             let code = &int_codes[index];
@@ -4197,6 +4227,7 @@ impl WasmCodeBlock {
         unsafe {
             int_codes.set_len(actual_len);
         }
+        int_codes.shrink_to_fit();
 
         // fixes branching targets
         for code in int_codes.iter_mut() {

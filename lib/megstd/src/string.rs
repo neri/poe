@@ -1,18 +1,10 @@
 // Small String Buffer & Formatter
 
-use alloc::vec::Vec;
+use ::alloc::vec::Vec;
 use core::{fmt, slice, str};
-use fmt::Error;
 
-#[macro_export]
-macro_rules! sformat {
-    ($sb:expr, $($arg:tt)*) => {
-        $sb.clear();
-        write!($sb, $($arg)*).unwrap();
-    };
-}
-
-/// Small String Buffer (NO MORE ALLOC)
+/// Small String Buffer
+#[derive(Clone, Copy, Eq, Ord)]
 pub struct Sb255([u8; 256]);
 
 impl Sb255 {
@@ -39,10 +31,33 @@ impl Sb255 {
         self.0[0] as usize
     }
 
-    /// SAFETY: This method does not strictly conform to Rust's ownership and lifetime philosophy
     #[inline]
-    pub fn as_str<'a>(&self) -> &'a str {
-        unsafe { str::from_utf8_unchecked(slice::from_raw_parts(&self.0[1], self.len())) }
+    fn as_slice<'a>(&'a self) -> &'a [u8] {
+        unsafe { slice::from_raw_parts(&self.0[1], self.len()) }
+    }
+
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        str::from_utf8(self.as_slice()).unwrap_or("")
+    }
+
+    #[inline]
+    pub unsafe fn as_str_unchecked(&self) -> &str {
+        str::from_utf8_unchecked(self.as_slice())
+    }
+}
+
+impl PartialEq for Sb255 {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialOrd for Sb255 {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.as_str().partial_cmp(other.as_str())
     }
 }
 
@@ -50,14 +65,18 @@ impl fmt::Write for Sb255 {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         let mut iter = 1 + self.len();
         for c in s.bytes() {
-            if iter >= 255 {
-                return Err(Error);
-            }
             self.0[iter] = c;
             iter += 1;
         }
         self.0[0] += s.bytes().count() as u8;
         Ok(())
+    }
+}
+
+impl AsRef<str> for Sb255 {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -114,6 +133,7 @@ impl StringBuffer {
 impl fmt::Write for StringBuffer {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         for c in s.bytes() {
+            self.vec.try_reserve(1).map_err(|_| core::fmt::Error)?;
             self.vec.push(c);
         }
         Ok(())

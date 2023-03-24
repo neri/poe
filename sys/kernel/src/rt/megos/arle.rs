@@ -4,7 +4,7 @@ use super::*;
 use crate::io::hid::*;
 use crate::ui::text::*;
 use crate::util::rng::*;
-use alloc::collections::BTreeMap;
+use alloc::{borrow::ToOwned, collections::BTreeMap};
 use byteorder::*;
 use core::{
     convert::TryFrom, intrinsics::transmute, num::NonZeroU32, sync::atomic::*, time::Duration,
@@ -46,9 +46,9 @@ impl BinaryLoader for ArleBinaryLoader {
                     "svc0" | "svc1" | "svc2" | "svc3" | "svc4" | "svc5" | "svc6" => {
                         Ok(ArleRuntime::syscall)
                     }
-                    _ => Err(WasmDecodeErrorKind::NoMethod),
+                    _ => Err(WasmDecodeErrorKind::NoMethod(name.to_owned())),
                 },
-                _ => Err(WasmDecodeErrorKind::NoModule),
+                _ => Err(WasmDecodeErrorKind::NoModule(mod_name.to_owned())),
             })
             .map_err(|_| ())
     }
@@ -223,7 +223,7 @@ impl ArleRuntime {
                     rect.size.width -= origin.x;
                     rect.size.height -= origin.y;
                     let _ = window.draw_in_rect(rect, |bitmap| {
-                        AttributedString::props()
+                        AttributedString::new()
                             .align(TextAlignment::Left)
                             .valign(VerticalAlignment::Top)
                             .color(color)
@@ -262,7 +262,7 @@ impl ArleRuntime {
                     let c1 = params.get_point()?;
                     let c2 = params.get_point()?;
                     let color = params.get_color()?;
-                    let rect = Rect::from(Coordinates::from_two(c1, c2)) + Size::new(1, 1);
+                    let rect = Rect::from(Coordinates::from_diagonal(c1, c2)) + Size::new(1, 1);
                     let _ = window.draw_in_rect(rect, |bitmap| {
                         bitmap.draw_line(c1 - rect.origin, c2 - rect.origin, color);
                     });
@@ -503,7 +503,7 @@ impl ParamsDecoder<'_> {
     }
 
     #[inline]
-    fn get_color(&mut self) -> Result<AmbiguousColor, WasmRuntimeErrorKind> {
+    fn get_color(&mut self) -> Result<Color, WasmRuntimeErrorKind> {
         self.get_u32().map(|v| IndexedColor::from(v as u8).into())
     }
 
@@ -625,7 +625,7 @@ impl OsBitmap1<'_> {
         }
     }
 
-    fn blt(&self, to: &mut Bitmap, origin: Point, color: AmbiguousColor, mode: usize) {
+    fn blt(&self, to: &mut Bitmap, origin: Point, color: Color, mode: usize) {
         // TODO: clipping
         let scale = mode as isize;
         let stride = self.stride;

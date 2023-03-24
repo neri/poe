@@ -31,11 +31,11 @@ const WINDOW_BORDER_PADDING: isize = 1;
 const WINDOW_TITLE_HEIGHT: isize = 20;
 
 const WINDOW_DEFAULT_KEY_COLOR: IndexedColor = IndexedColor::DEFAULT_KEY;
-const WINDOW_BORDER_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x666666);
-const WINDOW_ACTIVE_TITLE_BG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xCCCCCC);
-const WINDOW_ACTIVE_TITLE_FG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x333333);
-const WINDOW_INACTIVE_TITLE_BG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
-const WINDOW_INACTIVE_TITLE_FG_COLOR: AmbiguousColor = AmbiguousColor::from_rgb(0x999999);
+const WINDOW_BORDER_COLOR: Color = Color::from_rgb(0x666666);
+const WINDOW_ACTIVE_TITLE_BG_COLOR: Color = Color::from_rgb(0xFFFFFF);
+const WINDOW_ACTIVE_TITLE_FG_COLOR: Color = Color::from_rgb(0x000000);
+const WINDOW_INACTIVE_TITLE_BG_COLOR: Color = Color::from_rgb(0xCCCCCC);
+const WINDOW_INACTIVE_TITLE_FG_COLOR: Color = Color::from_rgb(0x999999);
 
 const MOUSE_POINTER_WIDTH: usize = 12;
 const MOUSE_POINTER_HEIGHT: usize = 20;
@@ -96,7 +96,7 @@ impl Into<usize> for WindowManagerAttributes {
 }
 
 impl WindowManager<'static> {
-    pub const DEFAULT_BGCOLOR: AmbiguousColor = AmbiguousColor::from_rgb(0xFFFFFF);
+    pub const DEFAULT_BGCOLOR: Color = Color::from_rgb(0xFFFFFF);
 
     pub(crate) unsafe fn init() {
         let main_screen = System::main_screen();
@@ -321,7 +321,7 @@ impl WindowManager<'_> {
                         } else {
                             let mut title_frame = target_window.title_frame();
                             title_frame.origin += target_window.frame.origin;
-                            if position.is_within(title_frame) {
+                            if title_frame.contains(position) {
                                 shared.attributes.insert(WindowManagerAttributes::MOVING);
                             } else {
                                 let _ = Self::make_mouse_events(
@@ -488,9 +488,7 @@ impl WindowManager<'_> {
             && event.modifier().has_ctrl()
             && event.modifier().has_alt()
         {
-            unsafe {
-                System::reset();
-            }
+            System::reset();
         } else if let Some(window) = shared.active {
             let _ = window.post(WindowMessage::Key(event));
         }
@@ -553,7 +551,7 @@ impl WindowManager<'_> {
         });
     }
 
-    pub fn set_desktop_color(color: AmbiguousColor) {
+    pub fn set_desktop_color(color: Color) {
         let shared = WindowManager::shared();
         let _ = shared.root.update_opt(|root| {
             root.bitmap = None;
@@ -583,7 +581,7 @@ impl WindowManager<'_> {
                 let shared = WindowManager::shared();
                 for handle in shared.window_orders.iter().rev().skip(1) {
                     let window = handle.as_ref();
-                    if point.is_within(window.frame) {
+                    if window.frame.contains(point) {
                         return *handle;
                     }
                 }
@@ -672,7 +670,7 @@ struct RawWindow<'a> {
     content_insets: EdgeInsets,
 
     // Appearances
-    bg_color: AmbiguousColor,
+    bg_color: Color,
     key_color: IndexedColor,
     bitmap: Option<UnsafeCell<BoxedBitmap<'a>>>,
 
@@ -814,7 +812,7 @@ impl RawWindow<'_> {
         }
     }
 
-    fn set_bg_color(&mut self, color: AmbiguousColor) {
+    fn set_bg_color(&mut self, color: Color) {
         self.bg_color = color;
         if let Some(mut bitmap) = self.bitmap() {
             bitmap.fill_rect(bitmap.bounds(), color.into());
@@ -861,7 +859,7 @@ impl RawWindow<'_> {
 
                 if let Some(s) = self.title() {
                     let rect = title_rect.insets_by(EdgeInsets::new(0, 8, 0, 8));
-                    AttributedString::props()
+                    AttributedString::new()
                         .font(FontManager::title_font())
                         .color(if is_active {
                             WINDOW_ACTIVE_TITLE_FG_COLOR
@@ -881,7 +879,7 @@ impl RawWindow<'_> {
         frame.origin += self.frame.origin;
         let main_screen = WindowManager::shared().main_screen();
         self.draw_into(main_screen, frame);
-        // main_screen.draw_rect(frame, AmbiguousColor::Indexed(IndexedColor::RED));
+        // main_screen.draw_rect(frame, Color::Indexed(IndexedColor::RED));
     }
 
     fn draw_into(&self, target_bitmap: &mut Bitmap, frame: Rect) -> bool {
@@ -908,7 +906,7 @@ impl RawWindow<'_> {
                     Ok(v) => v,
                     Err(_) => return,
                 };
-                if frame.is_within_rect(window.frame) {
+                if frame.contains_rect(window.frame) {
                     let blt_origin = Point::new(
                         cmp::max(coords1.left, coords2.left),
                         cmp::max(coords1.top, coords2.top),
@@ -1061,7 +1059,7 @@ pub struct WindowBuilder {
     frame: Rect,
     style: WindowStyle,
     level: WindowLevel,
-    bg_color: AmbiguousColor,
+    bg_color: Color,
     key_color: IndexedColor,
     title: [u8; WINDOW_TITLE_LENGTH],
     queue_size: usize,
@@ -1212,7 +1210,7 @@ impl WindowBuilder {
     }
 
     #[inline]
-    pub const fn bg_color(mut self, bg_color: AmbiguousColor) -> Self {
+    pub const fn bg_color(mut self, bg_color: Color) -> Self {
         self.bg_color = bg_color;
         self
     }
@@ -1330,14 +1328,14 @@ impl WindowHandle {
         self.get().and_then(|v| v.title())
     }
 
-    pub fn set_bg_color(&self, color: AmbiguousColor) {
+    pub fn set_bg_color(&self, color: Color) {
         self.update(|window| {
             window.set_bg_color(color);
         });
     }
 
     #[inline]
-    pub fn bg_color(&self) -> AmbiguousColor {
+    pub fn bg_color(&self) -> Color {
         self.as_ref().bg_color
     }
 
@@ -1555,7 +1553,7 @@ impl WindowHandle {
     }
 
     /// Get the window message asynchronously.
-    pub fn get_message(&self) -> Pin<Box<dyn Future<Output = Option<WindowMessage>>>> {
+    pub fn await_message(&self) -> Pin<Box<dyn Future<Output = Option<WindowMessage>>>> {
         Box::pin(WindowMessageConsumer { handle: *self })
     }
 

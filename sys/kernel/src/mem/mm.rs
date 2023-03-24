@@ -1,12 +1,12 @@
 // Memory Manager
 
 use super::slab::SlabAllocator;
-use super::string::StringBuffer;
 use crate::arch::cpu::Cpu;
 use crate::*;
 use bitflags::*;
 use core::alloc::Layout;
 use core::num::*;
+use megstd::string::*;
 use toeboot::*;
 
 static mut MM: MemoryManager = MemoryManager::new();

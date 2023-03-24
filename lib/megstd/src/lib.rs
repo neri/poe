@@ -8,6 +8,7 @@ pub mod error;
 pub mod fs;
 pub mod io;
 pub mod path;
+pub mod string;
 pub mod sys;
 
 extern crate alloc;
