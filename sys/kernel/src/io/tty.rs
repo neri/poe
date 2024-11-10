@@ -20,7 +20,7 @@ pub trait TtyWrite: Write {
 
     fn set_cursor_enabled(&mut self, enabled: bool) -> bool;
 
-    fn attribute(&self) -> u8;
+    fn attributes(&self) -> u8;
 
     fn set_attribute(&mut self, attribute: u8);
 }
@@ -139,8 +139,8 @@ impl TtyWrite for CombinedTty<'_> {
     }
 
     #[inline]
-    fn attribute(&self) -> u8 {
-        self.stdout.attribute()
+    fn attributes(&self) -> u8 {
+        self.stdout.attributes()
     }
 
     #[inline]

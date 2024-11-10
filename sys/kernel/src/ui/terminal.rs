@@ -12,7 +12,8 @@ use core::{
 };
 
 const DEFAULT_INSETS: EdgeInsets = EdgeInsets::new(4, 4, 4, 4);
-const DEFAULT_ATTRIBUTE: u8 = 0x0F;
+// const DEFAULT_ATTRIBUTE: u8 = 0x07;
+const DEFAULT_ATTRIBUTE: u8 = 0xF8;
 
 static mut TA: TerminalAgent = TerminalAgent::new();
 
@@ -61,6 +62,7 @@ pub struct Terminal {
     insets: EdgeInsets,
     x: usize,
     y: usize,
+    default_attribute: u8,
     attribute: u8,
     fg_color: Color,
     bg_color: Color,
@@ -105,6 +107,7 @@ impl Terminal {
             insets,
             x: 0,
             y: 0,
+            default_attribute: attribute,
             attribute,
             fg_color,
             bg_color,
@@ -285,11 +288,16 @@ impl TtyWrite for Terminal {
         r
     }
 
-    fn attribute(&self) -> u8 {
+    fn attributes(&self) -> u8 {
         self.attribute
     }
 
     fn set_attribute(&mut self, attribute: u8) {
+        let attribute = if attribute > 0 {
+            attribute
+        } else {
+            self.default_attribute
+        };
         self.attribute = attribute;
         let (fg_color, bg_color) = Self::split_attr(attribute);
         self.fg_color = fg_color;

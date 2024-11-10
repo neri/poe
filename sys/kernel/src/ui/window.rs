@@ -28,7 +28,7 @@ const MAX_WINDOWS: usize = 255;
 const WINDOW_TITLE_LENGTH: usize = 32;
 
 const WINDOW_BORDER_PADDING: isize = 1;
-const WINDOW_TITLE_HEIGHT: isize = 20;
+const WINDOW_TITLE_HEIGHT: isize = 16;
 
 const WINDOW_DEFAULT_KEY_COLOR: IndexedColor = IndexedColor::DEFAULT_KEY;
 const WINDOW_BORDER_COLOR: Color = Color::from_rgb(0x666666);
@@ -749,7 +749,10 @@ impl RawWindow<'_> {
 
     #[inline]
     fn is_active(&self) -> bool {
-        WindowManager::shared().active.contains(&self.handle)
+        WindowManager::shared()
+            .active
+            .map(|v| v == self.handle)
+            .unwrap_or(false)
     }
 
     fn show(&mut self) {
@@ -766,7 +769,7 @@ impl RawWindow<'_> {
         let shared = WindowManager::shared_mut();
         let frame = self.frame;
         let handle = self.handle;
-        let new_active = if shared.active.contains(&handle) {
+        let new_active = if shared.active.map(|v| v == handle).unwrap_or(false) {
             unsafe {
                 Cpu::without_interrupts(|| {
                     shared
@@ -780,7 +783,7 @@ impl RawWindow<'_> {
         } else {
             None
         };
-        if shared.captured.contains(&self.handle) {
+        if shared.captured.map(|v| v == self.handle).unwrap_or(false) {
             shared.captured = None;
         }
         unsafe {
@@ -858,7 +861,7 @@ impl RawWindow<'_> {
                 );
 
                 if let Some(s) = self.title() {
-                    let rect = title_rect.insets_by(EdgeInsets::new(0, 8, 0, 8));
+                    let rect = title_rect.insets_by(EdgeInsets::new(1, 8, 0, 8));
                     AttributedString::new()
                         .font(FontManager::title_font())
                         .color(if is_active {

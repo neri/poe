@@ -12,7 +12,7 @@ use core::time::Duration;
 static mut PS2: Ps2 = Ps2::new();
 
 pub(super) struct Ps2 {
-    key_state: Ps2KeyState,
+    key_phase: Ps2KeyPhase,
     key_modifier: Modifier,
     mouse_state: MouseState,
     mouse_phase: Ps2MousePhase,
@@ -26,12 +26,17 @@ impl Ps2 {
 
     const fn new() -> Self {
         Self {
-            key_state: Ps2KeyState::Default,
+            key_phase: Ps2KeyPhase::Default,
             key_modifier: Modifier::empty(),
-            mouse_phase: Ps2MousePhase::Ack,
+            mouse_phase: Ps2MousePhase::WaitAck,
             mouse_buf: [Ps2Data(0); 3],
             mouse_state: MouseState::empty(),
         }
+    }
+
+    #[inline]
+    pub unsafe fn shared() -> &'static mut Self {
+        &mut *(&raw mut PS2)
     }
 
     pub unsafe fn init() -> Result<(), Ps2Error> {
@@ -40,50 +45,60 @@ impl Ps2 {
             Err(_) => return Err(Ps2Error::Unsupported),
             Ok(_) => (),
         }
-        Self::write_command(Ps2Command::DISABLE_FIRST_PORT);
-        Self::send_command(Ps2Command::DISABLE_SECOND_PORT, 1)?;
 
-        for _ in 0..16 {
+        Self::write_cmd(Ps2Cmd::DISABLE_FIRST_PORT);
+        Self::send_cmd(Ps2Cmd::DISABLE_SECOND_PORT, 1)?;
+
+        while Self::read_status().contains(Ps2Status::OUTPUT_FULL) {
             let _ = Self::read_data();
         }
 
         Irq(1).register(Self::irq_01).unwrap();
         Irq(12).register(Self::irq_12).unwrap();
 
-        Self::send_command(Ps2Command::WRITE_CONFIG, 1)?;
-        Self::send_data(Ps2Data(0x47), 1)?;
+        Self::send_cmd(Ps2Cmd::WRITE_CONFIG, 1)?;
+        Self::send_data(Ps2Data(0x44), 1)?;
 
-        Self::send_command(Ps2Command::ENABLE_FIRST_PORT, 1)?;
-        Self::send_command(Ps2Command::ENABLE_SECOND_PORT, 1)?;
+        // TODO: configure
+
+        Self::send_cmd(Ps2Cmd::ENABLE_FIRST_PORT, 1)?;
+        Self::send_cmd(Ps2Cmd::ENABLE_SECOND_PORT, 1)?;
+
+        Self::send_cmd(Ps2Cmd::WRITE_CONFIG, 1)?;
+        Self::send_data(Ps2Data(0x47), 1)?;
 
         Self::send_data(Ps2Data::RESET_COMMAND, 1)?;
         Timer::usleep(100_000);
         Self::send_data(Ps2Data::ENABLE_SEND, 1)?;
 
-        Self::send_second_data(Ps2Data::RESET_COMMAND, 1)?;
-        Timer::usleep(100_000);
-        Self::send_second_data(Ps2Data::ENABLE_SEND, 1)?;
+        Self::send_mouse_data(Ps2Data::RESET_COMMAND, 1)?;
+        Self::wait_mouse(10)?;
+        Self::send_mouse_data(Ps2Data::ENABLE_SEND, 1)?;
 
         Ok(())
     }
 
+    #[inline]
     unsafe fn read_data() -> Ps2Data {
         let mut al: u8;
         asm!("in al, 0x60", lateout("al") al);
         Ps2Data(al)
     }
 
+    #[inline]
     unsafe fn write_data(data: Ps2Data) {
         asm!("out 0x60, al", in("al") data.0);
     }
 
+    #[inline]
     unsafe fn read_status() -> Ps2Status {
         let mut al: u8;
         asm!("in al, 0x64", lateout("al") al);
         Ps2Status::from_bits_unchecked(al)
     }
 
-    unsafe fn write_command(command: Ps2Command) {
+    #[inline]
+    unsafe fn write_cmd(command: Ps2Cmd) {
         asm!("out 0x64, al", in("al") command.0);
     }
 
@@ -112,37 +127,49 @@ impl Ps2 {
     }
 
     // Wait for write, then command
-    unsafe fn send_command(command: Ps2Command, timeout: u64) -> Result<(), Ps2Error> {
-        Self::wait_for_write(timeout).and_then(|_| {
-            Self::write_command(command);
-            Ok(())
-        })
+    unsafe fn send_cmd(command: Ps2Cmd, timeout: u64) -> Result<(), Ps2Error> {
+        Self::wait_for_write(timeout).map(|_| Self::write_cmd(command))
     }
 
     // Wait for write, then data
     unsafe fn send_data(data: Ps2Data, timeout: u64) -> Result<(), Ps2Error> {
-        Self::wait_for_write(timeout).and_then(|_| {
-            Self::write_data(data);
-            Ok(())
-        })
+        Self::wait_for_write(timeout).map(|_| Self::write_data(data))
     }
 
     // Send to second port (mouse)
-    unsafe fn send_second_data(data: Ps2Data, timeout: u64) -> Result<(), Ps2Error> {
-        Self::send_command(Ps2Command::WRITE_SECOND_PORT, timeout)
-            .and_then(|_| Self::send_data(data, timeout))
+    unsafe fn send_mouse_data(data: Ps2Data, timeout: u64) -> Result<(), Ps2Error> {
+        Self::write_cmd(Ps2Cmd::WRITE_SECOND_PORT);
+        Self::send_data(data, timeout)
+    }
+
+    fn wait_mouse(timeout: u64) -> Result<(), Ps2Error> {
+        let ps2 = unsafe { Self::shared() };
+        if ps2.mouse_phase.get() == Ps2MousePhase::Nak {
+            ps2.mouse_phase.reset();
+        }
+        let deadline = Timer::new(Duration::from_micros(Self::WRITE_TIMEOUT * timeout));
+        while deadline.until() {
+            if ps2.mouse_phase.get() == Ps2MousePhase::Leading {
+                return Ok(());
+            } else {
+                Cpu::noop();
+            }
+        }
+        Err(Ps2Error::Timeout)
     }
 
     // IRQ 01 PS/2 Keyboard
+    #[inline(never)]
     fn irq_01(_irq: Irq) {
-        let ps2 = unsafe { &mut PS2 };
+        let ps2 = unsafe { Self::shared() };
         let data = unsafe { Self::read_data() };
         ps2.process_key_data(data);
     }
 
     // IRQ 12 PS/2 Mouse
+    #[inline(never)]
     fn irq_12(_irq: Irq) {
-        let ps2 = unsafe { &mut PS2 };
+        let ps2 = unsafe { Self::shared() };
         let data = unsafe { Self::read_data() };
         ps2.process_mouse_data(data);
     }
@@ -150,7 +177,7 @@ impl Ps2 {
     #[inline]
     fn process_key_data(&mut self, data: Ps2Data) {
         if data == Ps2Data::SCAN_E0 {
-            self.key_state = Ps2KeyState::PrefixE0;
+            self.key_phase = Ps2KeyPhase::PrefixE0;
         } else {
             let flags = if data.is_break() {
                 KeyEventFlags::BREAK
@@ -158,10 +185,10 @@ impl Ps2 {
                 KeyEventFlags::empty()
             };
             let mut scancode = data.scancode();
-            match self.key_state {
-                Ps2KeyState::PrefixE0 => {
+            match self.key_phase {
+                Ps2KeyPhase::PrefixE0 => {
                     scancode |= 0x80;
-                    self.key_state = Ps2KeyState::Default;
+                    self.key_phase = Ps2KeyPhase::Default;
                 }
                 _ => (),
             }
@@ -180,10 +207,16 @@ impl Ps2 {
     #[inline]
     fn process_mouse_data(&mut self, data: Ps2Data) {
         match self.mouse_phase {
-            Ps2MousePhase::Ack => {
-                if data == Ps2Data::ACK {
+            Ps2MousePhase::WaitAck => match data {
+                Ps2Data::ACK => {
                     self.mouse_phase.next();
                 }
+                _ => {
+                    self.mouse_phase.nak();
+                }
+            },
+            Ps2MousePhase::Nak => {
+                // TODO:
             }
             Ps2MousePhase::Leading => {
                 if MouseLeadByte::from(data).is_valid() {
@@ -227,12 +260,12 @@ pub(super) enum Ps2Error {
 }
 
 #[derive(Debug)]
-enum Ps2KeyState {
+enum Ps2KeyPhase {
     Default,
     PrefixE0,
 }
 
-impl Default for Ps2KeyState {
+impl Default for Ps2KeyPhase {
     fn default() -> Self {
         Self::Default
     }
@@ -273,22 +306,44 @@ impl Into<MouseButton> for MouseLeadByte {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum Ps2MousePhase {
-    Ack,
+    WaitAck,
     Leading,
     X,
     Y,
+    Nak,
 }
 
 impl Ps2MousePhase {
+    #[inline]
+    fn get(&self) -> Self {
+        *self
+    }
+
+    #[inline]
+    fn set(&mut self, value: Self) {
+        *self = value;
+    }
+
+    #[inline]
+    fn reset(&mut self) {
+        self.set(Self::WaitAck);
+    }
+
+    #[inline]
+    fn nak(&mut self) {
+        self.set(Self::Nak);
+    }
+
     fn next(&mut self) {
-        *self = match *self {
-            Ps2MousePhase::Ack => Ps2MousePhase::Leading,
+        self.set(match self.get() {
+            Ps2MousePhase::WaitAck => Ps2MousePhase::Leading,
             Ps2MousePhase::Leading => Ps2MousePhase::X,
             Ps2MousePhase::X => Ps2MousePhase::Y,
             Ps2MousePhase::Y => Ps2MousePhase::Leading,
-        }
+            otherwise => otherwise,
+        })
     }
 
     fn as_index(self) -> usize {
@@ -329,16 +384,16 @@ impl Ps2Data {
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq)]
-struct Ps2Command(pub u8);
+struct Ps2Cmd(pub u8);
 
 #[allow(dead_code)]
-impl Ps2Command {
-    const WRITE_CONFIG: Ps2Command = Ps2Command(0x60);
-    const DISABLE_SECOND_PORT: Ps2Command = Ps2Command(0xA7);
-    const ENABLE_SECOND_PORT: Ps2Command = Ps2Command(0xA8);
-    const DISABLE_FIRST_PORT: Ps2Command = Ps2Command(0xAD);
-    const ENABLE_FIRST_PORT: Ps2Command = Ps2Command(0xAE);
-    const WRITE_SECOND_PORT: Ps2Command = Ps2Command(0xD4);
+impl Ps2Cmd {
+    const WRITE_CONFIG: Ps2Cmd = Ps2Cmd(0x60);
+    const DISABLE_SECOND_PORT: Ps2Cmd = Ps2Cmd(0xA7);
+    const ENABLE_SECOND_PORT: Ps2Cmd = Ps2Cmd(0xA8);
+    const DISABLE_FIRST_PORT: Ps2Cmd = Ps2Cmd(0xAD);
+    const ENABLE_FIRST_PORT: Ps2Cmd = Ps2Cmd(0xAE);
+    const WRITE_SECOND_PORT: Ps2Cmd = Ps2Cmd(0xD4);
 }
 
 bitflags! {

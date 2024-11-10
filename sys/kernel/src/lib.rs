@@ -1,8 +1,7 @@
 #![no_std]
 #![feature(alloc_error_handler)]
-#![feature(associated_type_bounds)]
 #![feature(core_intrinsics)]
-#![feature(option_result_contains)]
+#![allow(internal_features)]
 
 use arch::cpu::Cpu;
 use core::fmt::Write;

@@ -1,0 +1,1030 @@
+make all --print-data-base --no-builtin-variables --no-builtin-rules --question
+# GNU Make 3.81
+# Copyright (C) 2006  Free Software Foundation, Inc.
+# This is free software; see the source for copying conditions.
+# There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.
+
+# This program built for i386-apple-darwin11.3.0
+ 
+
+# Make data base, printed on Sun Nov 10 19:36:54 2024
+
+# Variables
+
+# automatic
+<D = $(patsubst %/,%,$(dir $<))
+# automatic
+?F = $(notdir $?)
+# environment
+VSCODE_CRASH_REPORTER_PROCESS_TYPE = extensionHost
+# automatic
+?D = $(patsubst %/,%,$(dir $?))
+# environment
+CPPFLAGS = -I/opt/homebrew/opt/llvm/include
+# automatic
+@D = $(patsubst %/,%,$(dir $@))
+# automatic
+@F = $(notdir $@)
+# makefile (from `Makefile', line 11)
+KERNEL_SYS = $(BIN)kernel.sys
+# makefile
+CURDIR := /Users/nerry/proj/toe
+# makefile
+SHELL = /bin/sh
+# makefile (from `Makefile', line 3)
+BIN = bin/
+# environment
+VSCODE_NLS_CONFIG = {"userLocale":"ja","osLocale":"ja-jp","resolvedLanguage":"en","defaultMessagesFile":"/Applications/Visual Studio Code.app/Contents/Resources/app/out/nls.messages.json","locale":"ja","availableLanguages":{}}
+# environment
+_ = /usr/bin/make
+# makefile (from `Makefile', line 14)
+TARGET_ISO = $(BIN)megos.iso
+# makefile (from `Makefile', line 1)
+MAKEFILE_LIST :=  Makefile
+# environment
+__CFBundleIdentifier = com.microsoft.VSCode
+# environment
+VSCODE_CWD = /
+# environment
+PATH = /opt/homebrew/sbin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/opt/binutils/bin:/Users/nerry/.rbenv/shims:/opt/homebrew/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/Apple/usr/bin:/Users/nerry/.cargo/bin:~/development/flutter/bin
+# makefile (from `Makefile', line 9)
+KERNEL_CEF = $(BIN)kernel
+# environment
+LIBRARY_PATH = :/opt/homebrew/lib
+# makefile (from `Makefile', line 8)
+KERNEL_LD = sys/target/i586-unknown-none/release/kernel
+# environment
+ELECTRON_RUN_AS_NODE = 1
+# environment
+LDFLAGS = -L/opt/homebrew/opt/llvm/lib
+# default
+.FEATURES := target-specific order-only second-expansion else-if archives jobserver check-symlink
+# environment
+SSH_AUTH_SOCK = /private/tmp/com.apple.launchd.3djCAyfWmN/Listeners
+# automatic
+%F = $(notdir $%)
+# environment
+PWD = /Users/nerry/proj/toe
+# makefile (from `Makefile', line 6)
+BOOT_IMG = $(BIN)boot.img
+# environment
+ORIGINAL_XDG_CURRENT_DESKTOP = undefined
+# environment
+MANPATH = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man:
+# environment
+HOME = /Users/nerry
+# default
+MAKEFILEPATH := /Applications/Xcode.app/Contents/Developer/Makefiles
+# environment
+VSCODE_CODE_CACHE_PATH = /Users/nerry/Library/Application Support/Code/CachedData/e8653663e8840adaf45af01eab5c627a5af81807
+# environment
+LOGNAME = nerry
+# makefile (from `Makefile', line 16)
+IMG_SOURCES = $(KERNEL_SYS)
+# environment
+VSCODE_HANDLES_UNCAUGHT_ERRORS = true
+# automatic
+^D = $(patsubst %/,%,$(dir $^))
+# environment
+XPC_FLAGS = 0x0
+# default
+MAKE = $(MAKE_COMMAND)
+# default
+MAKECMDGOALS := all
+# environment
+SHLVL = 1
+# environment
+VSCODE_ESM_ENTRYPOINT = vs/workbench/api/node/extensionHostProcess
+# default
+MAKE_VERSION := 3.81
+# environment
+USER = nerry
+# makefile
+.DEFAULT_GOAL := all
+# automatic
+%D = $(patsubst %/,%,$(dir $%))
+# makefile (from `Makefile', line 19)
+MKFDFS = cargo run --manifest-path ./tools/mkfdfs/Cargo.toml --
+# default
+MAKE_COMMAND := /Applications/Xcode.app/Contents/Developer/usr/bin/make
+# makefile (from `Makefile', line 17)
+INITRD_FILES = $(KERNEL_CEF) $(MISC)initrd/*
+# default
+.VARIABLES := 
+# environment
+TMPDIR = /var/folders/g_/_d3fbyzd30j2fqp6t_52dnrm0000gn/T/
+# automatic
+*F = $(notdir $*)
+# environment
+VSCODE_IPC_HOOK = /Users/nerry/Library/Application Support/Code/1.95-main.sock
+# makefile (from `Makefile', line 12)
+TARGETS = $(IPLS) $(KERNEL_SYS)
+# environment
+MallocNanoZone = 0
+# makefile
+MAKEFLAGS = Rrqp
+# environment
+MFLAGS = -Rrqp
+# automatic
+*D = $(patsubst %/,%,$(dir $*))
+# environment
+XPC_SERVICE_NAME = application.com.microsoft.VSCode.160337138.160337144
+# automatic
++D = $(patsubst %/,%,$(dir $+))
+# makefile (from `Makefile', line 7)
+IPLS = $(BIN)fdboot.bin $(BIN)cdboot.bin $(BIN)fmcdboot.bin
+# automatic
++F = $(notdir $+)
+# makefile (from `Makefile', line 4)
+TEMP = temp/
+# makefile (from `Makefile', line 5)
+MISC = misc/
+# environment
+__CF_USER_TEXT_ENCODING = 0x1F5:0x1:0xE
+# environment
+COMMAND_MODE = unix2003
+# default
+MAKEFILES := 
+# environment
+RBENV_SHELL = zsh
+# automatic
+<F = $(notdir $<)
+# environment
+LC_ALL = C
+# automatic
+^F = $(notdir $^)
+# default
+SUFFIXES := 
+# default
+.INCLUDE_DIRS = /usr/local/include
+# makefile (from `Makefile', line 13)
+ISO_SRC = $(TEMP)iso
+# environment
+MAKELEVEL := 0
+# makefile (from `Makefile', line 10)
+INITRD_IMG = $(BIN)initrd.img
+# environment
+LANG = C
+# makefile (from `Makefile', line 18)
+INITRD_FILES2 = apps/target/wasm32-unknown-unknown/release/*.wasm
+# environment
+VSCODE_PID = 57354
+# variable set hash-table stats:
+# Load=79/1024=8%, Rehash=0, Collisions=5/154=3%
+
+# Pattern-specific Variable Values
+
+# No pattern-specific variable values.
+
+# Directories
+
+# sys/kernel/src/sync/semaphore.rs (device 16777233, inode 9933719): could not be opened.
+# lib/megstd/src/osstr.rs (device 16777233, inode 13068114): could not be opened.
+# sys/kernel/src (device 16777233, inode 6719539): 16 files, no impossibilities.
+# tools/mkinitrd/src (device 16777233, inode 12994730): 3 files, no impossibilities.
+# lib/megstd/src/path.rs (device 16777233, inode 13067799): could not be opened.
+# sys/kernel/src/ui/window.rs (device 16777233, inode 11582340): could not be opened.
+# sys/kernel/src/arch (device 16777233, inode 6752070): 5 files, no impossibilities.
+# sys/kernel/src/fs/filesys.rs (device 16777233, inode 13154512): could not be opened.
+# . (device 16777233, inode 6100355): 20 files, no impossibilities.
+# sys/kernel/src/rt/megos (device 16777233, inode 13164775): 4 files, no impossibilities.
+# sys/kernel/src/io/tty.rs (device 16777233, inode 12131434): could not be opened.
+# sys/kernel/src/ui/font (device 16777233, inode 6770972): 9 files, no impossibilities.
+# sys/kernel/src/sync/fifo.rs (device 16777233, inode 9914280): could not be opened.
+# sys/kernel/src/task/waker.rs (device 16777233, inode 11028275): could not be opened.
+# lib/wasm/src (device 16777233, inode 52748302): 10 files, no impossibilities.
+# sys/kernel/src/io/emcon.rs (device 16777233, inode 12131435): could not be opened.
+# sys/kernel/src/util/mod.rs (device 16777233, inode 7605575): could not be opened.
+# sys/kernel/src/mem (device 16777233, inode 7079345): 7 files, no impossibilities.
+# sys/kernel/src/task/executor.rs (device 16777233, inode 11007333): could not be opened.
+# sys/kernel/src/fs/initramfs.rs (device 16777233, inode 13154513): could not be opened.
+# sys/kernel/src/arch/mod.rs (device 16777233, inode 7087808): could not be opened.
+# lib/megstd/src/string.rs (device 16777233, inode 58092092): could not be opened.
+# sys/kernel/src/mem/slab.rs (device 16777233, inode 9788194): could not be opened.
+# sys/kernel/src/mem/alloc.rs (device 16777233, inode 7475462): could not be opened.
+# sys/kernel/src/sync (device 16777233, inode 8930081): 6 files, no impossibilities.
+# lib/megstd/src/drawing (device 16777233, inode 11968946): 7 files, no impossibilities.
+# sys/kernel/src/audio (device 16777233, inode 7533270): 3 files, no impossibilities.
+# sys/kernel/src/ui/terminal.rs (device 16777233, inode 12271686): could not be opened.
+# sys/kernel/src/ui (device 16777233, inode 7479783): 7 files, no impossibilities.
+# sys/kernel/src/mem/mod.rs (device 16777233, inode 7079347): could not be opened.
+# lib/megstd/src/lib.rs (device 16777233, inode 13072028): could not be opened.
+# sys/kernel/src/rt (device 16777233, inode 13164712): 5 files, no impossibilities.
+# lib/megstd/src (device 16777233, inode 13072022): 12 files, no impossibilities.
+# lib/megstd/src/error (device 16777233, inode 13065845): 3 files, no impossibilities.
+# sys/kernel/src/mem/mm.rs (device 16777233, inode 7475639): could not be opened.
+ 
+# sys/kernel/src/ui/mod.rs (device 16777233, inode 7479792): could not be opened.
+# lib/megstd/src/io (device 16777233, inode 13098795): 4 files, no impossibilities.
+# sys/kernel/src/fs (device 16777233, inode 10731703): 6 files, no impossibilities.
+# sys/kernel/src/ui/text.rs (device 16777233, inode 58093042): could not be opened.
+# sys/kernel/src/io (device 16777233, inode 7469411): 8 files, no impossibilities.
+# sys/kernel/src/io/hid.rs (device 16777233, inode 10718422): could not be opened.
+# misc/initrd (device 16777233, inode 13129299): 4 files, no impossibilities.
+# sys/kernel/src/audio/mod.rs (device 16777233, inode 7533278): could not be opened.
+# sys/kernel/src/io/null.rs (device 16777233, inode 12501578): could not be opened.
+# sys/kernel/src/lib.rs (device 16777233, inode 6720636): could not be opened.
+# sys/kernel/src/rt/mod.rs (device 16777233, inode 13164791): could not be opened.
+# sys/kernel/src/task/mod.rs (device 16777233, inode 11007348): could not be opened.
+# sys/kernel/src/task/scheduler.rs (device 16777233, inode 7469841): could not be opened.
+# sys/kernel/src/sync/mod.rs (device 16777233, inode 8930092): could not be opened.
+# sys/kernel/src/fs/mod.rs (device 16777233, inode 10731711): could not be opened.
+# sys/kernel/src/main.rs (device 16777233, inode 6719544): could not be opened.
+# tools/mkfdfs/src (device 16777233, inode 10017717): 5 files, no impossibilities.
+# sys/kernel/src/system.rs (device 16777233, inode 11582338): could not be opened.
+# lib/megstd/src/fs.rs (device 16777233, inode 10731710): could not be opened.
+# sys/kernel/src/util (device 16777233, inode 7605572): 4 files, no impossibilities.
+# lib/megstd/src/sys (device 16777233, inode 13129338): 4 files, no impossibilities.
+# sys/kernel/src/util/rng.rs (device 16777233, inode 7605584): could not be opened.
+# sys/kernel/src/arch/x86 (device 16777233, inode 7087804): 11 files, no impossibilities.
+# sys/kernel/src/sync/atomicflags.rs (device 16777233, inode 8930084): could not be opened.
+# sys/kernel/src/io/mod.rs (device 16777233, inode 7469421): could not be opened.
+# sys/kernel/src/task (device 16777233, inode 7469833): 6 files, no impossibilities.
+# tools/elf2ceef/src (device 16777233, inode 7158968): 6 files, no impossibilities.
+
+# 175 files, no impossibilities in 62 directories.
+
+# Implicit Rules
+
+# No implicit rules.
+
+# Files
+
+# Not a target:
+lib/wasm/src/opcode.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/wasm/src/tests.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/ui/window.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/wasm/src/wasm.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+sys/target/i586-unknown-none/release/kernel: sys/kernel/src/lib.rs sys/kernel/src/main.rs sys/kernel/src/system.rs sys/kernel/src/arch/mod.rs sys/kernel/src/audio/mod.rs sys/kernel/src/fs/filesys.rs sys/kernel/src/fs/initramfs.rs sys/kernel/src/fs/mod.rs sys/kernel/src/io/emcon.rs sys/kernel/src/io/hid.rs sys/kernel/src/io/mod.rs sys/kernel/src/io/null.rs sys/kernel/src/io/tty.rs sys/kernel/src/mem/alloc.rs sys/kernel/src/mem/mm.rs sys/kernel/src/mem/mod.rs sys/kernel/src/mem/slab.rs sys/kernel/src/rt/mod.rs sys/kernel/src/sync/atomicflags.rs sys/kernel/src/sync/fifo.rs sys/kernel/src/sync/mod.rs sys/kernel/src/sync/semaphore.rs sys/kernel/src/task/executor.rs sys/kernel/src/task/mod.rs sys/kernel/src/task/scheduler.rs sys/kernel/src/task/waker.rs sys/kernel/src/ui/mod.rs sys/kernel/src/ui/terminal.rs sys/kernel/src/ui/text.rs sys/kernel/src/ui/window.rs sys/kernel/src/util/mod.rs sys/kernel/src/util/rng.rs sys/kernel/src/arch/x86/cpu.rs sys/kernel/src/arch/x86/fmtowns.rs sys/kernel/src/arch/x86/mod.rs sys/kernel/src/arch/x86/pc98.rs sys/kernel/src/arch/x86/pic.rs sys/kernel/src/arch/x86/pit.rs sys/kernel/src/arch/x86/ps2.rs sys/kernel/src/arch/x86/rtc.rs sys/kernel/src/rt/megos/arle.rs sys/kernel/src/rt/megos/mod.rs sys/kernel/src/ui/font/font.rs sys/kernel/src/ui/font/megh0608.rs sys/kernel/src/ui/font/megh0816.rs sys/kernel/src/ui/font/megmsgr.rs sys/kernel/src/ui/font/megmsgr2.rs sys/kernel/src/ui/font/mod.rs lib/megstd/src/fs.rs lib/megstd/src/lib.rs lib/megstd/src/osstr.rs lib/megstd/src/path.rs lib/megstd/src/string.rs lib/megstd/src/drawing/bitmap.rs lib/megstd/src/drawing/color.rs lib/megstd/src/drawing/coords.rs lib/megstd/src/drawing/drawable.rs lib/megstd/src/drawing/mod.rs lib/megstd/src/error/mod.rs lib/megstd/src/io/error.rs lib/megstd/src/io/mod.rs lib/megstd/src/sys/fs_imp.rs lib/megstd/src/sys/mod.rs lib/wasm/src/intcode.rs lib/wasm/src/intr.rs lib/wasm/src/lib.rs lib/wasm/src/opcode.rs lib/wasm/src/stack.rs lib/wasm/src/tests.rs lib/wasm/src/wasm.rs
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 49):
+	cd sys; cargo build --release
+	
+
+bin/:
+#  Implicit rule search has not been done.
+#  Last modified 2024-11-03 17:30:57
+#  File has been updated.
+#  Successfully updated.
+#  commands to execute (from `Makefile', line 31):
+	mkdir -p $@
+	
+
+# Not a target:
+sys/kernel/src/ui/font/megh0608.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/task/waker.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+bin/kernel.sys: bin/loader.bin bin/initrd.img
+#  Implicit rule search has not been done.
+#  Last modified 2024-11-10 19:00:47
+#  File has been updated.
+#  Needs to be updated (-q is set).
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/2=0%
+#  commands to execute (from `Makefile', line 58):
+	cat $^ > $@
+	
+
+bin/initrd.img: tools/mkinitrd/src/main.rs apps bin/kernel misc/initrd/sample.txt
+#  Implicit rule search has not been done.
+#  Last modified 2024-11-10 19:00:47
+#  File has been updated.
+#  Needs to be updated (-q is set).
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/2=0%
+#  commands to execute (from `Makefile', line 55):
+	cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- $(INITRD_IMG) $(INITRD_FILES) $(INITRD_FILES2)
+	
+
+all: bin/ bin/fdboot.bin bin/cdboot.bin bin/fmcdboot.bin bin/kernel.sys
+#  Phony target (prerequisite of .PHONY).
+#  Command-line target.
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has been updated.
+#  Needs to be updated (-q is set).
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/2=0%
+
+# Not a target:
+sys/kernel/src/rt/megos/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/string.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+boot/pc-bios/fmcdboot.asm:
+#  Implicit rule search has been done.
+#  Last modified 2021-03-27 19:23:52
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+
+.PHONY: love all clean install iso full run test apps
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/wasm/src/intcode.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/lib.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+temp/iso:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 34):
+	mkdir -p $@
+	
+
+# Not a target:
+sys/kernel/src/ui/font/megh0816.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+ 
+
+apps:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  Implicit/static pattern stem: `'
+#  File does not exist.
+#  File has been updated.
+#  Needs to be updated (-q is set).
+# automatic
+# @ := apps
+# automatic
+# % := 
+# automatic
+# * := 
+# automatic
+# + := 
+# automatic
+# | := 
+# automatic
+# < := 
+# automatic
+# ^ := 
+# automatic
+# ? := 
+# variable set hash-table stats:
+# Load=8/32=25%, Rehash=0, Collisions=1/10=10%
+#  commands to execute (from `Makefile', line 63):
+	cd apps; cargo build --target wasm32-unknown-unknown --release
+	
+
+# Not a target:
+sys/kernel/src/audio/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/drawing/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/rt/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/ui/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/rt/megos/arle.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/error/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/main.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+tools/mkfdfs/src/fat.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+tools/elf2ceef/src/ceef.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/ui/font/megmsgr2.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/ps2.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/fmtowns.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+.SUFFIXES:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/drawing/color.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+Makefile:
+#  Implicit rule search has been done.
+#  Last modified 2024-11-05 13:07:09
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+
+bin/kernel: tools/elf2ceef/src/ceef.rs tools/elf2ceef/src/elf.rs tools/elf2ceef/src/lib.rs tools/elf2ceef/src/main.rs sys/target/i586-unknown-none/release/kernel
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 52):
+	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_CEF)
+	
+
+# Not a target:
+lib/megstd/src/sys/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+full: install iso
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 69):
+	$(MKFDFS) -bs $(BIN)fdboot.bin -f 1232 $(BIN)boot.hdm $(IMG_SOURCES)
+	$(MKFDFS) -bs $(BIN)fdboot.bin -f 320 $(BIN)mini.img $(IMG_SOURCES)
+	
+ 
+
+# Not a target:
+boot/pc-bios/fdboot.asm:
+#  Implicit rule search has been done.
+#  Last modified 2021-02-17 13:21:25
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+
+# Not a target:
+lib/wasm/src/stack.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+test:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 82):
+	cargo test --manifest-path lib/wasm/Cargo.toml
+	
+
+bin/cdboot.bin: boot/pc-bios/cdboot.asm
+#  Implicit rule search has not been done.
+#  Last modified 2024-11-03 17:24:54
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+#  commands to execute (from `Makefile', line 37):
+	nasm -f bin $< -o $@
+	
+
+# Not a target:
+sys/kernel/src/io/emcon.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+misc/initrd/sample.txt:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/io/hid.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/io/null.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/io/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+tools/mkfdfs/src/lib.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+refresh: clean
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 28):
+	-rm -rf apps/Cargo.lock sys/Cargo.lock tools/Cargo.lock
+	
+
+# Not a target:
+lib/megstd/src/fs.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/sync/atomicflags.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/sync/semaphore.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+tools/elf2ceef/src/elf.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/path.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+bin/loader.bin: boot/pc-bios/loader.asm
+#  Implicit rule search has not been done.
+#  Last modified 2024-11-06 08:44:54
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+#  commands to execute (from `Makefile', line 46):
+	nasm -f bin -I boot $< -o $@
+	
+
+# Not a target:
+sys/kernel/src/util/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/pc98.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/io/tty.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/pit.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/wasm/src/lib.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+.DEFAULT:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/drawing/bitmap.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/ui/font/font.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+bin/boot.img: install
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/mem/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+run:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 85):
+	qemu-system-i386 -fda $(BOOT_IMG) -rtc base=localtime,clock=host -serial mon:stdio -machine isapc -vga std -cpu 486
+	
+
+# Not a target:
+sys/kernel/src/fs/initramfs.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+clean:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 24):
+	-rm -rf $(TARGETS)
+	-rm -rf sys/target apps/target
+	
+
+# Not a target:
+boot/pc-bios/cdboot.asm:
+#  Implicit rule search has been done.
+#  Last modified 2021-02-28 23:28:36
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+
+# Not a target:
+lib/megstd/src/io/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+tools/elf2ceef/src/lib.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+love:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/sync/fifo.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/pic.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/util/rng.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/rtc.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/system.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+bin/fmcdboot.bin: boot/pc-bios/fmcdboot.asm
+#  Implicit rule search has not been done.
+#  Last modified 2024-11-03 17:24:54
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+#  commands to execute (from `Makefile', line 43):
+	nasm -f bin $< -o $@
+	
+
+# Not a target:
+lib/megstd/src/osstr.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+tools/mkfdfs/src/main.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/fs/filesys.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/ui/font/megmsgr.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+ 
+# Not a target:
+tools/elf2ceef/src/main.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+tools/mkinitrd/src/main.rs:
+#  Implicit rule search has been done.
+#  Last modified 2021-03-28 02:22:38
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+
+# Not a target:
+lib/megstd/src/drawing/coords.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/arch/x86/cpu.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/wasm/src/intr.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/task/executor.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/ui/font/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/mem/slab.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/mem/alloc.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/sys/fs_imp.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+boot/pc-bios/loader.asm:
+#  Implicit rule search has been done.
+#  Last modified 2024-11-06 08:44:52
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+
+# Not a target:
+sys/kernel/src/mem/mm.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/lib.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/ui/text.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/drawing/drawable.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+iso: temp/iso bin/fdboot.bin bin/cdboot.bin bin/fmcdboot.bin bin/kernel.sys
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 73):
+	cp -r $(BIN)cdboot.bin $(IMG_SOURCES) $(ISO_SRC)
+	mkisofs -iso-level 2 -V "MEG-OS" \
+	-hide-joliet boot.catalog -hide-joliet-trans-tbl -J \
+	-r -T \
+	-hide boot.catalog -no-emul-boot -b cdboot.bin \
+	-o $(TARGET_ISO) $(ISO_SRC)
+	dd conv=notrunc if=$(BIN)fmcdboot.bin of=$(TARGET_ISO)
+	
+
+bin/fdboot.bin: boot/pc-bios/fdboot.asm
+#  Implicit rule search has not been done.
+#  Last modified 2024-11-03 17:24:54
+#  File has been updated.
+#  Successfully updated.
+# variable set hash-table stats:
+# Load=0/32=0%, Rehash=0, Collisions=0/0=0%
+#  commands to execute (from `Makefile', line 40):
+	nasm -f bin $< -o $@
+	
+
+# Not a target:
+sys/kernel/src/ui/terminal.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/task/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/task/scheduler.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/sync/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+sys/kernel/src/fs/mod.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+lib/megstd/src/io/error.rs:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+install: bin/ tools/mkfdfs/src/fat.rs tools/mkfdfs/src/lib.rs tools/mkfdfs/src/main.rs bin/fdboot.bin bin/cdboot.bin bin/fmcdboot.bin bin/kernel.sys
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  commands to execute (from `Makefile', line 66):
+	$(MKFDFS) -bs $(BIN)fdboot.bin $(BOOT_IMG) $(IMG_SOURCES)
+	
+
+# files hash-table stats:
+# Load=108/1024=11%, Rehash=0, Collisions=15/238=6%
+# VPATH Search Paths
+
+# No `vpath' search paths.
+
+# No general (`VPATH' variable) search path.
+
+# # of strings in strcache: 1
+# # of strcache buffers: 1
+# strcache size: total = 4096 / max = 4096 / min = 4096 / avg = 4096
+# strcache free: total = 4087 / max = 4087 / min = 4087 / avg = 4087
+
+# Finished Make data base on Sun Nov 10 19:36:54 2024
+
+ 

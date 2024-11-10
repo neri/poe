@@ -178,8 +178,21 @@ impl Cpu {
         unsafe {
             match System::platform() {
                 Platform::PcCompatible => {
+                    // PCI
                     Self::out8(0x0CF9, 0x06);
+
+                    // OADG
                     asm!("out 0x92, al", in("al") 0x01u8);
+
+                    // PS/2
+                    loop {
+                        let al: u8;
+                        asm!("in al, 0x64", out("al") al);
+                        if (al & 0x02) == 0 {
+                            break;
+                        }
+                    }
+                    asm!("out 0x64, al", in("al") 0xFEu8);
                 }
                 Platform::Nec98 => {
                     asm!("out 0x37, al", in("al") 0x0Fu8);

@@ -75,17 +75,20 @@ impl FontManager {
 
     #[inline]
     pub fn system_font() -> FontDescriptor {
-        FontDescriptor::new(FontFamily::FixedSystem, 0).unwrap()
+        FontDescriptor::new(FontFamily::SmallFixed, 0).unwrap()
+        // FontDescriptor::new(FontFamily::FixedSystem, 0).unwrap()
     }
 
     #[inline]
     pub fn title_font() -> FontDescriptor {
-        FontDescriptor::new(FontFamily::SystemUI, 0).unwrap_or(Self::system_font())
+        Self::system_font()
+        // FontDescriptor::new(FontFamily::SystemUI, 0).unwrap_or(Self::system_font())
     }
 
     #[inline]
     pub fn ui_font() -> FontDescriptor {
-        FontDescriptor::new(FontFamily::SystemUI, 0).unwrap_or(Self::system_font())
+        Self::system_font()
+        // FontDescriptor::new(FontFamily::SystemUI, 0).unwrap_or(Self::system_font())
     }
 }
 

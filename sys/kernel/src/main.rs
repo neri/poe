@@ -4,9 +4,9 @@
 #![no_std]
 #![no_main]
 
-use alloc::boxed::Box;
 use alloc::string::*;
 use alloc::vec::Vec;
+use alloc::{borrow::ToOwned, boxed::Box};
 use core::fmt::Write;
 use core::time::Duration;
 use kernel::{
@@ -66,7 +66,13 @@ impl Shell {
     }
 
     async fn repl_main() {
-        System::set_stdout(Box::new(Terminal::new(80, 24)));
+        let size = WindowManager::main_screen_bounds().size();
+        if size.width() < 640 || size.height() < 400 {
+            System::set_stdout(Box::new(Terminal::new(40, 12)));
+        } else {
+            System::set_stdout(Box::new(Terminal::new(80, 24)));
+        }
+
         let stdout = System::stdout();
 
         Self::invoke_command(stdout, "ver");
@@ -93,7 +99,7 @@ impl Shell {
     fn invoke_command(stdout: &mut dyn Tty, cmdline: &str) {
         match Self::parse_cmd(&cmdline, |name, args| match name {
             "clear" | "cls" => stdout.reset().unwrap(),
-            "dir" => Self::cmd_dir(args),
+            "ls" | "dir" => Self::cmd_ls(args),
             "type" => Self::cmd_type(stdout, args),
             "echo" => {
                 for (index, word) in args.iter().skip(1).enumerate() {
@@ -185,13 +191,58 @@ impl Shell {
             .ok()
     }
 
-    fn cmd_dir(_args: &[&str]) {
-        let dir = match FileManager::read_dir("/") {
+    fn cmd_ls(args: &[&str]) {
+        let path = args.get(1).unwrap_or(&"");
+        let dir = match FileManager::read_dir(path) {
             Ok(v) => v,
-            Err(_) => return,
+            Err(err) => {
+                println!("{:?}", err.kind());
+                return;
+            }
         };
-        for dir_ent in dir {
-            print!(" {:<14} ", dir_ent.name());
+
+        let stdout = System::stdout();
+        // let attributes = stdout.attributes();
+        // let text_bg = attributes & 0xF0;
+        // let text_fg = attributes & 0x0F;
+
+        let mut files = dir
+            .map(|v| {
+                // let metadata = v.metadata();
+                // let (color, suffix) = if metadata.file_type().is_dir() {
+                //     (text_bg | 0x09, "/")
+                // } else if metadata.file_type().is_symlink() {
+                //     (text_bg | 0x0D, "@")
+                // } else if metadata.file_type().is_char_device() {
+                //     (0x0E, "")
+                // } else {
+                //     (0, "")
+                // };
+                let (color, suffix) = (0, "");
+                (v.name().to_owned(), suffix, color)
+            })
+            .collect::<Vec<_>>();
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let item_len = files.iter().fold(0, |acc, v| acc.max(v.0.len())) + 2;
+        let width = stdout.dims().0 as usize;
+        let items_per_line = width / item_len;
+        let needs_new_line = items_per_line > 0 && width % item_len > 0;
+
+        for (index, (name, suffix, attribute)) in files.into_iter().enumerate() {
+            if (index % items_per_line) == 0 {
+                if index > 0 && needs_new_line {
+                    println!("");
+                }
+            }
+            stdout.set_attribute(attribute);
+            print!("{}", name);
+            stdout.set_attribute(0);
+            print!("{}", suffix);
+            let len = name.len() + suffix.len();
+            if len < item_len {
+                print!("{:len$}", "", len = item_len - len);
+            }
         }
         println!("");
     }
@@ -439,13 +490,12 @@ impl Shell {
                                 let limit = item_size.width as usize - 2;
                                 for i in 0..limit {
                                     let scale = item_size.height - 2;
-                                    let value1 = usage_history
-                                        [((usage_cursor + i - limit) % n_items)]
+                                    let value1 = usage_history[(usage_cursor + i - limit) % n_items]
                                         as isize
                                         * scale
                                         / 255;
                                     let value2 = usage_history
-                                        [((usage_cursor + i - 1 - limit) % n_items)]
+                                        [(usage_cursor + i - 1 - limit) % n_items]
                                         as isize
                                         * scale
                                         / 255;
@@ -483,7 +533,7 @@ impl Shell {
 
     #[allow(dead_code)]
     async fn status_bar_main() {
-        const STATUS_BAR_HEIGHT: isize = 20;
+        const STATUS_BAR_HEIGHT: isize = 16;
         const STATUS_BAR_PADDING: EdgeInsets = EdgeInsets::new(0, 0, 0, 0);
         const INNER_PADDING: EdgeInsets = EdgeInsets::new(1, 16, 1, 16);
 

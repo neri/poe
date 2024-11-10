@@ -52,7 +52,7 @@ impl TtyWrite for Null {
         false
     }
 
-    fn attribute(&self) -> u8 {
+    fn attributes(&self) -> u8 {
         0
     }
 

@@ -8,10 +8,27 @@ pub type Elf32Off = u32;
 pub type Elf64Addr = u64;
 pub type Elf64Off = u64;
 
+pub const MAGIC: [u8; 4] = *b"\x7FELF";
+
+pub const EI_CLASS: usize = 4;
+pub const EI_DATA: usize = 5;
+pub const EI_VERSION: usize = 6;
+pub const EI_NIDENT: usize = 16;
+
+pub const ELFCLASSNONE: u8 = 0;
+pub const ELFCLASS32: u8 = 1;
+pub const ELFCLASS64: u8 = 2;
+
+pub const ELFDATANONE: u8 = 0;
+pub const ELFDATA2LSB: u8 = 1;
+pub const ELFDATA2MSB: u8 = 2;
+
+pub const EV_CURRENT: u8 = 1;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Elf32Hdr {
-    pub e_ident: [u8; Self::EI_NIDENT],
+    pub e_ident: [u8; EI_NIDENT],
     pub e_type: ElfType,
     pub e_machine: Machine,
     pub e_version: ElfWord,
@@ -28,21 +45,18 @@ pub struct Elf32Hdr {
 }
 
 impl Elf32Hdr {
-    pub const EI_NIDENT: usize = 16;
-    pub const MAGIC: [u8; 4] = *b"\x7FELF";
-
     pub fn is_valid(&self) -> bool {
-        (self.e_ident[..4] == Self::MAGIC)
-            && (self.e_ident[4] == 1)
-            && (self.e_ident[5] == 1)
-            && (self.e_ident[6] == 1)
+        (self.e_ident[..4] == MAGIC)
+            && (self.e_ident[EI_CLASS] == ELFCLASS32)
+            && (self.e_ident[EI_DATA] == ELFDATA2LSB)
+            && (self.e_ident[EI_VERSION] == EV_CURRENT)
     }
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Elf64Hdr {
-    pub n_ident: [u8; 16],
+    pub e_ident: [u8; EI_NIDENT],
     pub e_type: ElfType,
     pub e_machine: Machine,
     pub e_version: ElfWord,
@@ -59,13 +73,11 @@ pub struct Elf64Hdr {
 }
 
 impl Elf64Hdr {
-    pub const MAGIC: [u8; 4] = *b"\x7FELF";
-
     pub fn is_valid(&self) -> bool {
-        (self.n_ident[..4] == Self::MAGIC)
-            && (self.n_ident[4] == 2)
-            && (self.n_ident[5] == 1)
-            && (self.n_ident[6] == 1)
+        (self.e_ident[..4] == MAGIC)
+            && (self.e_ident[EI_CLASS] == ELFCLASS64)
+            && (self.e_ident[EI_DATA] == ELFDATA2LSB)
+            && (self.e_ident[EI_VERSION] == EV_CURRENT)
     }
 }
 

@@ -5,7 +5,7 @@ TEMP		= temp/
 MISC		= misc/
 BOOT_IMG	= $(BIN)boot.img
 IPLS		= $(BIN)fdboot.bin $(BIN)cdboot.bin $(BIN)fmcdboot.bin
-KERNEL_LD	= sys/target/i586-unknown-linux-gnu/release/kernel
+KERNEL_LD	= sys/target/i586-unknown-none/release/kernel
 KERNEL_CEF	= $(BIN)kernel
 INITRD_IMG	= $(BIN)initrd.img
 KERNEL_SYS	= $(BIN)kernel.sys
@@ -23,6 +23,9 @@ all: $(BIN) $(TARGETS)
 clean:
 	-rm -rf $(TARGETS)
 	-rm -rf sys/target apps/target
+
+refresh: clean
+	-rm -rf apps/Cargo.lock sys/Cargo.lock tools/Cargo.lock
 
 $(BIN):
 	mkdir -p $@
@@ -43,7 +46,7 @@ $(BIN)loader.bin: boot/pc-bios/loader.asm
 	nasm -f bin -I boot $< -o $@
 
 $(KERNEL_LD): sys/kernel/src/*.rs sys/kernel/src/**/*.rs sys/kernel/src/**/**/*.rs lib/megstd/src/*.rs lib/megstd/src/**/*.rs lib/wasm/src/*.rs
-	cd sys; cargo build -Zbuild-std --release
+	cd sys; cargo build --release
 
 $(KERNEL_CEF): tools/elf2ceef/src/*.rs $(KERNEL_LD)
 	cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- $(KERNEL_LD) $(KERNEL_CEF)
@@ -79,4 +82,4 @@ test:
 	cargo test --manifest-path lib/wasm/Cargo.toml
 
 run:
-	qemu-system-i386 -fda $(BOOT_IMG) -rtc base=localtime,clock=host -serial mon:stdio
+	qemu-system-i386 -fda $(BOOT_IMG) -rtc base=localtime,clock=host -serial mon:stdio -machine isapc -vga std -cpu 486

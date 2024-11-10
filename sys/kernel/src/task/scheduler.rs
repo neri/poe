@@ -640,7 +640,7 @@ impl Timer {
             false
         } else {
             let timer = Self::timer_source();
-            self.deadline > timer.measure()
+            self.deadline >= timer.measure()
         }
     }
 

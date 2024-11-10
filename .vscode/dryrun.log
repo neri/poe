@@ -1,0 +1,23 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory `/Users/nerry/proj/toe'
+mkdir -p bin/
+ 
+nasm -f bin boot/pc-bios/fdboot.asm -o bin/fdboot.bin
+ 
+nasm -f bin boot/pc-bios/cdboot.asm -o bin/cdboot.bin
+ 
+nasm -f bin boot/pc-bios/fmcdboot.asm -o bin/fmcdboot.bin
+ 
+nasm -f bin -I boot boot/pc-bios/loader.asm -o bin/loader.bin
+ 
+cd apps; cargo build --target wasm32-unknown-unknown --release
+ 
+cd sys; cargo build --release
+ 
+cargo run --manifest-path ./tools/elf2ceef/Cargo.toml -- sys/target/i586-unknown-none/release/kernel bin/kernel
+ 
+cargo run --manifest-path ./tools/mkinitrd/Cargo.toml -- bin/initrd.img bin/kernel misc/initrd/* apps/target/wasm32-unknown-unknown/release/*.wasm
+ 
+cat bin/loader.bin bin/initrd.img > bin/kernel.sys
+make: Leaving directory `/Users/nerry/proj/toe'
+ 

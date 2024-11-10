@@ -315,6 +315,11 @@ _bad_vga:
     call _puts
     jmp forever
 
+_a20_err:
+    mov si, a20_err_mes
+    call _puts
+    jmp forever
+
 _vga_nec98:
     mov al, [0x045C]
     test al, 0x40
@@ -460,9 +465,56 @@ _vesa:
     pop es
 
     ;; A20 control
+    call    _a20wait
+    mov     al,0xAD
+    out     0x64,al
+
+    call    _a20wait
+    mov     al,0xD0
+    out     0x64,al
+
+    call    _a20wait2
+    in      al,0x60
+    push    eax
+
+    call    _a20wait
+    mov     al,0xD1
+    out     0x64,al
+
+    call    _a20wait
+    pop     eax
+    or      al,2
+    out     0x60,al
+
+    call    _a20wait
+    mov     al,0xAE
+    out     0x64,al
+
+    call    _a20wait
+
     in al, 0x92
     or al, 2
     out 0x92, al
+
+    ;;  A20 check
+    xor ax, ax
+    mov ds, ax
+    dec ax
+    mov es, ax
+    xor si, si
+    mov di, 16
+    mov cx, 16
+.loop_a20_check:
+    mov eax, [si]
+    cmp es:[di], eax
+    loopz .loop_a20_check
+    push cs
+    pop ds
+    jnz .a20_ok
+    jmp _a20_err
+.a20_ok:
+
+    jmp .no_vesa
 
     mov ax, 0x4F02
     mov bx, VESA_MODE_1
@@ -583,6 +635,18 @@ _video_next:
     mov ax, KERNEL_DS
     jmp KERNEL_CS:_next32
 
+_a20wait:
+    in      al,0x64
+    test    al,2
+    jnz     _a20wait
+    ret
+
+_a20wait2:
+    in      al,0x64
+    test    al,1
+    jz      _a20wait2
+    ret
+
 
 [BITS 32]
 
@@ -678,10 +742,13 @@ _next32:
     ud2
 
 
-
     db 22, 0, 15
 cpu_err_mes:
     db "UNSUPPORTED CPU", 13, 10, 0
+
+    db 22, 0, 0
+a20_err_mes:
+    db "A20 ERROR", 13, 10, 0
 
     db 22, 0, 17
 vga_err_mes:
