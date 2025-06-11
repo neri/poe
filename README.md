@@ -13,6 +13,8 @@ q . p  |
 
 ## Requirements
 
+* NOTE: May not work or may need to be adjusted as it has not been fully verified on actual hardware.
+
 ### x86
 
 * Computer
@@ -26,18 +28,16 @@ q . p  |
 * (Optional) 8253/8254 Sound
 * Standard disk drive
 
-* NOTE: May not work or may need to be adjusted as it has not been fully verified on actual hardware.
+### riscv
+
+* Computer
+  * qemu (qemu-system-riscv64 -M virt)
 
 ### arm64
 
 * Computer
   * Raspberry Pi 3/4
   * Currently, Raspberry Pi 5 is not supported
-
-### riscv
-
-* Computer
-  * qemu (qemu-system-riscv64 -M virt)
 
 ## Build Environment
 
@@ -63,9 +63,9 @@ $ make run
 
 ## History
 
-### 2025-06-10?
+### 2025-06-11
 
-* Change in policy
+* Renewal
 
 ### 2021-01-06
 
