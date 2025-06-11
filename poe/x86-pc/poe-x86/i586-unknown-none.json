@@ -1,0 +1,45 @@
+{
+  "features": "-sse,-sse2,-avx,-avx2,-soft-float",
+  "no-default-libraries": true,
+  "arch": "x86",
+  "cpu": "pentium",
+  "crt-static-respected": true,
+  "data-layout": "e-m:e-p:32:32-p270:32:32-p271:32:32-p272:64:64-i128:128-f64:32:64-f80:32-n8:16:32-S128",
+  "dynamic-linking": false,
+  "env": "",
+  "executables": true,
+  "has-rpath": false,
+  "has-thread-local": false,
+  "llvm-target": "i586-unknown-none",
+  "linker-flavor": "ld.lld",
+  "max-atomic-width": 32,
+  "os": "none",
+  "position-independent-executables": false,
+  "pre-link-args": {
+    "gcc": [
+      "-m32",
+      "-nostdlib"
+    ]
+  },
+  "relro-level": "full",
+  "stack-probes": {
+    "kind": "inline-or-call",
+    "min-llvm-version-for-inline": [
+      16,
+      0,
+      0
+    ]
+  },
+  "supported-sanitizers": [
+    "address"
+  ],
+  "supported-split-debuginfo": [
+    "packed",
+    "unpacked",
+    "off"
+  ],
+  "target-family": [
+    "unknown"
+  ],
+  "target-pointer-width": "32"
+}

@@ -1,0 +1,9 @@
+[build]
+target = "aarch64-unknown-none"
+rustflags = [
+    "-C", "link-args=-T src/link.ld",
+]
+
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
+build-std-features = ["compiler-builtins-mem"]

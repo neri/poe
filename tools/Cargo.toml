@@ -1,0 +1,15 @@
+[workspace]
+members = [
+  "elf2ceef",
+  "mkfdfs",
+  "mkinitrd",
+  "mkkrnimg",
+  "wasm-strip",
+]
+resolver = "3"
+
+[profile.release]
+lto = true
+opt-level = "z"
+
+[profile.dev]

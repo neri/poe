@@ -1,0 +1,45 @@
+[package]
+name = "libminios"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+device_tree = []
+pc = []
+rpi = ["device_tree"]
+sbi = ["device_tree"]
+
+[dependencies]
+paste = { version = "1.0" }
+seq-macro = { version = "0.3" }
+
+# bootprot = {path = "./bootprot/"}
+acpi = { path = "./acpi/", features = ["uuid"] }
+fdt = { path = "./fdt/", features = ["uuid"] }
+libhid = { path = "./hid/" }
+minilib = { path = "./minilib/" }
+smbios = { path = "./smbios/", features = ["uuid"] }
+uuid = { path = "./uuid/" }
+
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+x86 = { path = "./x86/" }
+
+[target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
+sbi = { path = "./sbi/" }
+
+[workspace]
+members = [
+    "acpi",
+    "bootprot",
+    "elf",
+    "fdt",
+    "hid",
+    "mar",
+    "minilib",
+    "sbi",
+    "smbios",
+    "x86",
+]

@@ -1,0 +1,8 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./poe/arm64-rpi/poe-rpi/Cargo.toml",
+        "./poe/riscv-virt/poe-rv/Cargo.toml",
+        "./poe/x86-pc/poe-x86/Cargo.toml",
+        "./tools/mkfdfs/Cargo.toml",
+    ]
+}
