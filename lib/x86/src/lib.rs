@@ -1,4 +1,4 @@
-//! My x86 libraries
+//! My x86 and x86_64 libraries
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;

@@ -15,23 +15,36 @@ pub fn main() {
     let info = System::boot_info();
     let memsize1 = MemoryManager::total_memory_size();
     let memsize2 = MemoryManager::total_extended_memory_size();
-    println!("()=()  | {} v{}", SYSTEM_NAME, CURRENT_VERSION,);
-    println!("('Y') <  PLATFORM: {}", info.platform);
-    print!("q . p  | MEMORY: ");
+
+    #[rustfmt::skip]
+    let logo = [
+        "()=() |", 
+        "('Y') <", 
+        "q . p |", 
+        "()_()  "
+    ];
+    let mut logo = logo.iter();
+
+    println!("{}", logo.next().unwrap());
+    println!("{} hi, i'm Bare Metal Bear!", logo.next().unwrap());
+    println!("{}", logo.next().unwrap());
+    println!("{}", logo.next().unwrap());
+
+    println!("{} v{}", SYSTEM_NAME, CURRENT_VERSION,);
     if memsize2 > 0 {
         let memsize1 = (memsize1 + 0xfffff) >> 20;
         let memsize = memsize1 + memsize2;
-        println!(
-            "{} GB ({} MB + {} MB)",
+        print!(
+            "MEMORY {} GB ({} MB + {} MB)",
             (memsize + 0x3ff) >> 10,
             memsize1,
             memsize2,
         );
     } else {
         let memsize1 = (memsize1 + 0x3ff) >> 10;
-        println!("{} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
+        print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
     }
-    println!("()_()");
+    println!(", PLATFORM {}", info.platform);
     println!("");
 
     if false {
@@ -48,6 +61,7 @@ pub fn main() {
         println!("");
     }
 
+    println!("POE super-shell v0.0");
     loop {
         print!(">");
         if let Some(line) = System::line_input(16) {

@@ -22,7 +22,7 @@ use core::fmt;
 pub enum Platform {
     Unknown = 0,
     Nec98 = 1,
-    PcCompatible = 2,
+    PcBios = 2,
     FmTowns = 3,
     Uefi = 4,
     RaspberryPi = 5,
@@ -35,7 +35,7 @@ impl Platform {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Unknown => "Unknown",
-            Self::PcCompatible => "PC Compatible",
+            Self::PcBios => "PC (BIOS)",
             Self::Nec98 => "PC-98",
             Self::FmTowns => "FM TOWNS",
             Self::Uefi => "UEFI",

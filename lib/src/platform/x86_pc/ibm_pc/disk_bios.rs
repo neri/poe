@@ -1,14 +1,8 @@
 //! Disk Bios Driver
 
-use crate::*;
+use super::{bios, *};
 use arch::{cpu::X86StackContext, vm86::VM86};
-use x86::{
-    gpr::Flags,
-    prot::{InterruptVector, Selector},
-};
-
-#[allow(unused)]
-const INT13: InterruptVector = InterruptVector(0x13);
+use x86::{gpr::Flags, prot::Selector};
 
 pub(super) struct DiskBios {
     //
@@ -51,7 +45,7 @@ fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
     regs.ecx = 0xffff;
     regs.edx = drive as u32;
     unsafe {
-        VM86::call_bios(INT13, regs);
+        VM86::call_bios(bios::INT13, regs);
     }
     if regs.eflags.contains(Flags::CF) {
         println!("drive {:02x}: error {:02x}", drive, regs.ah());
@@ -65,7 +59,7 @@ fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
     unsafe { regs.set_vmes(Selector::NULL) };
     regs.edi = 0;
     unsafe {
-        VM86::call_bios(INT13, regs);
+        VM86::call_bios(bios::INT13, regs);
     }
     if regs.eflags.contains(Flags::CF) {
         println!("drive {:02x}: {:02x}", drive, drive_type);

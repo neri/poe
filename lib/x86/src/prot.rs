@@ -1,6 +1,6 @@
-// protected mode structures
+//! protected mode structures
 
-use core::{fmt::LowerHex, mem::transmute};
+use core::{convert::TryFrom, fmt::LowerHex, mem::transmute};
 use paste::paste;
 
 #[allow(unused_imports)]
@@ -222,6 +222,11 @@ impl Linear32 {
     pub const NULL: Linear32 = Linear32(0);
 
     #[inline]
+    pub const fn as_u32(&self) -> u32 {
+        self.0
+    }
+
+    #[inline]
     pub const fn as_segment_base(&self) -> u64 {
         ((self.0 as u64 & 0x00FF_FFFF) << 16) | ((self.0 as u64 & 0xFF00_0000) << 32)
     }
@@ -233,6 +238,11 @@ impl Linear32 {
 pub struct Linear64(pub u64);
 
 impl Linear64 {
+    #[inline]
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+
     #[inline]
     pub const fn as_segment_base_pair(&self) -> (u64, u64) {
         let low = Linear32(self.0 as u32).as_segment_base();
@@ -248,6 +258,11 @@ pub struct Offset32(pub u32);
 
 impl Offset32 {
     #[inline]
+    pub const fn as_u32(&self) -> u32 {
+        self.0
+    }
+
+    #[inline]
     pub const fn as_gate_offset(&self) -> u64 {
         let offset = self.0 as u64;
         (offset & 0xFFFF) | (offset & 0xFFFF_0000) << 32
@@ -260,6 +275,11 @@ impl Offset32 {
 pub struct Offset64(pub u64);
 
 impl Offset64 {
+    #[inline]
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+
     #[inline]
     pub const fn as_gate_offset_pair(&self) -> (u64, u64) {
         let low = Offset32(self.0 as u32).as_gate_offset();
@@ -395,11 +415,13 @@ macro_rules! privilege_level_impl {
 
             impl $class {
                 $vis const SUPERVISOR: Self = Self(PrivilegeLevel::Supervisor);
+
                 $vis const USER: Self = Self(PrivilegeLevel::User);
             }
 
             paste! {
                 $vis const [<$class 0>]: $class = $class::SUPERVISOR;
+
                 $vis const [<$class 3>]: $class = $class::USER;
             }
 
@@ -556,7 +578,37 @@ impl ExceptionType {
     }
 
     #[inline]
-    pub const unsafe fn from_vec(vec: InterruptVector) -> Self {
+    pub fn try_from_vec(vec: InterruptVector) -> Result<ExceptionType, u8> {
+        match vec.0 {
+            0 => Ok(ExceptionType::DivideError),
+            1 => Ok(ExceptionType::Debug),
+            2 => Ok(ExceptionType::NonMaskable),
+            3 => Ok(ExceptionType::Breakpoint),
+            4 => Ok(ExceptionType::Overflow),
+            6 => Ok(ExceptionType::InvalidOpcode),
+            7 => Ok(ExceptionType::DeviceNotAvailable),
+            8 => Ok(ExceptionType::DoubleFault),
+            10 => Ok(ExceptionType::InvalidTss),
+            11 => Ok(ExceptionType::SegmentNotPresent),
+            12 => Ok(ExceptionType::StackException),
+            13 => Ok(ExceptionType::GeneralProtection),
+            14 => Ok(ExceptionType::PageFault),
+            16 => Ok(ExceptionType::FloatingPointException),
+            17 => Ok(ExceptionType::AlignmentCheck),
+            18 => Ok(ExceptionType::MachineCheck),
+            19 => Ok(ExceptionType::SimdException),
+            20 => Ok(ExceptionType::Virtualization),
+            21 => Ok(ExceptionType::ControlProtection),
+            30 => Ok(ExceptionType::Security),
+            raw => Err(raw), // Reserved or Unavailable
+        }
+    }
+
+    /// # Safety
+    ///
+    /// UB on invalid value.
+    #[inline]
+    pub const unsafe fn from_vec_unchecked(vec: InterruptVector) -> Self {
         unsafe { transmute(vec.0) }
     }
 
@@ -606,6 +658,14 @@ impl From<ExceptionType> for InterruptVector {
     #[inline]
     fn from(ex: ExceptionType) -> Self {
         InterruptVector(ex as u8)
+    }
+}
+
+impl TryFrom<InterruptVector> for ExceptionType {
+    type Error = u8;
+    #[inline]
+    fn try_from(vec: InterruptVector) -> Result<Self, Self::Error> {
+        ExceptionType::try_from_vec(vec)
     }
 }
 
@@ -798,7 +858,7 @@ pub enum InterruptStackTable {
     IST7,
 }
 
-#[allow(unused)]
+#[cfg(target_arch = "x86_64")]
 macro_rules! ist_impl {
     ($( $ist:ident , )*) => {
         $(

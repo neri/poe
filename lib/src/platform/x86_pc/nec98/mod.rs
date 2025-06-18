@@ -5,12 +5,12 @@
 //! May not work or may need to be adjusted as it has not been fully verified on actual hardware.
 //!
 
+pub mod bios;
 mod pc98_text;
 
 use crate::arch::{cpu::X86StackContext, vm86::VM86};
 use crate::*;
 use mem::{MemoryManager, MemoryType};
-use x86::prot::InterruptVector;
 
 pub(super) unsafe fn init_early() {
     unsafe {
@@ -60,12 +60,12 @@ impl SimpleTextInput for BiosTextInput {
         unsafe {
             let mut regs = X86StackContext::default();
             regs.eax = 0x0100;
-            VM86::call_bios(InterruptVector(0x18), &mut regs);
+            VM86::call_bios(bios::INT18, &mut regs);
             if regs.bh() == 0 {
                 None
             } else {
                 regs.eax = 0;
-                VM86::call_bios(InterruptVector(0x18), &mut regs);
+                VM86::call_bios(bios::INT18, &mut regs);
                 InputKey {
                     usage: (regs.eax >> 8) as u16,
                     unicode_char: (regs.eax & 0xFF) as u16,

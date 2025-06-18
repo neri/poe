@@ -1,5 +1,6 @@
 //! IBM PC architecture specific code
 
+pub mod bios;
 mod cga_text;
 mod disk_bios;
 // mod ps2;
@@ -12,7 +13,7 @@ use crate::{
 use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrOld};
 use core::{ffi::c_void, iter::Iterator, ops::Range};
 use smbios::{SMBIOS_GUID, SmBios};
-use x86::{gpr::Eflags, prot::InterruptVector};
+use x86::gpr::Eflags;
 
 pub(super) unsafe fn init_early() {
     unsafe {
@@ -89,7 +90,7 @@ pub(super) unsafe fn init_late() {
             regs.ecx = 24;
             regs.set_vmes(buf.sel());
             regs.edi = 0;
-            VM86::call_bios(InterruptVector(0x15), &mut regs);
+            VM86::call_bios(bios::INT15, &mut regs);
             if regs.eflags.contains(Eflags::CF) || regs.eax != 0x534d4150 {
                 break;
             }
@@ -130,7 +131,7 @@ pub(super) unsafe fn exit() {
     // TODO:
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 struct SmapEntry {
     base: u64,
     size: u64,
@@ -166,12 +167,12 @@ impl SimpleTextInput for BiosTextInput {
         unsafe {
             let mut regs = X86StackContext::default();
             regs.eax = 0x0100;
-            VM86::call_bios(InterruptVector(0x16), &mut regs);
+            VM86::call_bios(bios::INT16, &mut regs);
             if regs.eflags.contains(Eflags::ZF) {
                 None
             } else {
                 regs.eax = 0;
-                VM86::call_bios(InterruptVector(0x16), &mut regs);
+                VM86::call_bios(bios::INT16, &mut regs);
                 InputKey {
                     usage: (regs.eax >> 8) as u16,
                     unicode_char: (regs.eax & 0xFF) as u16,

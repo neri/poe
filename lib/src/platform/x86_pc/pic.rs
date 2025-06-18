@@ -209,7 +209,7 @@ impl Pic {
         unsafe {
             let shared = Self::shared();
             match platform {
-                Platform::PcCompatible => {
+                Platform::PcBios => {
                     shared.master.set_addrs(0x0020, 0x0021);
                     shared.slave.set_addrs(0x00a0, 0x00a1);
                     shared.redirect_table = [

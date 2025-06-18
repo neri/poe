@@ -21,9 +21,9 @@ pub struct System {
 }
 
 impl System {
-    pub const NAME: &str = "libminios";
+    // pub const NAME: &str = "libminios";
 
-    pub const CURRENT_VERSION: Version<'static> = Version::new(0, 0, 0, "");
+    // pub const CURRENT_VERSION: Version<'static> = Version::new(0, 0, 0, "");
 
     pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x07;
 
@@ -102,15 +102,15 @@ impl System {
         unsafe { (&mut *(&raw mut SYSTEM)).assume_init_mut() }
     }
 
-    #[inline]
-    pub fn name() -> &'static str {
-        &Self::NAME
-    }
+    // #[inline]
+    // pub fn name() -> &'static str {
+    //     &Self::NAME
+    // }
 
-    #[inline]
-    pub fn current_version<'a>() -> &'a Version<'static> {
-        &Self::CURRENT_VERSION
-    }
+    // #[inline]
+    // pub fn current_version<'a>() -> &'a Version<'static> {
+    //     &Self::CURRENT_VERSION
+    // }
 
     #[inline]
     pub fn boot_info<'a>() -> &'a BootInfo {

@@ -32,7 +32,7 @@ impl PlatformTrait for Platform {
                 Platform::Nec98 => {
                     nec98::init_early();
                 }
-                Platform::PcCompatible => {
+                Platform::PcBios => {
                     ibm_pc::init_early();
                 }
                 Platform::FmTowns => {
@@ -50,7 +50,7 @@ impl PlatformTrait for Platform {
                 Platform::Nec98 => {
                     nec98::init_late();
                 }
-                Platform::PcCompatible => {
+                Platform::PcBios => {
                     ibm_pc::init_late();
                 }
                 Platform::FmTowns => {
@@ -68,7 +68,7 @@ impl PlatformTrait for Platform {
                 Platform::Nec98 => {
                     nec98::exit();
                 }
-                Platform::PcCompatible => {
+                Platform::PcBios => {
                     ibm_pc::exit();
                 }
                 Platform::FmTowns => {
@@ -83,7 +83,7 @@ impl PlatformTrait for Platform {
     fn reset_system() -> ! {
         unsafe {
             match System::platform() {
-                Platform::PcCompatible => {
+                Platform::PcBios => {
                     // PCI reset
                     IoPort(0x0CF9).out8(0x06);
 

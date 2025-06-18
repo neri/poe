@@ -33,7 +33,7 @@ impl Pit {
         unsafe {
             let shared = Self::shared();
             match platform {
-                Platform::PcCompatible => {
+                Platform::PcBios => {
                     shared.tmr_cnt0 = 0x0040;
                     shared.beep_cnt0 = 0x0042;
                     shared.tmr_ctl = 0x0043;

@@ -1,4 +1,4 @@
-//! Pre-OS Execution Environment for riscv
+//! Pre-OS Execution Environment for riscv-virtio
 #![no_std]
 #![no_main]
 
