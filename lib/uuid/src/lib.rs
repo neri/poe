@@ -1,14 +1,19 @@
-//! Universally Unique Identifier (RFC 4122)
+//! Universally Unique IDentifier (RFC 4122)
+//!
+//! <https://www.rfc-editor.org/rfc/rfc4122>
+//!
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
 use core::{fmt, mem::transmute};
 pub use uuid_identify::*;
 
-/// Universally Unique Identifier (RFC 4122)
-#[repr(transparent)]
+/// Universally Unique IDentifier (RFC 4122)
+#[repr(C)]
 #[derive(Copy, Clone, Eq)]
-pub struct Uuid([u8; 16]);
+pub struct Uuid {
+    data: [u8; 16],
+}
 
 impl Uuid {
     pub const NULL: Self = Self::null();
@@ -19,43 +24,45 @@ impl Uuid {
         let b = b.to_be_bytes();
         let c = c.to_be_bytes();
         let d = d.to_be_bytes();
-        Self([
-            a[0], a[1], a[2], a[3], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], e[2], e[3],
-            e[4], e[5],
-        ])
+        Self {
+            data: [
+                a[0], a[1], a[2], a[3], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], e[2], e[3],
+                e[4], e[5],
+            ],
+        }
     }
 
     #[inline]
     pub const fn from_raw(data: [u8; 16]) -> Self {
-        Self(data)
+        Self { data }
     }
 
     #[inline]
     pub const fn a(&self) -> u32 {
-        ((self.0[0] as u32) << 24)
-            + ((self.0[1] as u32) << 16)
-            + ((self.0[2] as u32) << 8)
-            + (self.0[3] as u32)
+        ((self.data[0] as u32) << 24)
+            + ((self.data[1] as u32) << 16)
+            + ((self.data[2] as u32) << 8)
+            + (self.data[3] as u32)
     }
 
     #[inline]
     pub const fn b(&self) -> u16 {
-        ((self.0[4] as u16) << 8) + (self.0[5] as u16)
+        ((self.data[4] as u16) << 8) + (self.data[5] as u16)
     }
 
     #[inline]
     pub const fn c(&self) -> u16 {
-        ((self.0[6] as u16) << 8) + (self.0[7] as u16)
+        ((self.data[6] as u16) << 8) + (self.data[7] as u16)
     }
 
     #[inline]
     pub const fn d(&self) -> u16 {
-        ((self.0[8] as u16) << 8) + (self.0[9] as u16)
+        ((self.data[8] as u16) << 8) + (self.data[9] as u16)
     }
 
     #[inline]
     pub fn e(&self) -> &[u8] {
-        &self.0[10..]
+        &self.data[10..]
     }
 
     #[inline]
@@ -65,7 +72,7 @@ impl Uuid {
 
     #[inline]
     pub const fn null() -> Self {
-        Self([0; 16])
+        Self { data: [0; 16] }
     }
 
     #[inline]
@@ -75,12 +82,12 @@ impl Uuid {
 
     #[inline]
     pub const fn into_raw(self) -> [u8; 16] {
-        self.0
+        self.data
     }
 
     #[inline]
     pub const fn as_slice(&self) -> &[u8; 16] {
-        &self.0
+        &self.data
     }
 
     #[inline]
@@ -90,7 +97,7 @@ impl Uuid {
 
     #[inline]
     pub fn version(&self) -> Option<UuidVersion> {
-        unsafe { transmute(self.0[6] >> 4) }
+        unsafe { transmute(self.data[6] >> 4) }
     }
 }
 
@@ -154,11 +161,20 @@ pub unsafe trait Identify {
 }
 
 /// Globally Unique Identifier (MS-GUID)
-#[repr(transparent)]
+#[repr(C, align(8))]
 #[derive(Copy, Clone, Eq)]
-pub struct Guid([u8; 16]);
+pub struct Guid {
+    data: [u8; 16],
+}
 
 impl Guid {
+    pub const NULL: Self = Self::null();
+
+    #[inline]
+    pub const fn null() -> Self {
+        Self { data: [0; 16] }
+    }
+
     /// Parse a MS-GUID from string
     ///
     /// `00112233-4455-6677-8899-aabbccddeeff` -> `33 22 11 00 55 44 77 66 88 99 aa bb cc dd ee ff`
@@ -227,7 +243,7 @@ impl Guid {
 
     #[inline]
     pub const fn from_raw(data: [u8; 16]) -> Self {
-        Self(data)
+        Self { data }
     }
 
     #[inline]
@@ -237,30 +253,30 @@ impl Guid {
 
     #[inline]
     pub const fn a(&self) -> u32 {
-        ((self.0[3] as u32) << 24)
-            + ((self.0[2] as u32) << 16)
-            + ((self.0[1] as u32) << 8)
-            + (self.0[0] as u32)
+        ((self.data[3] as u32) << 24)
+            + ((self.data[2] as u32) << 16)
+            + ((self.data[1] as u32) << 8)
+            + (self.data[0] as u32)
     }
 
     #[inline]
     pub const fn b(&self) -> u16 {
-        ((self.0[5] as u16) << 8) + (self.0[4] as u16)
+        ((self.data[5] as u16) << 8) + (self.data[4] as u16)
     }
 
     #[inline]
     pub const fn c(&self) -> u16 {
-        ((self.0[7] as u16) << 8) + (self.0[6] as u16)
+        ((self.data[7] as u16) << 8) + (self.data[6] as u16)
     }
 
     #[inline]
     pub const fn d(&self) -> u16 {
-        ((self.0[8] as u16) << 8) + (self.0[9] as u16)
+        ((self.data[8] as u16) << 8) + (self.data[9] as u16)
     }
 
     #[inline]
     pub fn e(&self) -> &[u8] {
-        &self.0[10..]
+        &self.data[10..]
     }
 
     #[inline]
@@ -279,14 +295,14 @@ impl PartialEq for Guid {
 impl From<Uuid> for Guid {
     #[inline]
     fn from(uuid: Uuid) -> Self {
-        Self(uuid.0)
+        Self { data: uuid.data }
     }
 }
 
 impl From<Guid> for Uuid {
     #[inline]
     fn from(guid: Guid) -> Self {
-        Uuid(guid.0)
+        Uuid { data: guid.data }
     }
 }
 

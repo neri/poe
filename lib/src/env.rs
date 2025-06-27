@@ -21,10 +21,6 @@ pub struct System {
 }
 
 impl System {
-    // pub const NAME: &str = "libminios";
-
-    // pub const CURRENT_VERSION: Version<'static> = Version::new(0, 0, 0, "");
-
     pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x07;
 
     /// Initialize with boot information and main function
@@ -89,7 +85,7 @@ impl System {
     fn _init(main: fn() -> ()) -> ! {
         main();
 
-        panic!("minios: system has halted");
+        panic!("The system has halted");
     }
 
     #[inline]
@@ -101,16 +97,6 @@ impl System {
     unsafe fn shared_mut<'a>() -> &'a mut Self {
         unsafe { (&mut *(&raw mut SYSTEM)).assume_init_mut() }
     }
-
-    // #[inline]
-    // pub fn name() -> &'static str {
-    //     &Self::NAME
-    // }
-
-    // #[inline]
-    // pub fn current_version<'a>() -> &'a Version<'static> {
-    //     &Self::CURRENT_VERSION
-    // }
 
     #[inline]
     pub fn boot_info<'a>() -> &'a BootInfo {
@@ -133,7 +119,7 @@ impl System {
 
     /// # Safety
     ///
-    /// After calling this function, all libpoe functions will cease to function.
+    /// After calling this function, all minios functions will cease to function.
     pub unsafe fn exit_minios() {
         unsafe {
             // let shared = Self::shared_mut();
@@ -215,9 +201,9 @@ impl System {
                                     // printable char
                                     let _ = stdout.write_char(c);
                                     buf.push(c);
+                                } else {
+                                    // TODO: unprintable char
                                 }
-                            } else {
-                                // TODO: unprintable char
                             }
                         }
                     }

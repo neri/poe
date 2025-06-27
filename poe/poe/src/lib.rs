@@ -7,7 +7,7 @@ use libminios::{mem::MemoryManager, prelude::*};
 
 pub use libminios::prelude;
 
-static SYSTEM_NAME: &str = "POE";
+static SYSTEM_NAME: &str = "Pre-OS Execution Environment";
 
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
@@ -29,6 +29,7 @@ pub fn main() {
     println!("{} hi, i'm Bare Metal Bear!", logo.next().unwrap());
     println!("{}", logo.next().unwrap());
     println!("{}", logo.next().unwrap());
+    println!("");
 
     println!("{} v{}", SYSTEM_NAME, CURRENT_VERSION,);
     if memsize2 > 0 {

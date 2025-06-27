@@ -3,13 +3,13 @@
 default:
 
 clean:
-	-rm -rf boot/**/target tools/target
-	(cd boot/x86-pc && make clean)
-	(cd boot/arm64-rpi && make clean)
-	(cd boot/riscv-virt && make clean)
+	-rm -rf poe/**/target tools/target
+	(cd poe/x86-pc && make clean)
+	(cd poe/arm64-rpi && make clean)
+	(cd poe/riscv-virt && make clean)
 
 refresh:
 	-rm -rf lib/Cargo.lock lib/target tools/target
-	(cd boot/x86-pc && make refresh)
-	(cd boot/arm64-rpi && make refresh)
-	(cd boot/riscv-virt && make refresh)
+	(cd poe/x86-pc && make refresh)
+	(cd poe/arm64-rpi && make refresh)
+	(cd poe/riscv-virt && make refresh)

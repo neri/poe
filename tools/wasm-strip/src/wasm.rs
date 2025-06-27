@@ -3,9 +3,7 @@
 use core::mem::transmute;
 use core::str;
 
-pub struct WasmMiniLoader {
-    _phantom: (),
-}
+pub struct WasmMiniLoader;
 
 impl WasmMiniLoader {
     /// Minimal valid module size, Magic(4) + Version(4) + Empty sections(0) = 8
@@ -29,7 +27,7 @@ impl WasmMiniLoader {
             && u32::from_le_bytes(blob[4..8].try_into().unwrap()) == Self::VER_CURRENT
     }
 
-    pub fn load_sections(blob: &[u8]) -> Result<Vec<WasmSection>, WasmDecodeErrorType> {
+    pub fn load_sections(blob: &[u8]) -> Result<Vec<WasmSection<'_>>, WasmDecodeErrorType> {
         let magic = Self::file_header().len();
         let mut positions = Vec::new();
         let mut leb = Leb128Stream::from_slice(&blob[magic..]);
