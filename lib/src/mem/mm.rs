@@ -15,7 +15,7 @@ use core::{
 use minilib::fixedvec::FixedVec;
 
 #[cfg(target_arch = "x86")]
-use crate::arch::lomem::LowMemoryManager;
+use crate::arch::lomem::LoMemoryManager;
 
 #[cfg(feature = "device_tree")]
 use fdt::DeviceTree;
@@ -266,7 +266,7 @@ impl MemoryManager {
     #[inline]
     pub fn memory_list<'a>() -> impl Iterator<Item = MemoryMapEntry> + 'a {
         let shared = Self::shared();
-        let iter = LowMemoryManager::memory_list();
+        let iter = LoMemoryManager::memory_list();
         iter.chain(
             shared
                 .conventional

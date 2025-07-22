@@ -39,6 +39,56 @@ impl Cpu {
         }
     }
 
+    /// Fill memory with a 32-bit value using `rep stosd`.
+    ///
+    /// Returns the destination pointer after filling.
+    ///
+    /// # Safety
+    ///
+    /// * The DF flag must be cleared before calling this function.
+    /// * Memory range safety must be guaranteed by the caller.
+    #[inline(always)]
+    pub unsafe fn rep_stosd(dst: *mut u32, value: u32, count: usize) -> *mut u32 {
+        let mut result;
+        unsafe {
+            asm!(
+                "rep stosd",
+                inout("edi") dst => result,
+                in("eax") value,
+                inout("ecx") count => _,
+            );
+        }
+        result
+    }
+
+    /// Copy memory from `src` to `dst` using `rep movsd`.
+    ///
+    /// Returns the destination pointer and source pointer after copying.
+    ///
+    /// # Safety
+    ///
+    /// * The DF flag must be cleared before calling this function.
+    /// * Memory range safety must be guaranteed by the caller.
+    #[inline(always)]
+    pub unsafe fn rep_movsd(
+        dst: *mut u32,
+        src: *const u32,
+        count: usize,
+    ) -> (*mut u32, *const u32) {
+        let (mut edi, mut esi) = (dst, src);
+        unsafe {
+            asm!(
+                "xchg esi, {0}",
+                "rep movsd",
+                "xchg esi, {0}",
+                inout(reg) esi,
+                inout("edi") edi,
+                inout("ecx") count => _,
+            );
+        }
+        (edi, esi)
+    }
+
     #[unsafe(naked)]
     unsafe extern "fastcall" fn _iret_to_user_mode(
         regs: &mut X86StackContext,

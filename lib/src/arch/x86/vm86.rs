@@ -2,7 +2,7 @@
 
 use super::{
     cpu::{Cpu, Gdt, Idt, X86StackContext},
-    lomem::{LowMemoryManager, ManagedLowMemory},
+    lomem::{LoMemoryManager, ManagedLowMemory},
     setjmp::JmpBuf,
 };
 use crate::*;
@@ -42,7 +42,7 @@ impl VM86 {
     pub(crate) unsafe fn init() {
         unsafe {
             let shared = Self::shared_mut();
-            shared.vm_stack = LowMemoryManager::alloc_page_checked();
+            shared.vm_stack = LoMemoryManager::alloc_page_checked();
 
             let mut vmbp = Linear32::NULL;
 
@@ -89,7 +89,7 @@ impl VM86 {
             let vm_stack = match old_vm_stack.as_ref() {
                 Some(v) => v,
                 None => {
-                    temp_stack = LowMemoryManager::alloc_page().into();
+                    temp_stack = LoMemoryManager::alloc_page().into();
                     temp_stack.as_ref().unwrap()
                 }
             };
@@ -130,7 +130,7 @@ impl VM86 {
             let vm_stack = match old_vm_stack.as_ref() {
                 Some(v) => v,
                 None => {
-                    temp_stack = LowMemoryManager::alloc_page().into();
+                    temp_stack = LoMemoryManager::alloc_page().into();
                     temp_stack.as_ref().unwrap()
                 }
             };

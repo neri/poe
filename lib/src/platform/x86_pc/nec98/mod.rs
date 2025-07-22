@@ -6,11 +6,14 @@
 //!
 
 pub mod bios;
-mod pc98_text;
+pub mod pc98_text;
 
 use crate::arch::{cpu::X86StackContext, vm86::VM86};
 use crate::*;
 use mem::{MemoryManager, MemoryType};
+use x86::isolated_io::LoIoPortDummyB;
+
+pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
 
 pub(super) unsafe fn init_early() {
     unsafe {

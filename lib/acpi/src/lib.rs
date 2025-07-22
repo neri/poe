@@ -22,10 +22,12 @@ pub const ACPI_10_TABLE_GUID: Guid = guid!("eb9d2d30-2d88-11d3-9a16-0090273fc14d
 #[cfg(feature = "uuid")]
 pub const ACPI_20_TABLE_GUID: Guid = guid!("8868e871-e4f1-11d3-bc22-0080c73c8881");
 
+pub type RsdPtr = RsdPtrV2;
+
 /// Root System Description Pointer
 #[repr(C, packed)]
 #[allow(unused)]
-pub struct RsdPtr {
+pub struct RsdPtrV2 {
     signature: [u8; 8],
     checksum: u8,
     oem_id: [u8; 6],
@@ -37,7 +39,7 @@ pub struct RsdPtr {
     _reserved: [u8; 3],
 }
 
-impl RsdPtr {
+impl RsdPtrV2 {
     pub const VALID_SIGNATURE: [u8; 8] = *b"RSD PTR ";
     pub const CURRENT_REV: u8 = 2;
 
@@ -50,7 +52,7 @@ impl RsdPtr {
     #[inline]
     pub unsafe fn parse_extended(ptr: *const c_void) -> Option<&'static Self> {
         unsafe {
-            let _ = RsdPtrOld::parse(ptr)?;
+            let _ = RsdPtrV1::parse(ptr)?;
 
             let p = &*(ptr as *const Self);
             p.is_valid().then(|| ())?;
@@ -83,7 +85,7 @@ impl RsdPtr {
 /// Root System Description Pointer revision 0 (ACPI version 1)
 #[repr(C, packed)]
 #[allow(unused)]
-pub struct RsdPtrOld {
+pub struct RsdPtrV1 {
     signature: [u8; 8],
     checksum: u8,
     oem_id: [u8; 6],
@@ -91,7 +93,7 @@ pub struct RsdPtrOld {
     rsdt_addr: u32,
 }
 
-impl RsdPtrOld {
+impl RsdPtrV1 {
     pub const VALID_SIGNATURE: [u8; 8] = *b"RSD PTR ";
     pub const CURRENT_REV: u8 = 0;
 

@@ -19,8 +19,8 @@ pub type IrqHandler = fn(Irq) -> ();
 
 /// Programmable Interrupt Controller i8259
 pub struct Pic {
-    master: IndividualPIC,
-    slave: IndividualPIC,
+    master: I8259Device,
+    slave: I8259Device,
     chain_eoi: u8,
     old_imr: u32,
     redirect_bitmap: u32,
@@ -55,13 +55,13 @@ macro_rules! handle_master_irq {
                 "mov ds, ax",
                 "mov es, ax",
 
-                "mov ebp, esp",
-                "and esp, 0xfffffff0",
+                // "mov ebp, esp",
+                // "and esp, 0xfffffff0",
                 "mov ecx, {local_irq}",
                 "mov edx, ebp",
                 "call {handler}",
 
-                "mov esp, ebp",
+                // "mov esp, ebp",
                 ".byte 0x0f, 0xa9", // pop gs
                 ".byte 0x0f, 0xa1", // pop fs
                 ".byte 0x1f", // pop ds
@@ -101,13 +101,13 @@ macro_rules! handle_slave_irq {
                 "mov ds, ax",
                 "mov es, ax",
 
-                "mov ebp, esp",
-                "and esp, 0xfffffff0",
+                // "mov ebp, esp",
+                // "and esp, 0xfffffff0",
                 "mov ecx, {local_irq}",
                 "mov edx, ebp",
                 "call {handler}",
 
-                "mov esp, ebp",
+                // "mov esp, ebp",
                 ".byte 0x0f, 0xa9", // pop gs
                 ".byte 0x0f, 0xa1", // pop fs
                 ".byte 0x1f", // pop ds
@@ -191,8 +191,8 @@ pub unsafe extern "fastcall" fn pic_handle_slave_irq(irq: u8, regs: &mut X86Stac
 impl Pic {
     const fn new() -> Self {
         Self {
-            master: IndividualPIC::zero(),
-            slave: IndividualPIC::zero(),
+            master: I8259Device::zero(),
+            slave: I8259Device::zero(),
             chain_eoi: 0,
             old_imr: 0,
             redirect_bitmap: 0,
@@ -404,13 +404,13 @@ impl Pic {
     }
 }
 
-struct IndividualPIC {
+struct I8259Device {
     a0: u32,
     a1: u32,
 }
 
 #[allow(unused)]
-impl IndividualPIC {
+impl I8259Device {
     #[inline]
     const fn zero() -> Self {
         Self { a0: 0, a1: 0 }

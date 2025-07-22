@@ -5,8 +5,7 @@
 //! May not work or may need to be adjusted as it has not been fully verified on actual hardware.
 //!
 
-use crate::*;
-use core::arch::asm;
+use crate::{arch::cpu::Cpu, *};
 use mem::{MemoryManager, MemoryType};
 
 mod fmt_kbd;
@@ -14,44 +13,24 @@ mod fmt_text;
 
 pub(super) unsafe fn init_early() {
     unsafe {
-        if false {
+        if true {
             // In the future, all screens will be cleared, but currently we dare to keep some of the screens.
             let p = 0xc_ff81 as *mut u8;
             p.write_volatile(0x08);
-            asm!(
-                "rep stosd",
-                inout("ecx") 80 / 4 * 400 => _,
-                inout("edi") 0xc_0000 => _,
-                in("eax") 0,
-            );
+            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 / 4 * 400);
 
             // "Reading system..." message
             let p = 0xc_ff81 as *mut u8;
             p.write_volatile(0x0f);
-            asm!(
-                "rep stosd",
-                inout("ecx") 80 / 4 * 5 * 16 => _,
-                inout("edi") 0xc_0000 + 80 * 16 * 20 => _,
-                in("eax") 0,
-            );
+            Cpu::rep_stosd((0xc_0000 + 80 * 16 * 20) as *mut u32, 0, 80 / 4 * 5 * 16);
 
             // Tsugaru compatible ROM annotations
-            asm!(
-                "rep stosd",
-                inout("ecx") 80 / 4 * 7 * 16 => _,
-                inout("edi") 0xc_0000 => _,
-                in("eax") 0,
-            );
+            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 / 4 * 7 * 16);
         } else {
             // Clear GVRAM
             let p = 0xc_ff81 as *mut u8;
             p.write_volatile(0x0f);
-            asm!(
-                "rep stosd",
-                inout("ecx") 80*400 => _,
-                inout("edi") 0xc_0000  => _,
-                in("eax") 0,
-            );
+            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 * 400);
         }
 
         fmt_text::FmtText::init();

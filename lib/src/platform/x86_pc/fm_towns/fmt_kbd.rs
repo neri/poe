@@ -3,12 +3,12 @@
 use crate::{platform::x86_pc::pic::Irq, *};
 use core::cell::UnsafeCell;
 use libhid::*;
-use x86::isolated_io::IoPort;
+use x86::isolated_io::{IoPortRB, IoPortWB};
 
 static mut FMT_KBD: UnsafeCell<FmtKbd> = UnsafeCell::new(FmtKbd::new());
 
 pub struct FmtKbd {
-    lead_data: KbdLeadData,
+    leading_data: KbdLeadingData,
     key_modifier: Modifier,
     last_key_data: Option<NonZeroInputKey>,
 }
@@ -16,38 +16,38 @@ pub struct FmtKbd {
 impl FmtKbd {
     const fn new() -> Self {
         Self {
-            lead_data: KbdLeadData::empty(),
+            leading_data: KbdLeadingData::empty(),
             key_modifier: Modifier::empty(),
             last_key_data: None,
         }
     }
 
     #[inline]
-    unsafe fn shared<'a>() -> &'a mut Self {
+    unsafe fn shared_mut<'a>() -> &'a mut Self {
         unsafe { (&mut *(&raw mut FMT_KBD)).get_mut() }
     }
 
     pub unsafe fn init() {
         unsafe {
-            IoPort(0x0604).out8(0x01);
-            IoPort(0x0602).out8(0xa1);
-            IoPort(0x0604).out8(0x01);
+            IoPortWB(0x0604).write(0x01);
+            IoPortWB(0x0602).write(0xa1);
+            IoPortWB(0x0604).write(0x01);
 
             Irq(1).register(Self::irq1).unwrap();
 
-            System::set_stdin(Self::shared());
+            System::set_stdin(Self::shared_mut());
         }
     }
 
     /// IRQ1 Standard Keyboard
     fn irq1(_irq: Irq) {
         unsafe {
-            let shared = Self::shared();
-            let _ = IoPort(0x0602).in8();
-            let data = IoPort(0x0600).in8();
-            let leading = KbdLeadData::from_bits_retain(data);
+            let shared = Self::shared_mut();
+            let _ = IoPortRB(0x0602).read();
+            let data = IoPortRB(0x0600).read();
+            let leading = KbdLeadingData::from_bits_retain(data);
             if leading.is_leading() {
-                shared.lead_data = leading;
+                shared.leading_data = leading;
             } else {
                 shared.process_key_data(data);
             }
@@ -55,17 +55,19 @@ impl FmtKbd {
     }
 
     fn process_key_data(&mut self, data: u8) {
-        let leading = self.lead_data;
-        if leading.contains(KbdLeadData::EXTEND) {
+        let leading = self.leading_data;
+        if leading.contains(KbdLeadingData::EXTEND) {
             return;
         }
         let is_break = leading.is_break();
         if !is_break {
-            self.key_modifier
-                .set(Modifier::LEFT_CTRL, leading.contains(KbdLeadData::HAS_CTRL));
+            self.key_modifier.set(
+                Modifier::LEFT_CTRL,
+                leading.contains(KbdLeadingData::HAS_CTRL),
+            );
             self.key_modifier.set(
                 Modifier::LEFT_SHIFT,
-                leading.contains(KbdLeadData::HAS_SHIFT),
+                leading.contains(KbdLeadingData::HAS_SHIFT),
             );
             let usage = Usage(SCAN_TO_HID[0x7F & data as usize]);
             if usage >= Usage::MOD_MIN && usage < Usage::MOD_MAX {
@@ -106,7 +108,7 @@ impl FmtKbd {
 
 impl SimpleTextInput for FmtKbd {
     fn reset(&mut self) {
-        self.lead_data = KbdLeadData::empty();
+        self.leading_data = KbdLeadingData::empty();
         self.key_modifier = Modifier::empty();
         self.last_key_data = None;
     }
@@ -117,9 +119,9 @@ impl SimpleTextInput for FmtKbd {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct KbdLeadData(u8);
+struct KbdLeadingData(u8);
 
-impl KbdLeadData {
+impl KbdLeadingData {
     pub const IS_LEADING: Self = Self(0b1000_0000);
     pub const EXTEND: Self = Self(0b0110_0000);
     pub const IS_BREAK: Self = Self(0b0001_0000);
@@ -143,12 +145,12 @@ impl KbdLeadData {
 
     #[inline]
     pub const fn is_leading(&self) -> bool {
-        self.contains(KbdLeadData::IS_LEADING)
+        self.contains(KbdLeadingData::IS_LEADING)
     }
 
     #[inline]
     pub const fn is_break(&self) -> bool {
-        self.contains(KbdLeadData::IS_BREAK)
+        self.contains(KbdLeadingData::IS_BREAK)
     }
 }
 

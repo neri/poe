@@ -2,12 +2,18 @@
 
 use crate::{
     System,
+    arch::cpu::Cpu,
     io::tty::{SimpleTextOutput, SimpleTextOutputMode},
 };
-use core::{arch::asm, cell::UnsafeCell, mem::transmute};
-use x86::isolated_io::IoPort;
+use core::{cell::UnsafeCell, mem::transmute};
+use x86::isolated_io::*;
 
 const TVRAM_OFFSET_MASK: usize = 0x0003_ffff / 4;
+
+const CRTC_INDEX: IoPortWB = IoPortWB(0x440);
+const CRTC_DATA: IoPortWW = IoPortWW(0x442);
+const VIDEO_OUT_CTL_INDEX: IoPortWB = IoPortWB(0x448);
+const VIDEO_OUT_CTL_DATA: IoPortWB = IoPortWB(0x44a);
 
 const BITMAP_CONVERT_TABLE: [u32; 256] = [
     0x00000000, 0xf0000000, 0x0f000000, 0xff000000, 0x00f00000, 0xf0f00000, 0x0ff00000, 0xfff00000,
@@ -48,7 +54,7 @@ const BITMAP_CONVERT_TABLE: [u32; 256] = [
 /// bg layer 0: mode 1 640x400 16colors planar
 /// fg layer 1: mode 4 640x400 (1024x512 virtual) 16colors packed pixel
 #[rustfmt::skip]
-const MODE_SETTINGS: [u16; 30] = [
+const TEXT_MODE_SETTINGS: [u16; 30] = [
     0x0040, 0x0320, /* ---   --- */ 0x035f, 0x0000, 0x0010, 0x0000,
     0x036f, 0x009c, 0x031c, 0x009c, 0x031c, 0x0040, 0x0360, 0x0040,
     0x0360, 0x0000, 0x009c, 0x0000, 0x0050, 0x0000, 0x009c, 0x0000,
@@ -57,8 +63,8 @@ const MODE_SETTINGS: [u16; 30] = [
 
 pub struct FmtText {
     mode: SimpleTextOutputMode,
-    fg_color_oct: u32,
-    bg_color_oct: u32,
+    fg_color_u32: u32,
+    bg_color_u32: u32,
     tvram_offset: usize,
     tvram_crtc_fa1: u16,
 }
@@ -72,8 +78,8 @@ static mut FMT_TEXT: UnsafeCell<FmtText> = UnsafeCell::new(FmtText {
         attribute: 0,
         cursor_visible: 0,
     },
-    fg_color_oct: 0,
-    bg_color_oct: 0,
+    fg_color_u32: 0,
+    bg_color_u32: 0,
     tvram_offset: 0,
     tvram_crtc_fa1: 0,
 });
@@ -93,7 +99,7 @@ impl FmtText {
     }
 
     unsafe fn hw_set_mode(&self) {
-        let mut iter = MODE_SETTINGS.iter();
+        let mut iter = TEXT_MODE_SETTINGS.iter();
         unsafe {
             Self::crtc_out(0, *iter.next().unwrap());
             Self::crtc_out(1, *iter.next().unwrap());
@@ -105,9 +111,8 @@ impl FmtText {
             Self::video_output_control(0, 0b0001_0101);
             Self::video_output_control(1, 0b0000_1001);
 
-            IoPort(0xfda0).out8(0x0f);
-            IoPort(0xff99).out8(0x01);
-            // IoPort(0x404).out8(0);
+            IoPortWB(0xfda0).write(0x0f);
+            IoPortWB(0xff99).write(0x01);
         }
     }
 
@@ -130,16 +135,16 @@ impl FmtText {
     #[inline]
     unsafe fn crtc_out(index: u8, data: u16) {
         unsafe {
-            IoPort(0x440).out8(index);
-            IoPort(0x442).out16(data);
+            CRTC_INDEX.write(index);
+            CRTC_DATA.write(data);
         }
     }
 
     #[inline]
     unsafe fn video_output_control(index: u8, data: u8) {
         unsafe {
-            IoPort(0x448).out8(index);
-            IoPort(0x44a).out8(data);
+            VIDEO_OUT_CTL_INDEX.write(index);
+            VIDEO_OUT_CTL_DATA.write(data);
         }
     }
 
@@ -186,12 +191,7 @@ impl FmtText {
         while row >= self.mode.rows {
             unsafe {
                 let vram = self.get_vram().add(self.tvram_offset & TVRAM_OFFSET_MASK);
-                asm!(
-                    "rep stosd",
-                    inout("ecx") 512 * 16 / 4 => _,
-                    inout("edi") vram => _,
-                    in("eax") self.bg_color_oct
-                );
+                Cpu::rep_stosd(vram, self.bg_color_u32, 512 * 16 / 4);
                 self.tvram_offset = (self.tvram_offset + 512 * 16 / 4) & TVRAM_OFFSET_MASK;
 
                 self.tvram_crtc_fa1 = self.tvram_crtc_fa1 + 1024 * 16 / 8;
@@ -262,8 +262,8 @@ impl core::fmt::Write for FmtText {
 
                             for data in font_data {
                                 let mask = BITMAP_CONVERT_TABLE[*data as usize];
-                                let bg = self.bg_color_oct & !mask;
-                                let fg = self.fg_color_oct & mask;
+                                let bg = self.bg_color_u32 & !mask;
+                                let fg = self.fg_color_u32 & mask;
                                 vram.write_volatile(bg | fg);
                                 vram = vram.add(512 / 4);
                             }
@@ -273,8 +273,8 @@ impl core::fmt::Write for FmtText {
 
                             for data in font_data {
                                 let mask = BITMAP_CONVERT_TABLE[*data as usize];
-                                let bg = self.bg_color_oct & !mask;
-                                let fg = self.fg_color_oct & mask;
+                                let bg = self.bg_color_u32 & !mask;
+                                let fg = self.fg_color_u32 & mask;
                                 vram.write_volatile(bg | fg);
                                 vram = vram.add(512 / 4);
                                 vram.write_volatile(bg | fg);
@@ -316,21 +316,15 @@ impl SimpleTextOutput for FmtText {
         } else {
             self.mode.attribute = attribute;
         }
-        self.fg_color_oct = Self::octuple(self.mode.attribute & 0x0F);
-        self.bg_color_oct = Self::octuple((self.mode.attribute & 0xF0) >> 4);
+        self.fg_color_u32 = Self::octuple(self.mode.attribute & 0x0F);
+        self.bg_color_u32 = Self::octuple((self.mode.attribute & 0xF0) >> 4);
     }
 
     fn clear_screen(&mut self) {
-        let old_cursor_visible = self.enable_cursor(false);
+        let old_cursor_visible = self.mode.is_cursor_visible();
 
-        let vram_base = self.get_vram();
         unsafe {
-            asm!(
-                "rep stosd",
-                inout("ecx") 1024 * 512 / 4 => _,
-                inout("edi") vram_base => _,
-                in("eax") self.bg_color_oct
-            );
+            Cpu::rep_stosd(self.get_vram(), self.bg_color_u32, 512 * 1024 / 4);
         }
 
         self.tvram_offset = 0;

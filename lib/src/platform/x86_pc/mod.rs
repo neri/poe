@@ -11,8 +11,7 @@ use crate::{
     mem::{MemoryManager, MemoryType},
     *,
 };
-use core::arch::asm;
-use x86::isolated_io::IoPort;
+use x86::isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB};
 
 impl PlatformTrait for Platform {
     unsafe fn init(_arg: usize) {
@@ -20,7 +19,7 @@ impl PlatformTrait for Platform {
             let info = System::boot_info();
 
             cpu::Cpu::init();
-            lomem::LowMemoryManager::init();
+            lomem::LoMemoryManager::init();
 
             MemoryManager::register_memmap(
                 0x10_0000..info.start_conventional_memory as u64,
@@ -85,29 +84,28 @@ impl PlatformTrait for Platform {
             match System::platform() {
                 Platform::PcBios => {
                     // PCI reset
-                    IoPort(0x0CF9).out8(0x06);
+                    IoPortWB(0x0CF9).write(0x06);
 
                     // OADG reset
-                    asm!("out 0x92, al", in("al") 0x01u8);
+                    LoIoPortWB::<0x92>::new().write(0x01);
 
                     // PS/2 reset
                     loop {
-                        let al: u8;
-                        asm!("in al, 0x64", out("al") al);
+                        let al = LoIoPortRB::<0x64>::new().read();
                         if (al & 0x02) == 0 {
                             break;
                         }
                     }
-                    asm!("out 0x64, al", in("al") 0xFEu8);
+                    LoIoPortWB::<0x64>::new().write(0xfe);
                 }
                 Platform::Nec98 => {
-                    asm!("out 0x37, al", in("al") 0x0Fu8);
-                    asm!("out 0x37, al", in("al") 0x0Bu8);
-                    asm!("out 0xF0, al", in("al") 0x00u8);
+                    LoIoPortWB::<0x37>::new().write(0x0f);
+                    LoIoPortWB::<0x37>::new().write(0x0b);
+                    LoIoPortWB::<0xf0>::new().write(0x00);
                 }
                 Platform::FmTowns => {
-                    asm!("out 0x20, al", in("al") 0x01u8);
-                    asm!("out 0x22, al", in("al") 0x00u8);
+                    LoIoPortWB::<0x20>::new().write(0x01);
+                    LoIoPortWB::<0x22>::new().write(0x00);
                 }
                 _ => unreachable!(),
             }

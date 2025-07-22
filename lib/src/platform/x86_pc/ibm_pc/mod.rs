@@ -6,11 +6,11 @@ mod disk_bios;
 // mod ps2;
 
 use crate::{
-    arch::{cpu::X86StackContext, lomem::LowMemoryManager, vm86::VM86},
+    arch::{cpu::X86StackContext, lomem::LoMemoryManager, vm86::VM86},
     mem::{MemoryManager, MemoryType},
     *,
 };
-use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrOld};
+use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
 use core::{ffi::c_void, iter::Iterator, ops::Range};
 use smbios::{SMBIOS_GUID, SmBios};
 use x86::gpr::Eflags;
@@ -33,7 +33,7 @@ pub(super) unsafe fn init_early() {
                 let p = (ebda + i) as *const c_void;
                 if RsdPtr::parse_extended(p).is_some() {
                     acpi2 = NonNullPhysicalAddress::from_ptr(p)
-                } else if RsdPtrOld::parse(p).is_some() {
+                } else if RsdPtrV1::parse(p).is_some() {
                     acpi1 = NonNullPhysicalAddress::from_ptr(p)
                 }
             }
@@ -46,7 +46,7 @@ pub(super) unsafe fn init_early() {
             let p = i as *const c_void;
             if RsdPtr::parse_extended(p).is_some() {
                 acpi2 = NonNullPhysicalAddress::from_ptr(p)
-            } else if RsdPtrOld::parse(p).is_some() {
+            } else if RsdPtrV1::parse(p).is_some() {
                 acpi1 = NonNullPhysicalAddress::from_ptr(p)
             }
         }
@@ -79,10 +79,8 @@ pub(super) unsafe fn init_early() {
 pub(super) unsafe fn init_late() {
     // let info = Environment::boot_info();
     unsafe {
-        disk_bios::DiskBios::init();
-
         let mut smap_supported = false;
-        let buf = LowMemoryManager::alloc_page();
+        let buf = LoMemoryManager::alloc_page();
         let mut regs = X86StackContext::default();
         loop {
             regs.eax = 0xe820;
@@ -101,7 +99,7 @@ pub(super) unsafe fn init_late() {
             if let Some(mem_type) = entry.mem_type() {
                 if range.start < 0x10_0000 && range.end <= 0x10_0000 {
                     if mem_type != MemoryType::Available {
-                        LowMemoryManager::reserve(
+                        LoMemoryManager::reserve(
                             range.start as usize..range.end as usize,
                             mem_type,
                         )
@@ -124,6 +122,8 @@ pub(super) unsafe fn init_late() {
         }
 
         System::set_stdin(&mut *(&raw mut STDIN));
+
+        disk_bios::DiskBios::init();
     }
 }
 

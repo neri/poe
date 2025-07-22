@@ -2,13 +2,13 @@
 
 use crate::{
     System,
+    arch::cpu::Cpu,
     io::tty::{SimpleTextOutput, SimpleTextOutputMode},
 };
-use core::{arch::asm, cell::UnsafeCell};
-use x86::isolated_io::IoPort;
+use core::cell::UnsafeCell;
+use x86::isolated_io::IoPortWW;
 
-const VGA_CRTC_INDEX: IoPort = IoPort(0x3d4);
-const VGA_CRTC_DATA: IoPort = IoPort(0x3d5);
+const VGA_CRTC_IDX_DAT: IoPortWW = IoPortWW(0x3d4);
 
 pub struct CgaText {
     mode: SimpleTextOutputMode,
@@ -46,8 +46,7 @@ impl CgaText {
     #[inline]
     unsafe fn crtc_out(index: u8, data: u8) {
         unsafe {
-            VGA_CRTC_INDEX.out8(index);
-            VGA_CRTC_DATA.out8(data);
+            VGA_CRTC_IDX_DAT.write(u16::from_le_bytes([index, data]));
         }
     }
 
@@ -75,7 +74,7 @@ impl CgaText {
         row as usize * self.mode.columns as usize + col as usize
     }
 
-    fn adjust_coords(&mut self, col: u8, row: u8, wrap_around: bool) -> Option<(u8, u8)> {
+    fn adjust_coords(&self, col: u8, row: u8, wrap_around: bool) -> Option<(u8, u8)> {
         if row < self.mode.rows && (!wrap_around || col < self.mode.columns) {
             return None;
         }
@@ -91,27 +90,18 @@ impl CgaText {
         }
 
         while row >= self.mode.rows {
-            let vram = self.get_vram() as *mut u16;
             unsafe {
-                let count = (self.mode.columns as usize * (self.mode.rows as usize - 1)) / 2;
-                let src = vram.offset(self.mode.columns as isize);
-                let mut dst = vram;
-                asm!(
-                    "xchg esi, {0}",
-                    "rep movsd",
-                    "xchg esi, {0}",
-                    inout(reg) src => _,
-                    inout("ecx") count => _,
-                    inout("edi") dst,
+                let dst = self.get_vram() as *mut u32;
+                let (dst, _) = Cpu::rep_movsd(
+                    dst,
+                    dst.byte_offset(2 * self.mode.columns as isize),
+                    (self.mode.columns as usize * (self.mode.rows as usize - 1)) / 2,
                 );
-                let count = self.mode.columns as usize / 2;
-                asm!(
-                    "rep stosd",
-                    inout("ecx") count => _,
-                    inout("edi") dst,
-                    in("eax") (0x20|(self.mode.attribute as u32) << 8) * 0x10001
+                Cpu::rep_stosd(
+                    dst,
+                    (0x20 | (self.mode.attribute as u32) << 8) * 0x10001,
+                    self.mode.columns as usize / 2,
                 );
-                let _ = dst;
             }
             row -= 1;
         }
@@ -199,16 +189,13 @@ impl SimpleTextOutput for CgaText {
     }
 
     fn clear_screen(&mut self) {
-        let old_cursor_visible = self.enable_cursor(false);
+        let old_cursor_visible = self.mode.is_cursor_visible();
 
-        let vram_base = self.get_vram() as *mut u16;
-        let count = (self.mode.columns as usize * self.mode.rows as usize) / 2;
         unsafe {
-            asm!(
-                "rep stosd",
-                inout("ecx") count => _,
-                inout("edi") vram_base => _,
-                in("eax") (0x20|(self.mode.attribute as u32) << 8) * 0x10001
+            Cpu::rep_stosd(
+                self.get_vram() as *mut u32,
+                (0x20 | (self.mode.attribute as u32) << 8) * 0x10001,
+                (self.mode.columns as usize * self.mode.rows as usize) / 2,
             );
         }
 

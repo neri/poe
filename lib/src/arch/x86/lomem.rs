@@ -6,12 +6,12 @@ use core::{cell::UnsafeCell, num::NonZeroU16, ops::Range};
 use mem::{MemoryMapEntry, MemoryType};
 use x86::prot::{Limit16, Linear32, Selector};
 
-static mut LMM: UnsafeCell<LowMemoryManager> = UnsafeCell::new(LowMemoryManager::new());
+static mut LMM: UnsafeCell<LoMemoryManager> = UnsafeCell::new(LoMemoryManager::new());
 
 /// Low Memory Manager
 ///
 /// This manager is used to manage the first 1MB of memory.
-pub struct LowMemoryManager {
+pub struct LoMemoryManager {
     free_bitmap: AtomicBitArray<8>,
     reserved_bitmap: AtomicBitArray<8>,
     acpi_reclaim_bitmap: AtomicBitArray<8>,
@@ -19,7 +19,7 @@ pub struct LowMemoryManager {
 }
 
 #[allow(unused)]
-impl LowMemoryManager {
+impl LoMemoryManager {
     const PAGE_SIZE: usize = 0x1000;
 
     const PAGE_SIZE_M1: usize = Self::PAGE_SIZE - 1;
@@ -189,13 +189,13 @@ impl Drop for ManagedLowMemory {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            LowMemoryManager::free_page(self);
+            LoMemoryManager::free_page(self);
         }
     }
 }
 
 struct LowMemoryIter<'a> {
-    instance: &'a LowMemoryManager,
+    instance: &'a LoMemoryManager,
     current: usize,
     prev_attr: Option<(usize, MemoryType)>,
     terminated: bool,
@@ -216,8 +216,8 @@ impl Iterator for LowMemoryIter<'_> {
                 if let Some((prev, prev_attr)) = self.prev_attr {
                     self.prev_attr = None;
                     return Some(MemoryMapEntry::new(
-                        (prev * LowMemoryManager::PAGE_SIZE) as u64,
-                        ((current - prev) * LowMemoryManager::PAGE_SIZE) as u64,
+                        (prev * LoMemoryManager::PAGE_SIZE) as u64,
+                        ((current - prev) * LoMemoryManager::PAGE_SIZE) as u64,
                         prev_attr,
                     ));
                 } else {
@@ -245,8 +245,8 @@ impl Iterator for LowMemoryIter<'_> {
                     current += 1;
                     self.current = current;
                     return Some(MemoryMapEntry::new(
-                        (prev * LowMemoryManager::PAGE_SIZE) as u64,
-                        ((current - prev - 1) * LowMemoryManager::PAGE_SIZE) as u64,
+                        (prev * LoMemoryManager::PAGE_SIZE) as u64,
+                        ((current - prev - 1) * LoMemoryManager::PAGE_SIZE) as u64,
                         prev_type,
                     ));
                 }

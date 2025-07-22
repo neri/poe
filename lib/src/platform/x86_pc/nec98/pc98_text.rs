@@ -1,12 +1,23 @@
 //! PC98 Text Mode Driver
 
 use crate::{
+    arch::cpu::Cpu,
     io::tty::{SimpleTextOutput, SimpleTextOutputMode},
+    platform::x86_pc::nec98::PORT_5F,
     *,
 };
-use core::{arch::asm, cell::UnsafeCell};
+use core::cell::UnsafeCell;
+use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
 const COLOR_TABLE: [u8; 8] = [0, 1, 4, 5, 2, 3, 6, 7];
+
+pub const TGDC_STATUS: LoIoPortRB<0x60> = LoIoPortRB::new();
+
+pub const TGDC_PARAM: LoIoPortWB<0x60> = LoIoPortWB::new();
+
+pub const TGDC_COMMAND: LoIoPortWB<0x62> = LoIoPortWB::new();
+
+pub const TGDC_DATA: LoIoPortWB<0x62> = LoIoPortWB::new();
 
 pub struct Pc98Text {
     mode: SimpleTextOutputMode,
@@ -41,30 +52,27 @@ impl Pc98Text {
     }
 
     #[inline]
-    fn get_vram(&self) -> *mut u8 {
+    pub fn get_vram(&self) -> *mut u8 {
         0xa0000 as *mut u8
     }
 
-    unsafe fn gdc_command(command: u8, params: &[u8]) {
+    pub unsafe fn tgdc_command(command: u8, params: &[u8]) {
         unsafe {
             let mut guard = Hal::cpu().interrupt_guard();
             loop {
-                let status: u8;
-                asm!(
-                    "in al, 0x60",
-                    out("al") status,
-                );
+                let status = TGDC_STATUS.read();
                 if status & 0x04 != 0 {
                     break;
                 }
                 guard = Hal::cpu().interrupt_guard();
-                asm!("out 0x5f, al");
+
+                PORT_5F.write_dummy();
             }
 
-            asm!("out 0x62, al", in("al") command);
+            TGDC_COMMAND.write(command);
 
             for data in params {
-                asm!("out 0x60, al", in("al") *data);
+                TGDC_PARAM.write(*data);
             }
 
             drop(guard);
@@ -75,9 +83,9 @@ impl Pc98Text {
         unsafe {
             let lh = self.line_height_m1;
             if visible {
-                Self::gdc_command(0x4b, &[lh | 0x80, 0, lh << 3 | 3]);
+                Self::tgdc_command(0x4b, &[lh | 0x80, 0, lh << 3 | 3]);
             } else {
-                Self::gdc_command(0x4b, &[lh, 0, 0]);
+                Self::tgdc_command(0x4b, &[lh, 0, 0]);
             }
         }
     }
@@ -85,7 +93,7 @@ impl Pc98Text {
     fn set_hw_cursor_position(&mut self, col: u8, row: u8) {
         unsafe {
             let pos = self.pos(col, row);
-            Self::gdc_command(0x49, &[pos as u8, (pos >> 8) as u8]);
+            Self::tgdc_command(0x49, &[pos as u8, (pos >> 8) as u8]);
         }
     }
 
@@ -94,7 +102,7 @@ impl Pc98Text {
         row as usize * self.mode.columns as usize + col as usize
     }
 
-    fn adjust_coords(&mut self, col: u8, row: u8, wrap_around: bool) -> Option<(u8, u8)> {
+    fn adjust_coords(&self, col: u8, row: u8, wrap_around: bool) -> Option<(u8, u8)> {
         if row < self.mode.rows && (!wrap_around || col < self.mode.columns) {
             return None;
         }
@@ -110,27 +118,14 @@ impl Pc98Text {
         }
 
         while row >= self.mode.rows {
-            let vram = self.get_vram() as *mut u16;
             unsafe {
-                let count = (self.mode.columns as usize * (self.mode.rows as usize - 1)) / 2;
-                let src = vram.offset(self.mode.columns as isize);
-                let mut dst = vram;
-                asm!(
-                    "xchg esi, {0}",
-                    "rep movsd",
-                    "xchg esi, {0}",
-                    inout(reg) src => _,
-                    inout("ecx") count => _,
-                    inout("edi") dst,
+                let dst = self.get_vram() as *mut u32;
+                let (dst, _) = Cpu::rep_movsd(
+                    dst,
+                    dst.byte_offset(2 * self.mode.columns as isize),
+                    (self.mode.columns as usize * (self.mode.rows as usize - 1)) / 2,
                 );
-                let count = self.mode.columns as usize / 2;
-                asm!(
-                    "rep stosd",
-                    inout("ecx") count => _,
-                    inout("edi") dst,
-                    in("eax") 0x20_0020,
-                );
-                let _ = dst;
+                Cpu::rep_stosd(dst, 0x20_0020, self.mode.columns as usize / 2);
             }
             row -= 1;
         }
@@ -231,21 +226,15 @@ impl SimpleTextOutput for Pc98Text {
     }
 
     fn clear_screen(&mut self) {
-        let old_cursor_visible = self.enable_cursor(false);
+        let old_cursor_visible = self.mode.is_cursor_visible();
 
-        let vram_base = self.get_vram();
         unsafe {
-            asm!(
-                "rep stosd",
-                inout("ecx") 80 * 25 / 2 => _,
-                inout("edi") vram_base => _,
-                in("eax") 0x20_0020,
-            );
-            asm!(
-                "rep stosd",
-                inout("ecx") 80 * 25 / 2 => _,
-                inout("edi") vram_base.add(0x2000) => _,
-                in("eax") (self.native_attribute as u32) * 0x01_0001,
+            let vram = self.get_vram() as *mut u32;
+            Cpu::rep_stosd(vram, 0x20_0020, 80 * 50 / 2);
+            Cpu::rep_stosd(
+                vram.byte_offset(0x2000),
+                (self.native_attribute as u32) * 0x01_0001,
+                80 * 50 / 2,
             );
         }
 
