@@ -6,12 +6,37 @@ use crate::{
     io::tty::{SimpleTextOutput, SimpleTextOutputMode},
 };
 use core::cell::UnsafeCell;
-use x86::isolated_io::IoPortWW;
+use x86::isolated_io::{IoPortRWB, IoPortWB, IoPortWW};
 
 const VGA_CRTC_IDX_DAT: IoPortWW = IoPortWW(0x3d4);
+const VGA_CRTC_INDEX: IoPortWB = IoPortWB(0x3d4);
+const VGA_CRTC_DATA: IoPortRWB = IoPortRWB(0x3d5);
+
+#[allow(dead_code)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrtcIndex {
+    HorizontalTotal = 0x00,
+    HorizontalDisplayEnd = 0x01,
+    StartHorizontalBlank = 0x02,
+    EndHorizontalBlank = 0x03,
+    StartHorizontalRetrace = 0x04,
+    EndHorizontalRetrace = 0x05,
+    VerticalTotal = 0x06,
+    Overflow = 0x07,
+    PresetRowScan = 0x08,
+    MaxScanLine = 0x09,
+    CursorStartScanLine = 0x0a,
+    CursorEndScanLine = 0x0b,
+    StartAddressHigh = 0x0c,
+    StartAddressLow = 0x0d,
+    CursorLocationHigh = 0x0e,
+    CursorLocationLow = 0x0f,
+}
 
 pub struct CgaText {
     mode: SimpleTextOutputMode,
+    max_scan_line: u8,
 }
 
 static mut CGA_TEXT: UnsafeCell<CgaText> = UnsafeCell::new(CgaText {
@@ -23,12 +48,14 @@ static mut CGA_TEXT: UnsafeCell<CgaText> = UnsafeCell::new(CgaText {
         attribute: 0,
         cursor_visible: 0,
     },
+    max_scan_line: 0,
 });
 
 impl CgaText {
     pub(super) unsafe fn init() {
         unsafe {
             let stdout = (&mut *(&raw mut CGA_TEXT)).get_mut();
+            stdout.max_scan_line = Self::crtc_in(CrtcIndex::MaxScanLine) & 0x1f;
             stdout.reset();
             System::set_stdout(stdout);
 
@@ -44,19 +71,27 @@ impl CgaText {
     }
 
     #[inline]
-    unsafe fn crtc_out(index: u8, data: u8) {
+    unsafe fn crtc_out(index: CrtcIndex, data: u8) {
         unsafe {
-            VGA_CRTC_IDX_DAT.write(u16::from_le_bytes([index, data]));
+            VGA_CRTC_IDX_DAT.write(u16::from_le_bytes([index as u8, data]));
+        }
+    }
+
+    #[inline]
+    unsafe fn crtc_in(index: CrtcIndex) -> u8 {
+        unsafe {
+            VGA_CRTC_INDEX.write(index as u8);
+            VGA_CRTC_DATA.read()
         }
     }
 
     fn set_hw_cursor_visible(&mut self, visible: bool) {
         unsafe {
             if visible {
-                Self::crtc_out(0x0a, 0xce);
-                Self::crtc_out(0x0b, 0xef);
+                Self::crtc_out(CrtcIndex::CursorStartScanLine, self.max_scan_line - 1);
+                Self::crtc_out(CrtcIndex::CursorEndScanLine, self.max_scan_line);
             } else {
-                Self::crtc_out(0x0a, 0x20);
+                Self::crtc_out(CrtcIndex::CursorStartScanLine, 0x20);
             }
         }
     }
@@ -64,8 +99,8 @@ impl CgaText {
     fn set_hw_cursor_position(&mut self, col: u8, row: u8) {
         unsafe {
             let pos = self.pos(col, row);
-            Self::crtc_out(0x0f, pos as u8);
-            Self::crtc_out(0x0e, (pos >> 8) as u8);
+            Self::crtc_out(CrtcIndex::CursorLocationLow, pos as u8);
+            Self::crtc_out(CrtcIndex::CursorLocationHigh, (pos >> 8) as u8);
         }
     }
 

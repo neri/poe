@@ -121,7 +121,9 @@ pub(super) unsafe fn init_late() {
             // TODO:
         }
 
-        System::set_stdin(&mut *(&raw mut STDIN));
+        let kbd = &mut *(&raw mut STDIN);
+        kbd.reset();
+        System::set_stdin(kbd);
 
         disk_bios::DiskBios::init();
     }
@@ -165,20 +167,19 @@ impl SimpleTextInput for BiosTextInput {
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
-            let mut regs = X86StackContext::default();
-            regs.eax = 0x0100;
-            VM86::call_bios(bios::INT16, &mut regs);
-            if regs.eflags.contains(Eflags::ZF) {
-                None
-            } else {
-                regs.eax = 0;
-                VM86::call_bios(bios::INT16, &mut regs);
-                InputKey {
-                    usage: (regs.eax >> 8) as u16,
-                    unicode_char: (regs.eax & 0xFF) as u16,
-                }
-                .into()
+            let head = 0x41a as *const u16;
+            let tail = 0x41c as *const u16;
+            if head.read_volatile() == tail.read_volatile() {
+                return None;
             }
+            let mut regs = X86StackContext::default();
+            regs.eax = 0;
+            VM86::call_bios(bios::INT16, &mut regs);
+            InputKey {
+                usage: (regs.eax >> 8) as u16,
+                unicode_char: (regs.eax & 0xFF) as u16,
+            }
+            .into()
         }
     }
 }

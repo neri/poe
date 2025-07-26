@@ -21,7 +21,7 @@ pub struct System {
 }
 
 impl System {
-    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x07;
+    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x1f;
 
     /// Initialize with boot information and main function
     #[inline]
@@ -167,9 +167,9 @@ impl System {
                     let key = key.get();
                     let c = key.unicode_char as u8 as char;
                     match c {
-                        '\0' => {
-                            continue;
-                        }
+                        // '\0' => {
+                        //     continue;
+                        // }
                         // ctrl-c
                         '\x03' => {
                             return None;
@@ -209,6 +209,7 @@ impl System {
                     }
                 }
                 None => {
+                    // assert!(unsafe { Hal::cpu().is_interrupt_enabled() });
                     Hal::cpu().wait_for_interrupt();
                 }
             }

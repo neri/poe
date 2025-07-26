@@ -278,7 +278,7 @@ impl VM86 {
 
             match vm_csip.add(skip).read_volatile() {
                 0x9C => {
-                    // PUSHF
+                    // 9C: PUSHF
                     if prefix_66 {
                         Self::vm_push32(ctx, ctx.eflags.bits() as u32);
                     } else {
@@ -287,7 +287,7 @@ impl VM86 {
                     skip += 1;
                 }
                 0x9D => {
-                    // POPF
+                    // 9D: POPF
                     let new_fl: Eflags;
                     if prefix_66 {
                         new_fl = Eflags::from_bits(Self::vm_pop32(ctx) as usize);
@@ -300,18 +300,18 @@ impl VM86 {
                     skip += 1;
                 }
                 0xCD => {
-                    // INT N
+                    // CD nn: INT N
                     let int_vec = InterruptVector(vm_csip.add(skip + 1).read_volatile() as u8);
                     Self::redirect_vm_interrupt(int_vec, ctx, false);
                     return true;
                 }
                 0xCC => {
-                    // INT3
+                    // CC: INT3
                     Self::redirect_vm_interrupt(ExceptionType::Breakpoint.as_vec(), ctx, false);
                     return true;
                 }
                 0xCF => {
-                    // IRET
+                    // CF: IRET
                     let new_cs: Selector;
                     let new_fl: Eflags;
                     if prefix_66 {
@@ -330,18 +330,18 @@ impl VM86 {
                     return true;
                 }
                 0xF4 => {
-                    // HLT
+                    // F4: HLT
                     Hal::cpu().enable_interrupt();
                     Hal::cpu().wait_for_interrupt();
                     skip += 1;
                 }
                 0xFA => {
-                    // CLI
+                    // FA: CLI
                     ctx.eflags.remove(Eflags::IF);
                     skip += 1;
                 }
                 0xFB => {
-                    // STI
+                    // FB: STI
                     ctx.eflags.insert(Eflags::IF);
                     skip += 1;
                 }
@@ -416,7 +416,7 @@ impl VM86 {
     pub fn set_vm_eflags(ctx: &mut X86StackContext, eflags: Eflags) {
         let mut eflags = eflags.canonicalized();
         eflags.insert(Eflags::VM);
-        eflags.insert(Eflags::IF);
+        // eflags.insert(Eflags::IF);
         eflags.set_iopl(Self::IOPL_VM);
         ctx.eflags = eflags;
     }

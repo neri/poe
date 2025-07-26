@@ -42,7 +42,9 @@ pub(super) unsafe fn init_early() {
 
 pub(super) unsafe fn init_late() {
     unsafe {
-        System::set_stdin(&mut *(&raw mut STDIN));
+        let kbd = &mut *(&raw mut STDIN);
+        kbd.reset();
+        System::set_stdin(kbd);
     }
 }
 
@@ -61,20 +63,19 @@ impl SimpleTextInput for BiosTextInput {
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
-            let mut regs = X86StackContext::default();
-            regs.eax = 0x0100;
-            VM86::call_bios(bios::INT18, &mut regs);
-            if regs.bh() == 0 {
-                None
-            } else {
-                regs.eax = 0;
-                VM86::call_bios(bios::INT18, &mut regs);
-                InputKey {
-                    usage: (regs.eax >> 8) as u16,
-                    unicode_char: (regs.eax & 0xFF) as u16,
-                }
-                .into()
+            let head = 0x524 as *const u16;
+            let tail = 0x526 as *const u16;
+            if head.read_volatile() == tail.read_volatile() {
+                return None;
             }
+            let mut regs = X86StackContext::default();
+            regs.eax = 0;
+            VM86::call_bios(bios::INT18, &mut regs);
+            InputKey {
+                usage: (regs.eax >> 8) as u16,
+                unicode_char: (regs.eax & 0xFF) as u16,
+            }
+            .into()
         }
     }
 }

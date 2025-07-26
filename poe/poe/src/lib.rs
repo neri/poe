@@ -65,11 +65,14 @@ pub fn main() {
     println!("POE super-shell v0.0");
     loop {
         print!(">");
-        if let Some(line) = System::line_input(16) {
+        if let Some(line) = System::line_input(64) {
             if line.is_empty() {
                 continue;
             }
-            println!("{:?}?", line);
+            println!(
+                "Critical fatal error!!!\nUnable to execute command: {:?}",
+                line
+            );
         }
     }
 }

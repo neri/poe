@@ -222,53 +222,6 @@ _init_fmt:
     jmp _end_mem_check
 
 _init_pc:
-    int 0x12
-    mov cl, 6
-    shl ax, cl
-    mov [_memsz_lo], ax
-
-    mov ah, 0x88
-    stc
-    int 0x15
-    jc .no_1588
-    movzx eax, ax
-    shl eax, 10
-    mov [_memsz_mid], eax
-.no_1588:
-
-    push es
-    sub sp, 20
-    xor ebx, ebx
-    mov es, bx
-    mov di, sp
-    ; mov si, _smap
-.loop:
-    mov eax, 0xe820
-    mov edx, 0x534d4150 ; SMAP
-    mov ecx, 20
-    int 0x15
-    jc .end
-    cmp eax, 0x534d4150 ; SMAP
-    jnz .end
-    mov eax, [es:di + 4]
-    or eax, [es:di + 12]
-    jnz .skip
-    mov al, [es:di + 16]
-    cmp al, SMAP_AVAILABLE
-    jnz .skip
-    mov eax, [es:di]
-    cmp eax, 0x00100000
-    jb .skip
-    mov eax, [es:di + 8]
-    mov [_memsz_mid], eax
-    jmp .end
-.skip:
-    or ebx, ebx
-    jnz .loop
-.end:
-    add sp, 20
-    pop es
-
     call _a20_check
     jnc .a20_skip
 
@@ -298,13 +251,59 @@ _init_pc:
     mov al, 0xae
     out 0x64, al
 
-    ; call _ps2_wait_for_write
-
-    in al, 0x92
-    or al, 2
-    out 0x92, al
+    ; in al, 0x92
+    ; or al, 2
+    ; out 0x92, al
 
 .a20_skip:
+
+    int 0x12
+    mov cl, 6
+    shl ax, cl
+    mov [_memsz_lo], ax
+
+    mov ah, 0x88
+    clc
+    int 0x15
+    jc .no_1588
+    cmp ah, 0x80
+    jae .no_1588
+    movzx eax, ax
+    shl eax, 10
+    mov [_memsz_mid], eax
+.no_1588:
+
+    push es
+    sub sp, 20
+    xor ebx, ebx
+    mov es, bx
+    mov di, sp
+.smap_loop:
+    mov eax, 0xe820
+    mov edx, 0x534d4150 ; SMAP
+    mov ecx, 20
+    int 0x15
+    jc .smap_end
+    cmp eax, 0x534d4150 ; SMAP
+    jnz .smap_end
+    mov eax, [es:di + 4]
+    or eax, [es:di + 12]
+    jnz .smap_skip
+    mov al, [es:di + 16]
+    cmp al, SMAP_AVAILABLE
+    jnz .smap_skip
+    mov eax, [es:di]
+    cmp eax, 0x00100000
+    jb .smap_skip
+    mov eax, [es:di + 8]
+    mov [_memsz_mid], eax
+    jmp .smap_end
+.smap_skip:
+    or ebx, ebx
+    jnz .smap_loop
+.smap_end:
+    add sp, 20
+    pop es
 
     jmp _end_mem_check
 
@@ -323,17 +322,16 @@ _a20_check:
     mov ds, ax
     dec ax
     mov es, ax
-    xor si, si
-    mov di, 16
-; .loop_a20_check:
-    mov eax, [si]
-    cmp [es:di], eax
-    jnz .a20_ok
-    mov edx, eax
-    not edx
-    mov [es:di], edx
-    cmp [es:di], eax
-    jnz .a20_ok
+    mov si, 0x0500
+    lea di, [si+16]
+; .a20_check_loop:
+    mov ax, [si]
+    mov dx, ax
+    not dx
+    mov [es:di], dx
+    cmp [si], ax
+    jz .a20_ok
+    ; mov [si], ax
     stc
     jmp .a20_skip
 .a20_ok:
@@ -503,9 +501,9 @@ _tek1_decode:
 cpu_err_mes:
     db "NEEDS 386", 0
 
-    db 22, 0, 9
+    db 22, 0, 14
 a20_err_mes:
-    db "A20 ERROR", 0
+    db "A20 LINE ERROR", 0
 
     db 22, 0, 17
 no_mem_mes:
