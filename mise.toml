@@ -1,0 +1,3 @@
+[tasks.run]
+description = "Run the application"
+run = "cd poe/riscv-virt; make install run"

@@ -147,6 +147,7 @@ pub enum ReserveError {
     InvalidParameter,
 }
 
+#[repr(C)]
 pub struct ManagedLowMemory {
     limit: NonZeroU16,
     base_para: u16,
@@ -155,7 +156,7 @@ pub struct ManagedLowMemory {
 #[allow(unused)]
 impl ManagedLowMemory {
     #[inline]
-    const fn new(base_para: u16, limit: NonZeroU16) -> Self {
+    const unsafe fn new(base_para: u16, limit: NonZeroU16) -> Self {
         Self { base_para, limit }
     }
 
@@ -175,7 +176,7 @@ impl ManagedLowMemory {
     }
 
     #[inline]
-    pub unsafe fn as_slice<'a>(&self) -> &'a mut [u8] {
+    pub fn as_slice<'a>(&self) -> &'a mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
                 self.base().0 as usize as *mut u8,

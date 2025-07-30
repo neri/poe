@@ -28,8 +28,3 @@ unsafe impl GlobalAlloc for CustomAlloc {
         }
     }
 }
-
-// #[alloc_error_handler]
-// fn alloc_error_handler(layout: Layout) -> ! {
-//     panic!("allocation error: {:?}", layout)
-// }
