@@ -55,13 +55,10 @@ macro_rules! handle_master_irq {
                 "mov ds, ax",
                 "mov es, ax",
 
-                // "mov ebp, esp",
-                // "and esp, 0xfffffff0",
                 "mov ecx, {local_irq}",
-                "mov edx, ebp",
+                "mov edx, esp",
                 "call {handler}",
 
-                // "mov esp, ebp",
                 ".byte 0x0f, 0xa9", // pop gs
                 ".byte 0x0f, 0xa1", // pop fs
                 ".byte 0x1f", // pop ds
@@ -101,13 +98,10 @@ macro_rules! handle_slave_irq {
                 "mov ds, ax",
                 "mov es, ax",
 
-                // "mov ebp, esp",
-                // "and esp, 0xfffffff0",
                 "mov ecx, {local_irq}",
-                "mov edx, ebp",
+                "mov edx, esp",
                 "call {handler}",
 
-                // "mov esp, ebp",
                 ".byte 0x0f, 0xa9", // pop gs
                 ".byte 0x0f, 0xa1", // pop fs
                 ".byte 0x1f", // pop ds
