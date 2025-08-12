@@ -14,6 +14,8 @@ pub enum MemoryType {
     AcpiReclaim = 3,
     AcpiNvs = 4,
     DeviceTree = 5,
+    /// Other firmware reserved area
+    OtherFw = 6,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,15 +1,16 @@
 //! Simple Virtual 8086 Mode Manager
 
 use super::{
-    cpu::{Cpu, Gdt, Idt, X86StackContext},
+    cpu::{Cpu, Gdt, Idt},
     lomem::{LoMemoryManager, ManagedLowMemory},
     setjmp::JmpBuf,
 };
 use crate::*;
 use core::{cell::UnsafeCell, num::NonZeroUsize, ptr::null_mut};
+use x86::prot::{RPL0, SelectorErrorCode};
 use x86::{
     gpr::Eflags,
-    prot::{ExceptionType, IOPL, InterruptVector, Linear32, Selector},
+    prot::{Exception, IOPL, InterruptVector, Linear32, Selector},
     real::{Far16Ptr, Offset16},
 };
 
@@ -50,7 +51,7 @@ impl VM86 {
             for p in 0x0f_0000..0x0f_fff0 {
                 let p = p as *mut u8;
                 if p.read_volatile() == 0x63 {
-                    vmbp = Linear32(p as u32);
+                    vmbp = Linear32::new(p as u32);
                     break;
                 }
             }
@@ -62,8 +63,8 @@ impl VM86 {
             shared.vmbp = vmbp;
             shared.vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
 
-            Idt::handle_exception(ExceptionType::InvalidOpcode, Self::_handle_ud);
-            Idt::handle_exception(ExceptionType::GeneralProtection, Self::_handle_gpf);
+            Idt::handle_exception(Exception::InvalidOpcode, Self::_handle_ud);
+            Idt::handle_exception(Exception::GeneralProtection, Self::_handle_gpf);
         }
     }
 
@@ -94,11 +95,11 @@ impl VM86 {
                 }
             };
 
-            Self::set_vm_eflags(ctx, ctx.eflags);
+            ctx.adjust_vm_eflags();
             ctx.set_ss3(vm_stack.sel());
-            ctx.set_esp3((vm_stack.limit().0 & 0xfffe) as u32);
+            ctx.set_esp3(vm_stack.limit().as_u32() & 0xfffe);
             ctx.set_cs(shared.vmbp_csip.sel());
-            ctx.eip = shared.vmbp_csip.off().0 as u32;
+            ctx.eip = shared.vmbp_csip.off().as_u32();
             Self::redirect_vm_interrupt(int_vec, ctx, true);
 
             shared.context = ctx;
@@ -135,13 +136,13 @@ impl VM86 {
                 }
             };
 
-            Self::set_vm_eflags(ctx, ctx.eflags);
+            ctx.adjust_vm_eflags();
             ctx.set_ss3(vm_stack.sel());
-            ctx.set_esp3((vm_stack.limit().0 & 0xfffe) as u32);
-            Self::vm_push16(ctx, shared.vmbp_csip.sel().as_u16());
-            Self::vm_push16(ctx, shared.vmbp_csip.off().0);
+            ctx.set_esp3(vm_stack.limit().as_u32() & 0xfffe);
+            ctx.vm_push16(shared.vmbp_csip.sel().as_u16());
+            ctx.vm_push16(shared.vmbp_csip.off().as_u16());
             ctx.set_cs(target.sel());
-            ctx.eip = target.off().0 as u32;
+            ctx.eip = target.off().as_u32();
 
             shared.context = ctx;
             if shared.jmp_buf.set_jmp().is_none() {
@@ -167,7 +168,7 @@ impl VM86 {
     fn _handle_ud(ctx: &mut X86StackContext) -> bool {
         unsafe {
             if ctx.is_vm() {
-                let vm_csip = Far16Ptr::new(ctx.cs(), Offset16(ctx.eip as u16)).as_linear();
+                let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip as u16)).to_linear();
                 let shared = Self::shared_mut();
                 if shared.vmbp == vm_csip {
                     shared.intercept_vmbp(ctx);
@@ -181,7 +182,7 @@ impl VM86 {
     fn _handle_gpf(ctx: &mut X86StackContext) -> bool {
         unsafe {
             if ctx.is_vm() {
-                let vm_csip = Far16Ptr::new(ctx.cs(), Offset16(ctx.eip as u16)).as_linear();
+                let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip as u16)).to_linear();
                 let shared = Self::shared_mut();
                 if shared.vmbp == vm_csip {
                     shared.intercept_vmbp(ctx);
@@ -221,11 +222,11 @@ impl VM86 {
         is_external: bool,
     ) {
         unsafe {
-            let vm_csip = Self::vm_csip_ptr(ctx);
             let mut skip = 0;
             if is_external || ctx.selector_error_code().is_external() {
                 // external int
             } else {
+                let vm_csip = ctx.vm_csip_ptr();
                 match vm_csip.read_volatile() {
                     0xCD => {
                         if vm_csip.add(1).read_volatile() == int_vec.0 {
@@ -234,7 +235,7 @@ impl VM86 {
                         }
                     }
                     0xCC => {
-                        if int_vec == ExceptionType::Breakpoint.as_vec() {
+                        if int_vec == Exception::Breakpoint.as_vec() {
                             // CC: int3
                             skip = 1;
                         }
@@ -243,13 +244,14 @@ impl VM86 {
                 }
             }
 
-            Self::vm_push16(ctx, ctx.eflags.bits() as u16);
-            Self::vm_push16(ctx, ctx.cs().as_u16());
-            Self::vm_push16(ctx, (ctx.eip as u16).wrapping_add(skip));
+            ctx.vm_push16(ctx.eflags.bits() as u16);
+            ctx.vm_push16(ctx.cs().as_u16());
+            ctx.vm_push16((ctx.eip as u16).wrapping_add(skip));
 
-            let vm_intvect = (((int_vec.0 as usize) << 2) as *const u32).read_volatile();
-            ctx.eip = vm_intvect & 0xFFFF;
-            ctx.set_cs(Selector((vm_intvect >> 16) as u16));
+            let vm_intvec =
+                Far16Ptr::from_u32((((int_vec.0 as usize) << 2) as *const u32).read_volatile());
+            ctx.eip = vm_intvec.off().as_u32();
+            ctx.set_cs(vm_intvec.sel());
         }
     }
 
@@ -262,7 +264,7 @@ impl VM86 {
     #[must_use]
     unsafe fn simulate_vm_instruction(ctx: &mut X86StackContext) -> bool {
         unsafe {
-            let vm_csip = Self::vm_csip_ptr(ctx);
+            let vm_csip = ctx.vm_csip_ptr();
             let mut skip = 0;
             let mut prefix_66 = false;
 
@@ -279,10 +281,11 @@ impl VM86 {
             match vm_csip.add(skip).read_volatile() {
                 0x9C => {
                     // 9C: PUSHF
+                    let eflags = ctx.vm_eflags();
                     if prefix_66 {
-                        Self::vm_push32(ctx, ctx.eflags.bits() as u32);
+                        ctx.vm_push32(eflags.bits() as u32);
                     } else {
-                        Self::vm_push16(ctx, ctx.eflags.bits() as u16);
+                        ctx.vm_push16(eflags.bits() as u16);
                     }
                     skip += 1;
                 }
@@ -290,13 +293,13 @@ impl VM86 {
                     // 9D: POPF
                     let new_fl: Eflags;
                     if prefix_66 {
-                        new_fl = Eflags::from_bits(Self::vm_pop32(ctx) as usize);
+                        new_fl = Eflags::from_bits(ctx.vm_pop32() as usize);
                     } else {
                         new_fl = Eflags::from_bits(
-                            (ctx.eflags.bits() & 0xffff_0000) | Self::vm_pop16(ctx) as usize,
+                            (ctx.eflags.bits() & 0xffff_0000) | ctx.vm_pop16() as usize,
                         );
                     }
-                    Self::set_vm_eflags(ctx, new_fl);
+                    ctx.set_vm_eflags(new_fl);
                     skip += 1;
                 }
                 0xCD => {
@@ -307,7 +310,7 @@ impl VM86 {
                 }
                 0xCC => {
                     // CC: INT3
-                    Self::redirect_vm_interrupt(ExceptionType::Breakpoint.as_vec(), ctx, false);
+                    Self::redirect_vm_interrupt(Exception::Breakpoint.as_vec(), ctx, false);
                     return true;
                 }
                 0xCF => {
@@ -315,18 +318,18 @@ impl VM86 {
                     let new_cs: Selector;
                     let new_fl: Eflags;
                     if prefix_66 {
-                        ctx.eip = Self::vm_pop32(ctx);
-                        new_cs = Selector(Self::vm_pop32(ctx) as u16);
-                        new_fl = Eflags::from_bits(Self::vm_pop32(ctx) as usize);
+                        ctx.eip = ctx.vm_pop32();
+                        new_cs = Selector(ctx.vm_pop32() as u16);
+                        new_fl = Eflags::from_bits(ctx.vm_pop32() as usize);
                     } else {
-                        ctx.eip = Self::vm_pop16(ctx) as u32;
-                        new_cs = Selector(Self::vm_pop16(ctx));
+                        ctx.eip = ctx.vm_pop16() as u32;
+                        new_cs = Selector(ctx.vm_pop16());
                         new_fl = Eflags::from_bits(
-                            (ctx.eflags.bits() & 0xffff_0000) | Self::vm_pop16(ctx) as usize,
+                            (ctx.eflags.bits() & 0xffff_0000) | ctx.vm_pop16() as usize,
                         );
                     }
                     ctx.set_cs(new_cs);
-                    Self::set_vm_eflags(ctx, new_fl);
+                    ctx.set_vm_eflags(new_fl);
                     return true;
                 }
                 0xF4 => {
@@ -351,73 +354,420 @@ impl VM86 {
                 }
             }
 
-            ctx.eip = ctx.eip.wrapping_add(skip as u32) & 0xFFFF;
+            ctx.eip = ctx.eip.wrapping_add(skip as u32) & 0x0000_ffff;
             return true;
         }
     }
+}
 
-    #[inline]
-    pub fn vm_csip_ptr(ctx: &X86StackContext) -> *mut u8 {
-        Self::far16_to_ptr(ctx.cs(), Offset16(ctx.eip as u16))
-    }
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct X86StackContext {
+    _es: u32,
+    _ds: u32,
+    _fs: u32,
+    _gs: u32,
 
-    #[inline]
-    pub unsafe fn vm_sssp_ptr(ctx: &X86StackContext) -> *mut u16 {
-        let (ss, esp) = unsafe { ctx.ss_esp3_unchecked() };
-        Self::far16_to_ptr(ss, Offset16(esp as u16))
-    }
+    pub edi: u32,
+    pub esi: u32,
+    pub ebp: u32,
+    _esp_dummy: u32,
+    pub ebx: u32,
+    pub edx: u32,
+    pub ecx: u32,
+    pub eax: u32,
 
-    #[inline]
-    pub unsafe fn vm_sssp_ptr32(ctx: &X86StackContext) -> *mut u32 {
-        let (ss, esp) = unsafe { ctx.ss_esp3_unchecked() };
-        Self::far16_to_ptr(ss, Offset16(esp as u16))
-    }
+    // `vector` and `error_code` are set only when an exception occurs
+    _vector: u32,
+    _error_code: u32,
 
-    #[inline]
-    pub fn far16_to_ptr<T>(sel: Selector, off: Offset16) -> *mut T {
-        Far16Ptr::new(sel, off).as_linear().0 as *mut T
-    }
+    pub eip: u32,
+    _cs: u32,
+    pub eflags: Eflags,
 
+    // Valid only if `is_user()` is `true` after this point.
+    _esp3: u32,
+    _ss3: u32,
+
+    // Valid only if `is_vm()` is `true` after this point.
+    _vmes: u32,
+    _vmds: u32,
+    _vmfs: u32,
+    _vmgs: u32,
+}
+
+#[allow(unused)]
+impl X86StackContext {
     #[inline]
-    pub unsafe fn vm_push16(ctx: &mut X86StackContext, value: u16) {
-        unsafe {
-            ctx.fix_esp3(|esp3| esp3.wrapping_sub(size_of_val(&value) as u32) & 0xffff);
-            Self::vm_sssp_ptr(ctx).write_volatile(value);
+    pub const fn empty() -> Self {
+        Self {
+            _es: 0,
+            _ds: 0,
+            _fs: 0,
+            _gs: 0,
+            edi: 0,
+            esi: 0,
+            ebp: 0,
+            _esp_dummy: 0,
+            ebx: 0,
+            edx: 0,
+            ecx: 0,
+            eax: 0,
+            _vector: 0,
+            _error_code: 0,
+            eip: 0,
+            _cs: 0,
+            eflags: Eflags::empty(),
+            _esp3: 0,
+            _ss3: 0,
+            _vmes: 0,
+            _vmds: 0,
+            _vmfs: 0,
+            _vmgs: 0,
         }
     }
 
     #[inline]
-    pub unsafe fn vm_pop16(ctx: &mut X86StackContext) -> u16 {
-        unsafe {
-            let value = Self::vm_sssp_ptr(ctx).read_volatile();
-            ctx.fix_esp3(|esp3| esp3.wrapping_add(size_of_val(&value) as u32) & 0xffff);
-            value
+    pub fn is_vm(&self) -> bool {
+        self.eflags.contains(Eflags::VM)
+    }
+
+    #[inline]
+    pub fn is_user(&self) -> bool {
+        self.is_vm() || (self.cs().rpl() != RPL0)
+    }
+
+    #[inline]
+    pub const fn cs(&self) -> Selector {
+        Selector(self._cs as u16)
+    }
+
+    #[inline]
+    pub const fn ds(&self) -> Selector {
+        Selector(self._ds as u16)
+    }
+
+    #[inline]
+    pub const fn es(&self) -> Selector {
+        Selector(self._es as u16)
+    }
+
+    #[inline]
+    pub const fn fs(&self) -> Selector {
+        Selector(self._fs as u16)
+    }
+
+    #[inline]
+    pub const fn gs(&self) -> Selector {
+        Selector(self._gs as u16)
+    }
+
+    #[inline]
+    pub const fn error_code(&self) -> u16 {
+        self._error_code as u16
+    }
+
+    #[inline]
+    pub const fn selector_error_code(&self) -> SelectorErrorCode {
+        SelectorErrorCode(self._error_code as u16)
+    }
+
+    #[inline]
+    pub const fn vector(&self) -> InterruptVector {
+        InterruptVector(self._vector as u8)
+    }
+
+    #[inline]
+    pub fn vmds(&self) -> Option<Selector> {
+        if self.is_vm() {
+            Some(Selector(self._vmds as u16))
+        } else {
+            None
         }
     }
 
     #[inline]
-    pub unsafe fn vm_push32(ctx: &mut X86StackContext, value: u32) {
-        unsafe {
-            ctx.fix_esp3(|esp3| esp3.wrapping_sub(size_of_val(&value) as u32) & 0xffff);
-            Self::vm_sssp_ptr32(ctx).write_volatile(value);
+    pub fn vmes(&self) -> Option<Selector> {
+        if self.is_vm() {
+            Some(Selector(self._vmes as u16))
+        } else {
+            None
         }
     }
 
     #[inline]
-    pub unsafe fn vm_pop32(ctx: &mut X86StackContext) -> u32 {
-        unsafe {
-            let value = Self::vm_sssp_ptr32(ctx).read_volatile();
-            ctx.fix_esp3(|esp3| esp3.wrapping_add(size_of_val(&value) as u32) & 0xffff);
-            value
+    pub fn vmfs(&self) -> Option<Selector> {
+        if self.is_vm() {
+            Some(Selector(self._vmfs as u16))
+        } else {
+            None
         }
     }
 
     #[inline]
-    pub fn set_vm_eflags(ctx: &mut X86StackContext, eflags: Eflags) {
+    pub fn vmgs(&self) -> Option<Selector> {
+        if self.is_vm() {
+            Some(Selector(self._vmgs as u16))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub unsafe fn vmds_unchecked(&self) -> Selector {
+        Selector(self._vmds as u16)
+    }
+
+    #[inline]
+    pub unsafe fn vmes_unchecked(&self) -> Selector {
+        Selector(self._vmes as u16)
+    }
+
+    #[inline]
+    pub unsafe fn vmfs_unchecked(&self) -> Selector {
+        Selector(self._vmfs as u16)
+    }
+
+    #[inline]
+    pub unsafe fn vmgs_unchecked(&self) -> Selector {
+        Selector(self._vmgs as u16)
+    }
+
+    #[inline]
+    pub unsafe fn set_vmds(&mut self, vmds: Selector) {
+        self._vmds = vmds.as_u16() as u32;
+    }
+
+    #[inline]
+    pub unsafe fn set_vmes(&mut self, vmes: Selector) {
+        self._vmes = vmes.as_u16() as u32;
+    }
+
+    #[inline]
+    pub unsafe fn set_vmfs(&mut self, vmfs: Selector) {
+        self._vmfs = vmfs.as_u16() as u32;
+    }
+
+    #[inline]
+    pub unsafe fn set_vmgs(&mut self, vmgs: Selector) {
+        self._vmgs = vmgs.as_u16() as u32;
+    }
+
+    #[inline]
+    pub fn set_cs(&mut self, cs: Selector) {
+        self._cs = cs.as_u16() as u32;
+    }
+
+    #[inline]
+    pub unsafe fn set_esp3(&mut self, esp3: u32) {
+        self._esp3 = esp3;
+    }
+
+    #[inline]
+    pub unsafe fn esp3_unchecked(&self) -> u32 {
+        self._esp3
+    }
+
+    #[inline]
+    pub unsafe fn fix_esp3<F>(&mut self, f: F)
+    where
+        F: FnOnce(u32) -> u32,
+    {
+        self._esp3 = f(self._esp3);
+    }
+
+    #[inline]
+    pub fn esp3(&self) -> Option<u32> {
+        if self.is_user() {
+            Some(self._esp3)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub unsafe fn ss3_unchecked(&self) -> Selector {
+        Selector(self._ss3 as u16)
+    }
+
+    #[inline]
+    pub fn ss3(&self) -> Option<Selector> {
+        if self.is_user() {
+            Some(Selector(self._ss3 as u16))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub unsafe fn set_ss3(&mut self, ss3: Selector) {
+        self._ss3 = ss3.as_u16() as u32;
+    }
+
+    #[inline]
+    pub fn ss_esp3(&self) -> Option<(Selector, u32)> {
+        if self.is_user() {
+            Some((Selector(self._ss3 as u16), self._esp3))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub unsafe fn ss_esp3_unchecked(&self) -> (Selector, u32) {
+        (Selector(self._ss3 as u16), self._esp3)
+    }
+
+    #[inline]
+    pub fn al(&self) -> u8 {
+        self.eax as u8
+    }
+
+    #[inline]
+    pub fn ah(&self) -> u8 {
+        (self.eax >> 8) as u8
+    }
+
+    #[inline]
+    pub fn bl(&self) -> u8 {
+        self.ebx as u8
+    }
+
+    #[inline]
+    pub fn bh(&self) -> u8 {
+        (self.ebx >> 8) as u8
+    }
+
+    #[inline]
+    pub fn cl(&self) -> u8 {
+        self.ecx as u8
+    }
+
+    #[inline]
+    pub fn ch(&self) -> u8 {
+        (self.ecx >> 8) as u8
+    }
+
+    #[inline]
+    pub fn dl(&self) -> u8 {
+        self.edx as u8
+    }
+
+    #[inline]
+    pub fn dh(&self) -> u8 {
+        (self.edx >> 8) as u8
+    }
+
+    #[inline]
+    pub fn set_al(&mut self, al: u8) {
+        self.eax = (self.eax & 0xffffff00) | al as u32;
+    }
+
+    #[inline]
+    pub fn set_ah(&mut self, ah: u8) {
+        self.eax = (self.eax & 0xffff00ff) | (ah as u32) << 8;
+    }
+
+    #[inline]
+    pub fn set_bl(&mut self, bl: u8) {
+        self.ebx = (self.ebx & 0xffffff00) | bl as u32;
+    }
+
+    #[inline]
+    pub fn set_bh(&mut self, bh: u8) {
+        self.ebx = (self.ebx & 0xffff00ff) | (bh as u32) << 8;
+    }
+
+    #[inline]
+    pub fn set_cl(&mut self, cl: u8) {
+        self.ecx = (self.ecx & 0xffffff00) | cl as u32;
+    }
+
+    #[inline]
+    pub fn set_ch(&mut self, ch: u8) {
+        self.ecx = (self.ecx & 0xffff00ff) | (ch as u32) << 8;
+    }
+
+    #[inline]
+    pub fn set_dl(&mut self, dl: u8) {
+        self.edx = (self.edx & 0xffffff00) | dl as u32;
+    }
+
+    #[inline]
+    pub fn set_dh(&mut self, dh: u8) {
+        self.edx = (self.edx & 0xffff00ff) | (dh as u32) << 8;
+    }
+
+    #[inline]
+    pub fn vm_eflags(&self) -> Eflags {
+        let mut eflags = self.eflags.canonicalized();
+        eflags.remove(Eflags::VM);
+        eflags.clear_iopl();
+        eflags
+    }
+
+    #[inline]
+    pub fn set_vm_eflags(&mut self, eflags: Eflags) {
         let mut eflags = eflags.canonicalized();
         eflags.insert(Eflags::VM);
-        // eflags.insert(Eflags::IF);
-        eflags.set_iopl(Self::IOPL_VM);
-        ctx.eflags = eflags;
+        eflags.set_iopl(VM86::IOPL_VM);
+        self.eflags = eflags;
+    }
+
+    #[inline]
+    pub fn adjust_vm_eflags(&mut self) {
+        self.set_vm_eflags(self.eflags);
+    }
+
+    #[inline]
+    pub fn vm_csip_ptr(&self) -> *mut u8 {
+        Far16Ptr::new(self.cs(), Offset16::new(self.eip as u16)).to_ptr()
+    }
+
+    #[inline]
+    pub unsafe fn vm_sssp_ptr(&self) -> *mut u16 {
+        let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
+        Far16Ptr::new(ss, Offset16::new(esp as u16)).to_ptr()
+    }
+
+    #[inline]
+    pub unsafe fn vm_sssp_ptr32(&self) -> *mut u32 {
+        let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
+        Far16Ptr::new(ss, Offset16::new(esp as u16)).to_ptr()
+    }
+
+    #[inline]
+    pub unsafe fn vm_push16(&mut self, value: u16) {
+        unsafe {
+            self.fix_esp3(|esp3| esp3.wrapping_sub(size_of_val(&value) as u32) & 0x0000_ffff);
+            Self::vm_sssp_ptr(self).write_volatile(value);
+        }
+    }
+
+    #[inline]
+    pub unsafe fn vm_pop16(&mut self) -> u16 {
+        unsafe {
+            let value = Self::vm_sssp_ptr(self).read_volatile();
+            self.fix_esp3(|esp3| esp3.wrapping_add(size_of_val(&value) as u32) & 0x0000_ffff);
+            value
+        }
+    }
+
+    #[inline]
+    pub unsafe fn vm_push32(&mut self, value: u32) {
+        unsafe {
+            self.fix_esp3(|esp3| esp3.wrapping_sub(size_of_val(&value) as u32) & 0x0000_ffff);
+            Self::vm_sssp_ptr32(self).write_volatile(value);
+        }
+    }
+
+    #[inline]
+    pub unsafe fn vm_pop32(&mut self) -> u32 {
+        unsafe {
+            let value = Self::vm_sssp_ptr32(self).read_volatile();
+            self.fix_esp3(|esp3| esp3.wrapping_add(size_of_val(&value) as u32) & 0x0000_ffff);
+            value
+        }
     }
 }

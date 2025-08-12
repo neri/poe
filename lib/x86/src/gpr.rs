@@ -141,6 +141,11 @@ impl Flags {
     }
 
     #[inline]
+    pub fn clear_iopl(&mut self) {
+        self.remove(Self::IOPL3);
+    }
+
+    #[inline]
     pub const fn is_canonical(&self) -> bool {
         self.bits() & Self::ALWAYS_1_BITMAP.bits() == Self::ALWAYS_1_BITMAP.bits()
             && self.bits() & Self::ALWAYS_0_BITMAP.bits() == 0

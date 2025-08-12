@@ -1,5 +1,6 @@
 //! i386 cpu core logic
 
+use super::vm86::X86StackContext;
 use crate::*;
 use core::{
     arch::{asm, global_asm, naked_asm},
@@ -9,7 +10,7 @@ use core::{
     sync::atomic::{Ordering, compiler_fence},
 };
 use paste::paste;
-use x86::{gpr::Eflags, prot::*};
+use x86::prot::*;
 
 pub const SYSTEM_TSS: Selector = Selector::new(1, RPL0);
 pub const KERNEL_CSEL: Selector = Selector::new(2, RPL0);
@@ -119,9 +120,10 @@ macro_rules! register_exception {
     ($mnemonic:ident) => {
         paste! {
             Self::register(
-                ExceptionType::$mnemonic.as_vec(),
+                Exception::$mnemonic.as_vec(),
                 [<exc_ $mnemonic>] as usize,
                 DPL0,
+                true,
             );
         }
     };
@@ -139,7 +141,7 @@ macro_rules! exception_handler {
                 "push {exno}",
                 "jmp short _default_exception_handler",
                 label = sym [<exc_ $mnemonic>],
-                exno = const (ExceptionType::$mnemonic.as_vec().0 as usize),
+                exno = const (Exception::$mnemonic.as_vec().0 as usize),
             );
         }
     };
@@ -158,7 +160,7 @@ macro_rules! exception_handler_noerr {
                 "push {exno}",
                 "jmp short _default_exception_handler",
                 label = sym [<exc_ $mnemonic>],
-                exno = const (ExceptionType::$mnemonic.as_vec().0 as usize),
+                exno = const (Exception::$mnemonic.as_vec().0 as usize),
             );
         }
     };
@@ -252,8 +254,8 @@ impl Gdt {
             gdt.tss.ss0 = KERNEL_DSEL.as_u16() as u32;
             let iopb_base = (offset_of!(Self, iopb) - offset_of!(Self, tss)) as u16;
             gdt.tss.iopb_base = iopb_base;
-            let tss_base = Linear32(&gdt.tss as *const _ as u32);
-            let tss_limit = Limit16(iopb_base + 8191);
+            let tss_base = Linear32::new(&gdt.tss as *const _ as u32);
+            let tss_limit = Limit16::new(iopb_base + 8191);
             gdt.set_item(SYSTEM_TSS, DescriptorEntry::tss32(tss_base, tss_limit))
                 .unwrap();
 
@@ -385,12 +387,12 @@ impl Idt {
         }
     }
 
-    pub unsafe fn register(vec: InterruptVector, offset: usize, dpl: DPL) {
+    pub unsafe fn register(vec: InterruptVector, offset: usize, dpl: DPL, is_inter: bool) {
         let entry = DescriptorEntry::gate32(
             offset,
             KERNEL_CSEL,
             dpl,
-            if dpl == DPL0 {
+            if is_inter {
                 DescriptorType::InterruptGate
             } else {
                 DescriptorType::TrapGate
@@ -402,7 +404,7 @@ impl Idt {
     }
 
     #[inline]
-    pub unsafe fn handle_exception(exc: ExceptionType, handler: fn(&mut X86StackContext) -> bool) {
+    pub unsafe fn handle_exception(exc: Exception, handler: fn(&mut X86StackContext) -> bool) {
         unsafe {
             Self::shared().exceptions[exc.as_vec().0 as usize] = Some(handler);
         }
@@ -463,344 +465,4 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
     );
 
     Hal::cpu().stop();
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Debug, Clone, Default)]
-pub struct X86StackContext {
-    _es: u32,
-    _ds: u32,
-    _fs: u32,
-    _gs: u32,
-
-    pub edi: u32,
-    pub esi: u32,
-    pub ebp: u32,
-    _esp_dummy: u32,
-    pub ebx: u32,
-    pub edx: u32,
-    pub ecx: u32,
-    pub eax: u32,
-
-    // `vector` and `error_code` are set only when an exception occurs
-    _vector: u32,
-    _error_code: u32,
-
-    pub eip: u32,
-    _cs: u32,
-    pub eflags: Eflags,
-
-    // Valid only if `is_user()` is `true` after this point.
-    _esp3: u32,
-    _ss3: u32,
-
-    // Valid only if `is_vm()` is `true` after this point.
-    _vmes: u32,
-    _vmds: u32,
-    _vmfs: u32,
-    _vmgs: u32,
-}
-
-#[allow(unused)]
-impl X86StackContext {
-    #[inline]
-    pub const fn empty() -> Self {
-        Self {
-            _es: 0,
-            _ds: 0,
-            _fs: 0,
-            _gs: 0,
-            edi: 0,
-            esi: 0,
-            ebp: 0,
-            _esp_dummy: 0,
-            ebx: 0,
-            edx: 0,
-            ecx: 0,
-            eax: 0,
-            _vector: 0,
-            _error_code: 0,
-            eip: 0,
-            _cs: 0,
-            eflags: Eflags::empty(),
-            _esp3: 0,
-            _ss3: 0,
-            _vmes: 0,
-            _vmds: 0,
-            _vmfs: 0,
-            _vmgs: 0,
-        }
-    }
-
-    #[inline]
-    pub fn is_vm(&self) -> bool {
-        self.eflags.contains(Eflags::VM)
-    }
-
-    #[inline]
-    pub fn is_user(&self) -> bool {
-        self.is_vm() || (self.cs().rpl() != RPL0)
-    }
-
-    #[inline]
-    pub const fn cs(&self) -> Selector {
-        Selector(self._cs as u16)
-    }
-
-    #[inline]
-    pub const fn ds(&self) -> Selector {
-        Selector(self._ds as u16)
-    }
-
-    #[inline]
-    pub const fn es(&self) -> Selector {
-        Selector(self._es as u16)
-    }
-
-    #[inline]
-    pub const fn fs(&self) -> Selector {
-        Selector(self._fs as u16)
-    }
-
-    #[inline]
-    pub const fn gs(&self) -> Selector {
-        Selector(self._gs as u16)
-    }
-
-    #[inline]
-    pub const fn error_code(&self) -> u16 {
-        self._error_code as u16
-    }
-
-    #[inline]
-    pub const fn selector_error_code(&self) -> SelectorErrorCode {
-        SelectorErrorCode(self._error_code as u16)
-    }
-
-    #[inline]
-    pub const fn vector(&self) -> InterruptVector {
-        InterruptVector(self._vector as u8)
-    }
-
-    #[inline]
-    pub fn vmds(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(Selector(self._vmds as u16))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn vmes(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(Selector(self._vmes as u16))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn vmfs(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(Selector(self._vmfs as u16))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn vmgs(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(Selector(self._vmgs as u16))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub unsafe fn vmds_unchecked(&self) -> Selector {
-        Selector(self._vmds as u16)
-    }
-
-    #[inline]
-    pub unsafe fn vmes_unchecked(&self) -> Selector {
-        Selector(self._vmes as u16)
-    }
-
-    #[inline]
-    pub unsafe fn vmfs_unchecked(&self) -> Selector {
-        Selector(self._vmfs as u16)
-    }
-
-    #[inline]
-    pub unsafe fn vmgs_unchecked(&self) -> Selector {
-        Selector(self._vmgs as u16)
-    }
-
-    #[inline]
-    pub unsafe fn set_vmds(&mut self, vmds: Selector) {
-        self._vmds = vmds.as_u16() as u32;
-    }
-
-    #[inline]
-    pub unsafe fn set_vmes(&mut self, vmes: Selector) {
-        self._vmes = vmes.as_u16() as u32;
-    }
-
-    #[inline]
-    pub unsafe fn set_vmfs(&mut self, vmfs: Selector) {
-        self._vmfs = vmfs.as_u16() as u32;
-    }
-
-    #[inline]
-    pub unsafe fn set_vmgs(&mut self, vmgs: Selector) {
-        self._vmgs = vmgs.as_u16() as u32;
-    }
-
-    #[inline]
-    pub fn set_cs(&mut self, cs: Selector) {
-        self._cs = cs.as_u16() as u32;
-    }
-
-    #[inline]
-    pub unsafe fn set_esp3(&mut self, esp3: u32) {
-        self._esp3 = esp3;
-    }
-
-    #[inline]
-    pub unsafe fn esp3_unchecked(&self) -> u32 {
-        self._esp3
-    }
-
-    #[inline]
-    pub unsafe fn fix_esp3<F>(&mut self, f: F)
-    where
-        F: FnOnce(u32) -> u32,
-    {
-        self._esp3 = f(self._esp3);
-    }
-
-    #[inline]
-    pub fn esp3(&self) -> Option<u32> {
-        if self.is_user() {
-            Some(self._esp3)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub unsafe fn ss3_unchecked(&self) -> Selector {
-        Selector(self._ss3 as u16)
-    }
-
-    #[inline]
-    pub fn ss3(&self) -> Option<Selector> {
-        if self.is_user() {
-            Some(Selector(self._ss3 as u16))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub unsafe fn set_ss3(&mut self, ss3: Selector) {
-        self._ss3 = ss3.as_u16() as u32;
-    }
-
-    #[inline]
-    pub fn ss_esp3(&self) -> Option<(Selector, u32)> {
-        if self.is_user() {
-            Some((Selector(self._ss3 as u16), self._esp3))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub unsafe fn ss_esp3_unchecked(&self) -> (Selector, u32) {
-        (Selector(self._ss3 as u16), self._esp3)
-    }
-
-    #[inline]
-    pub fn al(&self) -> u8 {
-        self.eax as u8
-    }
-
-    #[inline]
-    pub fn ah(&self) -> u8 {
-        (self.eax >> 8) as u8
-    }
-
-    #[inline]
-    pub fn bl(&self) -> u8 {
-        self.ebx as u8
-    }
-
-    #[inline]
-    pub fn bh(&self) -> u8 {
-        (self.ebx >> 8) as u8
-    }
-
-    #[inline]
-    pub fn cl(&self) -> u8 {
-        self.ecx as u8
-    }
-
-    #[inline]
-    pub fn ch(&self) -> u8 {
-        (self.ecx >> 8) as u8
-    }
-
-    #[inline]
-    pub fn dl(&self) -> u8 {
-        self.edx as u8
-    }
-
-    #[inline]
-    pub fn dh(&self) -> u8 {
-        (self.edx >> 8) as u8
-    }
-
-    #[inline]
-    pub fn set_al(&mut self, al: u8) {
-        self.eax = (self.eax & 0xffffff00) | al as u32;
-    }
-
-    #[inline]
-    pub fn set_ah(&mut self, ah: u8) {
-        self.eax = (self.eax & 0xffff00ff) | (ah as u32) << 8;
-    }
-
-    #[inline]
-    pub fn set_bl(&mut self, bl: u8) {
-        self.ebx = (self.ebx & 0xffffff00) | bl as u32;
-    }
-
-    #[inline]
-    pub fn set_bh(&mut self, bh: u8) {
-        self.ebx = (self.ebx & 0xffff00ff) | (bh as u32) << 8;
-    }
-
-    #[inline]
-    pub fn set_cl(&mut self, cl: u8) {
-        self.ecx = (self.ecx & 0xffffff00) | cl as u32;
-    }
-
-    #[inline]
-    pub fn set_ch(&mut self, ch: u8) {
-        self.ecx = (self.ecx & 0xffff00ff) | (ch as u32) << 8;
-    }
-
-    #[inline]
-    pub fn set_dl(&mut self, dl: u8) {
-        self.edx = (self.edx & 0xffffff00) | dl as u32;
-    }
-
-    #[inline]
-    pub fn set_dh(&mut self, dh: u8) {
-        self.edx = (self.edx & 0xffff00ff) | (dh as u32) << 8;
-    }
 }

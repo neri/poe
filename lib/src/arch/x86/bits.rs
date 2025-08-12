@@ -42,7 +42,7 @@ impl<const N: usize> BitArray<N> {
     }
 
     #[inline]
-    pub fn fetch(&self, index: usize) -> bool {
+    pub fn get(&self, index: usize) -> bool {
         self.array[index / 32] & (1 << (index % 32)) != 0
     }
 

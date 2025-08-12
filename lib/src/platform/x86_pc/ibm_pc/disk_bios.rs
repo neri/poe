@@ -1,7 +1,7 @@
 //! Disk Bios Driver
 
 use super::{bios, *};
-use arch::{cpu::X86StackContext, vm86::VM86};
+use arch::vm86::{VM86, X86StackContext};
 use x86::{gpr::Flags, prot::Selector};
 
 pub(super) struct DiskBios {

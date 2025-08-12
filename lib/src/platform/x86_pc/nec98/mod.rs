@@ -8,7 +8,7 @@
 pub mod bios;
 pub mod pc98_text;
 
-use crate::arch::{cpu::X86StackContext, vm86::VM86};
+use crate::arch::vm86::{VM86, X86StackContext};
 use crate::*;
 use mem::{MemoryManager, MemoryType};
 use x86::isolated_io::LoIoPortDummyB;
@@ -63,12 +63,13 @@ impl SimpleTextInput for BiosTextInput {
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
-            let head = 0x524 as *const u16;
-            let tail = 0x526 as *const u16;
-            if head.read_volatile() == tail.read_volatile() {
+            let mut regs = X86StackContext::default();
+            regs.eax = 0x0100;
+            VM86::call_bios(bios::INT18, &mut regs);
+            if regs.bh() == 0 {
                 return None;
             }
-            let mut regs = X86StackContext::default();
+
             regs.eax = 0;
             VM86::call_bios(bios::INT18, &mut regs);
             InputKey {

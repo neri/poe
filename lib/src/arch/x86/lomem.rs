@@ -79,6 +79,7 @@ impl LoMemoryManager {
             MemoryType::AcpiReclaim => acpi_reclaim = true,
             MemoryType::AcpiNvs => acpi_nvs = true,
             MemoryType::DeviceTree => reserved = true,
+            MemoryType::OtherFw => reserved = true,
         }
         let fixed_range =
             (range.start / Self::PAGE_SIZE)..((range.end + Self::PAGE_SIZE_M1) / Self::PAGE_SIZE);
@@ -119,8 +120,8 @@ impl LoMemoryManager {
 
     unsafe fn free_page(page: &ManagedLowMemory) {
         let shared = unsafe { Self::shared_mut() };
-        let page_index = page.base().0 as usize / Self::PAGE_SIZE;
-        for i in 0..=(page.limit().0 as usize / Self::PAGE_SIZE) {
+        let page_index = page.base().as_u32() as usize / Self::PAGE_SIZE;
+        for i in 0..=(page.limit().as_u32() as usize / Self::PAGE_SIZE) {
             shared.free_bitmap.set(page_index + i);
         }
     }
@@ -130,7 +131,7 @@ impl LoMemoryManager {
         let shared = Self::shared();
         LowMemoryIter {
             instance: shared,
-            current: 0,
+            index: 0,
             prev_attr: None,
             terminated: false,
         }
@@ -162,7 +163,7 @@ impl ManagedLowMemory {
 
     #[inline]
     pub const fn base(&self) -> Linear32 {
-        Linear32((self.base_para as u32) * 16)
+        Linear32::new((self.base_para as u32) * 16)
     }
 
     #[inline]
@@ -172,15 +173,15 @@ impl ManagedLowMemory {
 
     #[inline]
     pub const fn limit(&self) -> Limit16 {
-        Limit16(self.limit.get())
+        Limit16::new(self.limit.get())
     }
 
     #[inline]
     pub fn as_slice<'a>(&self) -> &'a mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
-                self.base().0 as usize as *mut u8,
-                self.limit().0 as usize + 1,
+                self.base().as_u32() as *mut u8,
+                self.limit().as_u32() as usize + 1,
             )
         }
     }
@@ -197,7 +198,7 @@ impl Drop for ManagedLowMemory {
 
 struct LowMemoryIter<'a> {
     instance: &'a LoMemoryManager,
-    current: usize,
+    index: usize,
     prev_attr: Option<(usize, MemoryType)>,
     terminated: bool,
 }
@@ -209,26 +210,26 @@ impl Iterator for LowMemoryIter<'_> {
         if self.terminated {
             return None;
         }
-        let mut current = self.current;
+        let mut index = self.index;
         loop {
-            if current >= 256 {
+            if index >= 256 {
                 self.terminated = true;
 
                 if let Some((prev, prev_attr)) = self.prev_attr {
                     self.prev_attr = None;
                     return Some(MemoryMapEntry::new(
                         (prev * LoMemoryManager::PAGE_SIZE) as u64,
-                        ((current - prev) * LoMemoryManager::PAGE_SIZE) as u64,
+                        ((index - prev) * LoMemoryManager::PAGE_SIZE) as u64,
                         prev_attr,
                     ));
                 } else {
                     return None;
                 }
             }
-            let free = self.instance.free_bitmap.fetch(current);
-            let reserved = self.instance.reserved_bitmap.fetch(current);
-            let acpi_reclaim = self.instance.acpi_reclaim_bitmap.fetch(current);
-            let acpi_nvs = self.instance.acpi_nvs_bitmap.fetch(current);
+            let free = self.instance.free_bitmap.get(index);
+            let reserved = self.instance.reserved_bitmap.get(index);
+            let acpi_reclaim = self.instance.acpi_reclaim_bitmap.get(index);
+            let acpi_nvs = self.instance.acpi_nvs_bitmap.get(index);
             let current_type = if acpi_reclaim {
                 MemoryType::AcpiReclaim
             } else if acpi_nvs {
@@ -242,19 +243,19 @@ impl Iterator for LowMemoryIter<'_> {
             };
             if let Some((prev, prev_type)) = self.prev_attr {
                 if prev_type != current_type {
-                    self.prev_attr = Some((current, current_type));
-                    current += 1;
-                    self.current = current;
+                    self.prev_attr = Some((index, current_type));
+                    index += 1;
+                    self.index = index;
                     return Some(MemoryMapEntry::new(
                         (prev * LoMemoryManager::PAGE_SIZE) as u64,
-                        ((current - prev - 1) * LoMemoryManager::PAGE_SIZE) as u64,
+                        ((index - prev - 1) * LoMemoryManager::PAGE_SIZE) as u64,
                         prev_type,
                     ));
                 }
             } else {
-                self.prev_attr = Some((current, current_type));
+                self.prev_attr = Some((index, current_type));
             }
-            current += 1;
+            index += 1;
         }
     }
 }

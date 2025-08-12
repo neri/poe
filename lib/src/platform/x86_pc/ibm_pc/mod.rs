@@ -6,7 +6,10 @@ mod disk_bios;
 // mod ps2;
 
 use crate::{
-    arch::{cpu::X86StackContext, lomem::LoMemoryManager, vm86::VM86},
+    arch::{
+        lomem::LoMemoryManager,
+        vm86::{VM86, X86StackContext},
+    },
     mem::{MemoryManager, MemoryType},
     *,
 };
@@ -167,12 +170,13 @@ impl SimpleTextInput for BiosTextInput {
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
-            let head = 0x41a as *const u16;
-            let tail = 0x41c as *const u16;
-            if head.read_volatile() == tail.read_volatile() {
+            let mut regs = X86StackContext::default();
+            regs.eax = 0x0100;
+            VM86::call_bios(bios::INT16, &mut regs);
+            if regs.eflags.contains(Eflags::ZF) {
                 return None;
             }
-            let mut regs = X86StackContext::default();
+
             regs.eax = 0;
             VM86::call_bios(bios::INT16, &mut regs);
             InputKey {

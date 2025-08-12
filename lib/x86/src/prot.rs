@@ -183,19 +183,34 @@ impl DescriptorPair {
 /// Type of x86 Segment Limit
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Limit16(pub u16);
+pub struct Limit16(u16);
 
 impl Limit16 {
     #[inline]
     pub const fn as_descriptor_entry(&self) -> u64 {
         self.0 as u64
     }
+
+    #[inline]
+    pub const fn new(val: u16) -> Self {
+        Limit16(val)
+    }
+
+    #[inline]
+    pub const fn as_u16(&self) -> u16 {
+        self.0
+    }
+
+    #[inline]
+    pub const fn as_u32(&self) -> u32 {
+        self.0 as u32
+    }
 }
 
 /// Type of x86 Segment Limit
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Limit32(pub u32);
+pub struct Limit32(u32);
 
 impl Limit32 {
     pub const MAX: Self = Self(u32::MAX);
@@ -211,15 +226,30 @@ impl Limit32 {
             limit as u64
         }
     }
+
+    #[inline]
+    pub const fn new(val: u32) -> Self {
+        Limit32(val)
+    }
+
+    #[inline]
+    pub const fn as_u32(&self) -> u32 {
+        self.0
+    }
 }
 
 /// Type of 32bit Linear Address
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Linear32(pub u32);
+pub struct Linear32(u32);
 
 impl Linear32 {
     pub const NULL: Linear32 = Linear32(0);
+
+    #[inline]
+    pub const fn new(val: u32) -> Self {
+        Linear32(val)
+    }
 
     #[inline]
     pub const fn as_u32(&self) -> u32 {
@@ -235,7 +265,7 @@ impl Linear32 {
 /// Type of 64bit Linear Address
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Linear64(pub u64);
+pub struct Linear64(u64);
 
 impl Linear64 {
     #[inline]
@@ -254,7 +284,7 @@ impl Linear64 {
 /// Type of 32bit Offset Address
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Offset32(pub u32);
+pub struct Offset32(u32);
 
 impl Offset32 {
     #[inline]
@@ -522,7 +552,7 @@ pub struct InterruptVector(pub u8);
 #[repr(u8)]
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ExceptionType {
+pub enum Exception {
     /// #DE
     DivideError = 0,
     /// #DB
@@ -571,35 +601,35 @@ pub enum ExceptionType {
     MAX = 32,
 }
 
-impl ExceptionType {
+impl Exception {
     #[inline]
     pub const fn as_vec(self) -> InterruptVector {
         InterruptVector(self as u8)
     }
 
     #[inline]
-    pub fn try_from_vec(vec: InterruptVector) -> Result<ExceptionType, u8> {
+    pub fn try_from_vec(vec: InterruptVector) -> Result<Exception, u8> {
         match vec.0 {
-            0 => Ok(ExceptionType::DivideError),
-            1 => Ok(ExceptionType::Debug),
-            2 => Ok(ExceptionType::NonMaskable),
-            3 => Ok(ExceptionType::Breakpoint),
-            4 => Ok(ExceptionType::Overflow),
-            6 => Ok(ExceptionType::InvalidOpcode),
-            7 => Ok(ExceptionType::DeviceNotAvailable),
-            8 => Ok(ExceptionType::DoubleFault),
-            10 => Ok(ExceptionType::InvalidTss),
-            11 => Ok(ExceptionType::SegmentNotPresent),
-            12 => Ok(ExceptionType::StackException),
-            13 => Ok(ExceptionType::GeneralProtection),
-            14 => Ok(ExceptionType::PageFault),
-            16 => Ok(ExceptionType::FloatingPointException),
-            17 => Ok(ExceptionType::AlignmentCheck),
-            18 => Ok(ExceptionType::MachineCheck),
-            19 => Ok(ExceptionType::SimdException),
-            20 => Ok(ExceptionType::Virtualization),
-            21 => Ok(ExceptionType::ControlProtection),
-            30 => Ok(ExceptionType::Security),
+            0 => Ok(Exception::DivideError),
+            1 => Ok(Exception::Debug),
+            2 => Ok(Exception::NonMaskable),
+            3 => Ok(Exception::Breakpoint),
+            4 => Ok(Exception::Overflow),
+            6 => Ok(Exception::InvalidOpcode),
+            7 => Ok(Exception::DeviceNotAvailable),
+            8 => Ok(Exception::DoubleFault),
+            10 => Ok(Exception::InvalidTss),
+            11 => Ok(Exception::SegmentNotPresent),
+            12 => Ok(Exception::StackException),
+            13 => Ok(Exception::GeneralProtection),
+            14 => Ok(Exception::PageFault),
+            16 => Ok(Exception::FloatingPointException),
+            17 => Ok(Exception::AlignmentCheck),
+            18 => Ok(Exception::MachineCheck),
+            19 => Ok(Exception::SimdException),
+            20 => Ok(Exception::Virtualization),
+            21 => Ok(Exception::ControlProtection),
+            30 => Ok(Exception::Security),
             raw => Err(raw), // Reserved or Unavailable
         }
     }
@@ -615,14 +645,14 @@ impl ExceptionType {
     #[inline]
     pub const fn has_error_code(&self) -> bool {
         match self {
-            ExceptionType::DoubleFault
-            | ExceptionType::InvalidTss
-            | ExceptionType::SegmentNotPresent
-            | ExceptionType::StackException
-            | ExceptionType::GeneralProtection
-            | ExceptionType::PageFault
-            | ExceptionType::AlignmentCheck
-            | ExceptionType::Security => true,
+            Exception::DoubleFault
+            | Exception::InvalidTss
+            | Exception::SegmentNotPresent
+            | Exception::StackException
+            | Exception::GeneralProtection
+            | Exception::PageFault
+            | Exception::AlignmentCheck
+            | Exception::Security => true,
             _ => false,
         }
     }
@@ -630,42 +660,42 @@ impl ExceptionType {
     #[inline]
     pub const fn mnemonic(&self) -> &'static str {
         match self {
-            ExceptionType::DivideError => "#DE",
-            ExceptionType::Debug => "#DB",
-            ExceptionType::NonMaskable => "NMI",
-            ExceptionType::Breakpoint => "#BP",
-            ExceptionType::Overflow => "#OV",
-            ExceptionType::InvalidOpcode => "#UD",
-            ExceptionType::DeviceNotAvailable => "#NM",
-            ExceptionType::DoubleFault => "#DF",
-            ExceptionType::InvalidTss => "#TS",
-            ExceptionType::SegmentNotPresent => "#NP",
-            ExceptionType::StackException => "#SS",
-            ExceptionType::GeneralProtection => "#GP",
-            ExceptionType::PageFault => "#PF",
-            ExceptionType::FloatingPointException => "#MF",
-            ExceptionType::AlignmentCheck => "#AC",
-            ExceptionType::MachineCheck => "#MC",
-            ExceptionType::SimdException => "#XM",
-            ExceptionType::Virtualization => "#VE",
-            ExceptionType::Security => "#SX",
+            Exception::DivideError => "#DE",
+            Exception::Debug => "#DB",
+            Exception::NonMaskable => "NMI",
+            Exception::Breakpoint => "#BP",
+            Exception::Overflow => "#OV",
+            Exception::InvalidOpcode => "#UD",
+            Exception::DeviceNotAvailable => "#NM",
+            Exception::DoubleFault => "#DF",
+            Exception::InvalidTss => "#TS",
+            Exception::SegmentNotPresent => "#NP",
+            Exception::StackException => "#SS",
+            Exception::GeneralProtection => "#GP",
+            Exception::PageFault => "#PF",
+            Exception::FloatingPointException => "#MF",
+            Exception::AlignmentCheck => "#AC",
+            Exception::MachineCheck => "#MC",
+            Exception::SimdException => "#XM",
+            Exception::Virtualization => "#VE",
+            Exception::Security => "#SX",
             _ => "",
         }
     }
 }
 
-impl From<ExceptionType> for InterruptVector {
+impl From<Exception> for InterruptVector {
     #[inline]
-    fn from(ex: ExceptionType) -> Self {
+    fn from(ex: Exception) -> Self {
         InterruptVector(ex as u8)
     }
 }
 
-impl TryFrom<InterruptVector> for ExceptionType {
+impl TryFrom<InterruptVector> for Exception {
     type Error = u8;
     #[inline]
     fn try_from(vec: InterruptVector) -> Result<Self, Self::Error> {
-        ExceptionType::try_from_vec(vec)
+        Exception::try_from_vec(vec)
     }
 }
 

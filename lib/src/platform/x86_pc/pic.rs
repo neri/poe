@@ -1,7 +1,7 @@
 //! Programmable Interrupt Controller i8259
 
-use super::cpu::{Idt, KERNEL_DSEL, X86StackContext};
-use super::vm86::VM86;
+use super::cpu::{Idt, KERNEL_DSEL};
+use super::vm86::{VM86, X86StackContext};
 use crate::platform::Platform;
 use crate::*;
 use core::{
@@ -52,8 +52,8 @@ macro_rules! handle_master_irq {
                 ".byte 0x0f, 0xa8", // push gs
 
                 "mov eax, {dsel}",
-                "mov ds, ax",
-                "mov es, ax",
+                "mov ds, eax",
+                "mov es, eax",
 
                 "mov ecx, {local_irq}",
                 "mov edx, esp",
@@ -95,8 +95,8 @@ macro_rules! handle_slave_irq {
                 ".byte 0x0f, 0xa8", // push gs
 
                 "mov eax, {dsel}",
-                "mov ds, ax",
-                "mov es, ax",
+                "mov ds, eax",
+                "mov es, eax",
 
                 "mov ecx, {local_irq}",
                 "mov edx, esp",
@@ -160,21 +160,24 @@ pub unsafe extern "fastcall" fn pic_handle_master_irq(irq: Irq, regs: &mut X86St
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "fastcall" fn pic_handle_slave_irq(irq: u8, regs: &mut X86StackContext) {
+pub unsafe extern "fastcall" fn pic_handle_slave_irq(lirq: u8, regs: &mut X86StackContext) {
     unsafe {
         let shared = Pic::shared();
-        let irq = Irq(irq + 8);
+        let girq = Irq(lirq + 8);
 
-        if shared.redirect_bitmap & (1 << irq.0 as usize) != 0 {
-            VM86::redirect_interrupt(InterruptVector(shared.redirect_table[irq.0 as usize]), regs);
+        if shared.redirect_bitmap & (1 << girq.0 as usize) != 0 {
+            VM86::redirect_interrupt(
+                InterruptVector(shared.redirect_table[girq.0 as usize]),
+                regs,
+            );
         } else {
-            NonZeroUsize::new(*shared.idt.get_unchecked(irq.0 as usize)).map(|v| {
+            NonZeroUsize::new(*shared.idt.get_unchecked(girq.0 as usize)).map(|v| {
                 let f: IrqHandler = core::mem::transmute(v.get());
-                f(irq);
+                f(girq);
             });
 
             // EOI
-            shared.slave.write_a0(0x60 + irq.local_number());
+            shared.slave.write_a0(0x60 + girq.local_number());
             if shared.slave.read_isr() == 0 {
                 shared.master.write_a0(shared.chain_eoi);
             }
@@ -256,6 +259,7 @@ impl Pic {
                     Irq(N).as_vec(),
                     irq_m~N as usize,
                     DPL0,
+                    true,
                 );
             });
             seq!(N in 0..8 {
@@ -263,6 +267,7 @@ impl Pic {
                     Irq(N + 8).as_vec(),
                     irq_s~N as usize,
                     DPL0,
+                    true,
                 );
             });
         }
