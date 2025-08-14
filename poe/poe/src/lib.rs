@@ -48,7 +48,7 @@ pub fn main() {
     println!(", PLATFORM {}", info.platform);
     println!("");
 
-    if true {
+    if false {
         println!("Memory Map:");
         for item in MemoryManager::memory_list() {
             let range = item.range();

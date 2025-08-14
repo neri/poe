@@ -86,13 +86,13 @@ pub(super) unsafe fn init_late() {
         let buf = LoMemoryManager::alloc_page();
         let mut regs = X86StackContext::default();
         loop {
-            regs.eax = 0xe820;
-            regs.edx = 0x534d4150;
-            regs.ecx = 24;
+            regs.eax.set_d(0xe820);
+            regs.edx.set_d(0x534d4150);
+            regs.ecx.set_d(24);
             regs.set_vmes(buf.sel());
-            regs.edi = 0;
+            regs.edi.set_d(0);
             VM86::call_bios(bios::INT15, &mut regs);
-            if regs.eflags.contains(Eflags::CF) || regs.eax != 0x534d4150 {
+            if regs.eflags.contains(Eflags::CF) || regs.eax.d() != 0x534d4150 {
                 break;
             }
             smap_supported = true;
@@ -115,7 +115,7 @@ pub(super) unsafe fn init_late() {
                 }
             }
 
-            if regs.ebx == 0 {
+            if regs.ebx.d() == 0 {
                 break;
             }
         }
@@ -171,17 +171,17 @@ impl SimpleTextInput for BiosTextInput {
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
             let mut regs = X86StackContext::default();
-            regs.eax = 0x0100;
+            regs.eax.set_d(0x0100);
             VM86::call_bios(bios::INT16, &mut regs);
             if regs.eflags.contains(Eflags::ZF) {
                 return None;
             }
 
-            regs.eax = 0;
+            regs.eax.set_d(0);
             VM86::call_bios(bios::INT16, &mut regs);
             InputKey {
-                usage: (regs.eax >> 8) as u16,
-                unicode_char: (regs.eax & 0xFF) as u16,
+                usage: regs.eax.h() as u16,
+                unicode_char: regs.eax.b() as u16,
             }
             .into()
         }

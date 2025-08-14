@@ -5,12 +5,12 @@ use crate::*;
 use core::{
     arch::{asm, global_asm, naked_asm},
     cell::UnsafeCell,
-    mem::{MaybeUninit, offset_of, transmute},
+    mem::{MaybeUninit, offset_of, size_of, transmute},
     ptr,
     sync::atomic::{Ordering, compiler_fence},
 };
 use paste::paste;
-use x86::prot::*;
+use x86::{gpr::Pointer32, prot::*};
 
 pub const SYSTEM_TSS: Selector = Selector::new(1, RPL0);
 pub const KERNEL_CSEL: Selector = Selector::new(2, RPL0);
@@ -38,6 +38,31 @@ impl Cpu {
         unsafe {
             Self::_iret_to_user_mode(regs, &mut Gdt::shared().tss);
         }
+    }
+
+    #[unsafe(naked)]
+    unsafe extern "fastcall" fn _iret_to_user_mode(
+        regs: &mut X86StackContext,
+        tss: &mut TaskStateSegment32,
+    ) -> ! {
+        naked_asm!(
+            "mov [edx + 4], esp",
+
+            "mov esi, ecx",
+            "sub esp, {size_regs}",
+            "mov edi, esp",
+            "mov ecx, {size_regs} / 4",
+            "rep movsd",
+
+            ".byte 0x0f, 0xa9", // pop gs
+            ".byte 0x0f, 0xa1", // pop fs
+            ".byte 0x1f", // pop ds
+            ".byte 0x07", // pop es
+            "popad",
+            "add esp, 8",
+            "iretd",
+            size_regs = const size_of::<X86StackContext>(),
+        );
     }
 
     /// Fill memory with a 32-bit value using `rep stosd`.
@@ -88,31 +113,6 @@ impl Cpu {
             );
         }
         (edi, esi)
-    }
-
-    #[unsafe(naked)]
-    unsafe extern "fastcall" fn _iret_to_user_mode(
-        regs: &mut X86StackContext,
-        tss: &mut TaskStateSegment32,
-    ) -> ! {
-        naked_asm!(
-            "mov [edx + 4], esp",
-
-            "mov esi, ecx",
-            "sub esp, {size_regs}",
-            "mov edi, esp",
-            "mov ecx, {size_regs} / 4",
-            "rep movsd",
-
-            ".byte 0x0f, 0xa9", // pop gs
-            ".byte 0x0f, 0xa1", // pop fs
-            ".byte 0x1f", // pop ds
-            ".byte 0x07", // pop es
-            "popad",
-            "add esp, 8",
-            "iretd",
-            size_regs = const core::mem::size_of::<X86StackContext>(),
-        );
     }
 }
 
@@ -178,15 +178,15 @@ global_asm!(
     ".byte 0x0f, 0xa8", // push gs
 
     "mov eax, {dsel}",
-    "mov ds, ax",
-    "mov es, ax",
+    "mov ds, eax",
+    "mov es, eax",
 
     "mov ebp, esp",
     "and esp, 0xfffffff0",
     "mov ecx, ebp",
     "call {handler}",
-
     "mov esp, ebp",
+
     ".byte 0x0f, 0xa9", // pop gs
     ".byte 0x0f, 0xa1", // pop fs
     ".byte 0x1f", // pop ds
@@ -424,7 +424,7 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
     let ss = ctx.ss3().unwrap_or(Selector::NULL);
     let esp = ctx
         .esp3()
-        .unwrap_or_else(|| &ctx.esp3() as *const _ as usize as u32);
+        .unwrap_or_else(|| Pointer32::from_u32(&ctx.esp3() as *const _ as u32));
     let ds = ctx.vmds().unwrap_or(ctx.ds());
     let es = ctx.vmes().unwrap_or(ctx.es());
 
@@ -439,29 +439,37 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
             stderr,
             "CS:IP {:04x}:{:04x} SS:SP {:04x}:{:04x}",
             ctx.cs().0,
-            ctx.eip,
+            ctx.eip.as_u16(),
             ss,
-            esp,
+            esp.as_u16(),
         );
     } else {
         let _ = writeln!(
             stderr,
             "CS:EIP {:02x}:{:08x} SS:ESP {:02x}:{:08x}",
             ctx.cs(),
-            ctx.eip,
+            ctx.eip.as_u32(),
             ss,
-            esp,
+            esp.as_u32(),
         );
     }
     let _ = writeln!(
         stderr,
         "EAX {:08x} EBX {:08x} ECX {:08x} EDX {:08x} ESI {:08x} EDI {:08x}",
-        ctx.eax, ctx.ebx, ctx.ecx, ctx.edx, ctx.esi, ctx.edi,
+        ctx.eax.d(),
+        ctx.ebx.d(),
+        ctx.ecx.d(),
+        ctx.edx.d(),
+        ctx.esi.d(),
+        ctx.edi.d(),
     );
     let _ = writeln!(
         stderr,
         "EBP {:08x} DS {:04x} ES {:04x} EFL {}",
-        ctx.ebp, ds, es, ctx.eflags,
+        ctx.ebp.d(),
+        ds,
+        es,
+        ctx.eflags,
     );
 
     Hal::cpu().stop();

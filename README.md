@@ -1,11 +1,4 @@
-# Pre-OS Execution Environment
-
-```
-()=()  |
-('Y') <  hi, i'm Bare Metal Bear!
-q . p  |
-()_()
-```
+# poe
 
 ## History
 

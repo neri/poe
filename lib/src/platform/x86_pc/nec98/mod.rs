@@ -64,17 +64,17 @@ impl SimpleTextInput for BiosTextInput {
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
             let mut regs = X86StackContext::default();
-            regs.eax = 0x0100;
+            regs.eax.set_d(0x0100);
             VM86::call_bios(bios::INT18, &mut regs);
-            if regs.bh() == 0 {
+            if regs.ebx.h() == 0 {
                 return None;
             }
 
-            regs.eax = 0;
+            regs.eax.set_d(0);
             VM86::call_bios(bios::INT18, &mut regs);
             InputKey {
-                usage: (regs.eax >> 8) as u16,
-                unicode_char: (regs.eax & 0xFF) as u16,
+                usage: regs.eax.h() as u16,
+                unicode_char: regs.eax.b() as u16,
             }
             .into()
         }

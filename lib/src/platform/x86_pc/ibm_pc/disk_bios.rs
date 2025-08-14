@@ -41,23 +41,23 @@ impl DiskBios {
 fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
     let drive_type: u8;
 
-    regs.eax = 0x15ff;
-    regs.ecx = 0xffff;
-    regs.edx = drive as u32;
+    regs.eax.set_d(0x15ff);
+    regs.ecx.set_d(0xffff);
+    regs.edx.set_d(drive as u32);
     unsafe {
         VM86::call_bios(bios::INT13, regs);
     }
     if regs.eflags.contains(Flags::CF) {
-        println!("drive {:02x}: error {:02x}", drive, regs.ah());
+        println!("drive {:02x}: error {:02x}", drive, regs.eax.h());
         return;
     } else {
-        drive_type = regs.ah();
+        drive_type = regs.eax.h();
     }
 
-    regs.eax = 0x0800;
-    regs.edx = drive as u32;
+    regs.eax.set_d(0x0800);
+    regs.edx.set_d(drive as u32);
     unsafe { regs.set_vmes(Selector::NULL) };
-    regs.edi = 0;
+    regs.edi.set_d(0);
     unsafe {
         VM86::call_bios(bios::INT13, regs);
     }
@@ -66,15 +66,15 @@ fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
         return;
     }
 
-    let chs = [regs.cl(), regs.ch(), regs.dh()];
+    let chs = [regs.ecx.b(), regs.ecx.h(), regs.edx.h()];
 
     println!(
         "drive {:02x}: {:02x} {:02x} {:02x?} {:02x}",
         drive,
         drive_type,
-        regs.ah(),
+        regs.eax.h(),
         chs,
-        regs.dl(),
+        regs.edx.b(),
     );
 }
 

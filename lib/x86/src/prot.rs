@@ -409,6 +409,25 @@ impl LowerHex for Selector {
     }
 }
 
+/// 32-bit aligned selector
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Selector32(pub u32);
+
+impl Selector32 {
+    #[inline]
+    pub const fn sel(&self) -> Selector {
+        Selector(self.0 as u16)
+    }
+}
+
+impl From<Selector> for Selector32 {
+    #[inline]
+    fn from(value: Selector) -> Self {
+        Self(value.as_u16() as u32)
+    }
+}
+
 /// DPL, CPL, RPL and IOPL
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PrivilegeLevel {

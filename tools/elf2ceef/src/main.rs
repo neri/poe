@@ -167,7 +167,7 @@ fn main() {
                 };
 
                 println!(
-                    "Phdr #{} {} {:08x} {:08x} {:x}({:?}) {}",
+                    "Phdr #{} {} {:08x} {:08x} {:x}({:?}) {:08x}",
                     i,
                     phdr.p_flags as u8,
                     phdr.p_vaddr,
@@ -213,7 +213,7 @@ fn main() {
                 Stk1::encode(&data, Configuration::default()).unwrap()
             };
             println!(
-                "compressed: {} <= {} ({:.2}%)",
+                "* compressed: {} <= {} ({:.2}%)",
                 compressed.len(),
                 data.len(),
                 compressed.len() as f64 / data.len() as f64 * 100.0

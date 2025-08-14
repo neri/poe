@@ -1,4 +1,7 @@
-use crate::prot::IOPL;
+use crate::{
+    prot::{IOPL, Offset32},
+    real::Offset16,
+};
 use core::{
     arch::asm,
     fmt::{self, LowerHex},
@@ -9,6 +12,114 @@ use core::{
 pub type Eflags = Flags;
 #[cfg(target_arch = "x86_64")]
 pub type Rflags = Flags;
+
+/// 32-bit general purpose register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Gpr32(pub u32);
+
+impl Gpr32 {
+    /// Get the 32-bit value of the register.
+    #[inline]
+    pub const fn d(&self) -> u32 {
+        self.0
+    }
+
+    /// Set the 32-bit value of the register.
+    #[inline]
+    pub fn set_d(&mut self, d: u32) {
+        self.0 = d;
+    }
+
+    /// Get the 16-bit value of the register.
+    #[inline]
+    pub const fn w(&self) -> u16 {
+        self.0 as u16
+    }
+
+    /// Set the 16-bit value of the register.
+    #[inline]
+    pub fn set_w(&mut self, w: u16) {
+        self.0 = (self.0 & 0xffff_0000) | (w as u32);
+    }
+
+    /// Get the 8-bit value of the register.
+    #[inline]
+    pub const fn b(&self) -> u8 {
+        self.0 as u8
+    }
+
+    /// Set the 8-bit value of the register.
+    #[inline]
+    pub fn set_b(&mut self, b: u8) {
+        self.0 = (self.0 & 0xffffff00) | (b as u32);
+    }
+
+    /// Get the high 8 bits of the register.
+    #[inline]
+    pub const fn h(&self) -> u8 {
+        (self.0 >> 8) as u8
+    }
+
+    /// Set the high 8 bits of the register.
+    #[inline]
+    pub fn set_h(&mut self, h: u8) {
+        self.0 = (self.0 & 0xffff00ff) | ((h as u32) << 8);
+    }
+}
+
+/// 32-bit pointer register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Pointer32(pub u32);
+
+impl Pointer32 {
+    #[inline]
+    pub const fn from_u32(v: u32) -> Self {
+        Self(v)
+    }
+
+    #[inline]
+    pub const fn from_u16(w: u16) -> Self {
+        Self(w as u32)
+    }
+
+    #[inline]
+    pub const fn as_u32(&self) -> u32 {
+        self.0
+    }
+
+    #[inline]
+    pub const fn as_u16(&self) -> u16 {
+        self.0 as u16
+    }
+}
+
+impl From<u16> for Pointer32 {
+    #[inline]
+    fn from(value: u16) -> Self {
+        Self::from_u16(value)
+    }
+}
+
+impl From<u32> for Pointer32 {
+    #[inline]
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Offset16> for Pointer32 {
+    #[inline]
+    fn from(value: Offset16) -> Self {
+        Self::from_u16(value.as_u16())
+    }
+}
+
+impl From<Offset32> for Pointer32 {
+    #[inline]
+    fn from(value: Offset32) -> Self {
+        Self::from_u32(value.as_u32())
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Flags(usize);
