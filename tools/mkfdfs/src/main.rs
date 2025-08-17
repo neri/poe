@@ -11,9 +11,7 @@ use std::{
     mem::size_of,
     num::NonZeroU32,
     path::Path,
-    process,
-    ptr::addr_of,
-    usize,
+    process, usize,
 };
 
 fn usage() -> ! {
@@ -97,11 +95,10 @@ fn main() {
     let mut vd = VirtualDisk::new(&boot_sector, fs.sector_size, fs.total_sectors);
     fs.append_root_dir(root_dir.as_slice());
 
-    let n_heads = unsafe { addr_of!(boot_sector.ebpb.bpb.n_heads).read_unaligned() as usize };
-    let sectors_per_track =
-        unsafe { addr_of!(boot_sector.ebpb.bpb.sectors_per_track).read_unaligned() as usize };
+    let n_heads = boot_sector.ebpb.bpb.n_heads as usize;
+    let sectors_per_track = boot_sector.ebpb.bpb.sectors_per_track as usize;
     println!(
-        "CREATING image: {} KB [CHR {} {} {}] {} b/sec {} b/rec total {}",
+        "CREATING image: {} KB [CHR {} {} {}] {}b/sector {}b/record total {}",
         (fs.total_sectors * fs.sector_size) / 1024,
         fs.total_sectors / (n_heads * sectors_per_track),
         n_heads,
@@ -194,11 +191,11 @@ impl Fatfs {
             unimplemented!();
         }
 
-        let mut fat = Vec::with_capacity(2 + total_records);
+        let mut fat = Vec::new();
         let end_of_chain = FatEntry::MAX;
+        fat.push((end_of_chain & !0xFF) | bpb.media_descriptor as u16);
+        fat.push(end_of_chain);
         fat.resize(2 + total_records, 0);
-        fat[0] = (end_of_chain & !0xFF) | bpb.media_descriptor as u16;
-        fat[1] = end_of_chain;
 
         Self {
             sector_size,
@@ -222,18 +219,16 @@ impl Fatfs {
         match self.fattype {
             FatType::Fat12 => {
                 let fat_size = (self.fat.len() * 3 + 1) / 2;
-                let mut fat: Vec<u8> = Vec::with_capacity(fat_size);
-                fat.resize(fat_size, 0);
-                for (i, entry) in self.fat.iter().enumerate() {
-                    let index = i * 3 / 2;
-                    if (i & 1) == 0 {
-                        fat[index] = *entry as u8;
-                        fat[index + 1] = 0x0F & (*entry >> 8) as u8;
-                    } else {
-                        fat[index] |= (*entry << 4) as u8;
-                        fat[index + 1] = (*entry >> 4) as u8;
-                    }
+                let mut fat: Vec<u8> = Vec::new();
+                for pair in self.fat.chunks(2) {
+                    let lhs = pair[0] as u32;
+                    let rhs = if pair.len() > 1 { pair[1] as u32 } else { 0 };
+                    let mixed = (lhs & 0xFFF) | ((rhs & 0xFFF) << 12);
+                    fat.push(mixed as u8);
+                    fat.push((mixed >> 8) as u8);
+                    fat.push((mixed >> 16) as u8);
                 }
+                fat.resize(fat_size, 0);
                 vd.write(self.offset_fat, fat.as_slice())?;
                 vd.write(self.offset_fat + sectors_per_fat, fat.as_slice())?;
             }
@@ -297,8 +292,8 @@ pub struct VirtualDisk {
 impl VirtualDisk {
     pub fn new(boot_sector: &BootSector, sector_size: usize, total_sector: usize) -> Self {
         let capacity = sector_size * total_sector;
-        let mut vec = Vec::with_capacity(capacity);
-        vec.extend(boot_sector.as_bytes().iter());
+        let mut vec = Vec::new();
+        vec.extend_from_slice(boot_sector.as_bytes());
         vec.resize(capacity, 0);
         Self {
             vec,

@@ -1,4 +1,4 @@
-.PHONY: love all default clean install iso full run test apps kernel
+.PHONY: love all default clean install iso full run test apps kernel refresh
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -89,13 +89,13 @@ $(POE_BIN): $(BIN)/ssbl.bin $(POE_CEF)
 	cat $^ > $@
 
 $(TARGET_FD): $(FD_DEPS) 
-	$(MKFDFS) -bs $(BIN)/fdipl.bin $(TARGET_FD) $(IMG_SOURCES)
+	$(MKFDFS) -bs $(BIN)/fdipl.bin -l "poe 2hd" $(TARGET_FD) $(IMG_SOURCES)
 
 $(TARGET_FD2): $(FD_DEPS) 
-	$(MKFDFS) -bs $(BIN)/fdipl.bin -f 1232 $(TARGET_FD2) $(IMG_SOURCES)
+	$(MKFDFS) -bs $(BIN)/fdipl.bin -f 1232 -l "poe 1_2" $(TARGET_FD2) $(IMG_SOURCES)
 
 $(TARGET_FD3): $(FD_DEPS) 
-	$(MKFDFS) -bs $(BIN)/fdipl.bin -f 320 $(TARGET_FD3) $(IMG_SOURCES)
+	$(MKFDFS) -bs $(BIN)/fdipl.bin -f 320 -l "poe 320" $(TARGET_FD3) $(IMG_SOURCES)
 
 $(TARGET_ISO): $(ISO_DEPS)
 	cp -r $(BIN)/cdipl.bin $(IMG_SOURCES) $(ISO_SRC)

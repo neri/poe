@@ -1,3 +1,13 @@
 [tasks.run]
 description = "Run the application"
 run = "cd poe/riscv-virt; make install run"
+
+[tasks.clean]
+confirm = "Are you sure?"
+description = "Clean the build artifacts"
+run = "make clean"
+
+[tasks.refresh]
+confirm = "Are you sure?"
+description = "Refresh the dependencies"
+run = "make refresh"

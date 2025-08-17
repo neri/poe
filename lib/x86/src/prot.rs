@@ -137,7 +137,7 @@ impl DescriptorEntry {
 
     #[inline]
     pub const fn is_null(&self) -> bool {
-        self.0 == 0
+        (self.0 & 0x1f00_0000_0000) == 0
     }
 
     #[inline]
@@ -895,38 +895,6 @@ impl TryFrom<DescriptorEntry> for DefaultOperandSize {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum InterruptStackTable {
-    IST1 = 1,
-    IST2,
-    IST3,
-    IST4,
-    IST5,
-    IST6,
-    IST7,
-}
-
-#[cfg(target_arch = "x86_64")]
-macro_rules! ist_impl {
-    ($( $ist:ident , )*) => {
-        $(
-            pub const $ist: InterruptStackTable = InterruptStackTable::$ist;
-        )*
-    };
-}
-
-#[cfg(target_arch = "x86_64")]
-ist_impl!(IST1, IST2, IST3, IST4, IST5, IST6, IST7,);
-
-#[cfg(target_arch = "x86_64")]
-impl InterruptStackTable {
-    #[inline]
-    pub const fn as_descriptor_entry(&self) -> u64 {
-        (*self as u64) << 32
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SelectorErrorCode(pub u16);
 
@@ -1000,3 +968,37 @@ impl PageErrorCode {
         (self.0 & 0x20) != 0
     }
 }
+
+#[cfg(target_arch = "x86_64")]
+mod ist {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum InterruptStackTable {
+        IST1 = 1,
+        IST2,
+        IST3,
+        IST4,
+        IST5,
+        IST6,
+        IST7,
+    }
+
+    macro_rules! ist_impl {
+        ($( $ist:ident , )*) => {
+            $(
+                pub const $ist: InterruptStackTable = InterruptStackTable::$ist;
+            )*
+        };
+    }
+
+    ist_impl!(IST1, IST2, IST3, IST4, IST5, IST6, IST7,);
+
+    impl InterruptStackTable {
+        #[inline]
+        pub const fn as_descriptor_entry(&self) -> u64 {
+            (*self as u64) << 32
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+pub use ist::*;

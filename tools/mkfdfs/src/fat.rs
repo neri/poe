@@ -130,7 +130,7 @@ impl Default for BootSector {
     }
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Clone, Copy)]
 pub struct DosDirEnt {
     pub name: [u8; 11],

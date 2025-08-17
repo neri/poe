@@ -7,7 +7,7 @@ use libminios::{mem::MemoryManager, prelude::*};
 
 pub use libminios::prelude;
 
-static SYSTEM_NAME: &str = "Pre-OS Execution Environment";
+static SYSTEM_NAME: &str = "POE";
 
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
@@ -26,7 +26,7 @@ pub fn main() {
     let mut logo = logo.iter();
 
     println!("{}", logo.next().unwrap());
-    println!("{} hi, i'm Bare Metal Bear!", logo.next().unwrap());
+    println!("{} poe poe poe~", logo.next().unwrap());
     println!("{}", logo.next().unwrap());
     println!("{}", logo.next().unwrap());
     println!("");

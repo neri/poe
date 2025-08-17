@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run test apps kernel
+.PHONY: love all default clean install full run test apps kernel refresh
 
 BIN			= ./bin
 TEMP		= ../../temp

@@ -357,6 +357,7 @@ impl VM86 {
     }
 }
 
+/// A stack structure for handling exceptions and entering virtual 8086 mode.
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Debug, Clone, Default)]
