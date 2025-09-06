@@ -55,6 +55,14 @@ _HEAD:
     jmp short _crt0
     dw _END - _HEAD
 
+_boot_info:
+_platform           db 0
+_boot_drive         db 0
+_memsz_lo           dw 0
+_reserved_memsz     dd 0x00100000
+_start_mid          dd 0x00100000
+_memsz_mid          dd 0
+
 forever:
     sti
     hlt
@@ -102,9 +110,37 @@ _puts:
 _puts_fmt:
     push es
     pusha
-    sub si, 3
-    mov bh, 0x02
-    call 0xfffb:0x001e
+    mov ax, 0xc000
+    mov es, ax
+
+    mov dx, 0xff81
+    mov al, 0x07
+    out dx, al
+
+    mov di, 22 * 80 * 16
+.loop:
+    lodsb
+    or al, al
+    jz .end
+    movzx bx, al
+    shl bx, 3
+    add bx, 0xa000
+
+    mov cx, 8
+    push di
+.loop_font:
+    mov al, [es:bx]
+    mov [es:di], al
+    mov [es:di+80], al
+    add di, 160
+    inc bx
+    loop .loop_font
+    pop di
+    inc di
+
+    jmp .loop
+.end:
+
     popa
     pop es
     ret
@@ -218,6 +254,26 @@ _init_fmt:
     and eax, 0x7f
     shl eax, 20
     mov [_memsz_mid], eax
+
+    ; Select ANK font rom
+    mov dx, 0xff99
+    mov al, 0x01
+    out dx, al
+
+    ; Set color mask
+    mov dx, 0xff81
+    mov al, 0x0f
+    out dx, al
+
+    ; Clear only the bottom 5 rows on the screen
+    push es
+    mov ax, 0xc000
+    mov es, ax
+    mov di, 20 * 80 * 16
+    mov cx, 5 * 80 * 16 / 2
+    xor ax, ax
+    rep stosw
+    pop es
 
     jmp _end_mem_check
 
@@ -497,19 +553,15 @@ _tek1_decode:
     ret
 
 
-    db 22, 0, 9
 cpu_err_mes:
     db "NEEDS 386", 0
 
-    db 22, 0, 14
 a20_err_mes:
     db "A20 LINE ERROR", 0
 
-    db 22, 0, 17
 no_mem_mes:
     db "NOT ENOUGH MEMORY", 0
 
-    db 22, 0, 13
 bad_magc_mes:
     db "BROKEN SYSTEM", 0
 
@@ -520,16 +572,6 @@ _GDT:
     dw 0xffff, 0x0000, 0x9a00, 0x00cf   ;; 08 32bit KERNEL TEXT FLAT
     dw 0xffff, 0x0000, 0x9200, 0x00cf   ;; 10 32bit KERNEL DATA FLAT
 _end_GDT:
-
-    ; alignb 16
-_boot_info:
-_platform           db 0
-_boot_drive         db 0
-_memsz_lo           dw 0
-_reserved_memsz     dd 0x00100000
-_start_mid          dd 0x00100000
-_memsz_mid          dd 0
-
 
     alignb 16
 _END:

@@ -119,13 +119,20 @@ impl Pc98Text {
 
         while row >= self.mode.rows {
             unsafe {
+                let count = self.mode.columns as usize * (self.mode.rows as usize - 1) / 2;
                 let dst = self.get_vram() as *mut u32;
-                let (dst, _) = Cpu::rep_movsd(
-                    dst,
-                    dst.byte_offset(2 * self.mode.columns as isize),
-                    (self.mode.columns as usize * (self.mode.rows as usize - 1)) / 2,
-                );
+                let (dst, _) =
+                    Cpu::rep_movsd(dst, dst.byte_offset(2 * self.mode.columns as isize), count);
                 Cpu::rep_stosd(dst, 0x20_0020, self.mode.columns as usize / 2);
+
+                let dst = (self.get_vram() as *mut u32).byte_offset(0x2000);
+                let (dst, _) =
+                    Cpu::rep_movsd(dst, dst.byte_offset(2 * self.mode.columns as isize), count);
+                Cpu::rep_stosd(
+                    dst,
+                    (self.native_attribute as u32) * 0x01_0001,
+                    self.mode.columns as usize / 2,
+                );
             }
             row -= 1;
         }
@@ -211,18 +218,22 @@ impl SimpleTextOutput for Pc98Text {
     }
 
     fn set_attribute(&mut self, attribute: u8) {
-        if attribute == 0 {
-            self.mode.attribute = System::DEFAULT_STDOUT_ATTRIBUTE;
+        self.mode.attribute = if attribute == 0 {
+            System::DEFAULT_STDOUT_ATTRIBUTE
         } else {
-            self.mode.attribute = attribute;
-        }
+            attribute
+        };
 
-        if self.mode.attribute < 0x10 {
-            self.native_attribute = (COLOR_TABLE[self.mode.attribute as usize & 0x07]) << 5 | 0x01;
-        } else {
-            self.native_attribute =
-                (COLOR_TABLE[(self.mode.attribute as usize >> 4) & 0x7]) << 5 | 0x05;
-        }
+        self.native_attribute = match self.mode.attribute {
+            0x1f => 0xa5,
+            _ => {
+                if self.mode.attribute < 0x10 {
+                    ((COLOR_TABLE[self.mode.attribute as usize & 0x07]) << 5) | 0x01
+                } else {
+                    ((COLOR_TABLE[(self.mode.attribute as usize >> 4) & 0x7]) << 5) | 0x05
+                }
+            }
+        };
     }
 
     fn clear_screen(&mut self) {

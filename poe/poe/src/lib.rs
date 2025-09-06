@@ -16,6 +16,10 @@ pub fn main() {
     let memsize1 = MemoryManager::total_memory_size();
     let memsize2 = MemoryManager::total_extended_memory_size();
 
+    let stdout = System::stdout();
+    stdout.set_attribute(0);
+    stdout.clear_screen();
+
     #[rustfmt::skip]
     let logo = [
         "()=() |", 
@@ -48,8 +52,9 @@ pub fn main() {
     println!(", PLATFORM {}", info.platform);
     println!("");
 
-    if false {
+    if true {
         println!("Memory Map:");
+        stdout.set_attribute(0x78);
         for item in MemoryManager::memory_list() {
             let range = item.range();
             println!(
@@ -60,6 +65,7 @@ pub fn main() {
             )
         }
         println!("");
+        stdout.set_attribute(0);
     }
 
     println!("POE super-shell v0.0");

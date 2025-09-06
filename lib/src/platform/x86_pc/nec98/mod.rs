@@ -15,11 +15,10 @@ use x86::isolated_io::LoIoPortDummyB;
 
 pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
 
-pub(super) unsafe fn init_early() {
+pub(super) unsafe fn init(info: &BootInfo) {
     unsafe {
         pc98_text::Pc98Text::init();
 
-        // let info = Environment::boot_info();
         let _1mb = 0x0010_0000;
         let _15mb = 0x00f0_0000;
         let _16mb = 0x0100_0000;
@@ -37,11 +36,9 @@ pub(super) unsafe fn init_early() {
             )
             .unwrap();
         }
-    }
-}
 
-pub(super) unsafe fn init_late() {
-    unsafe {
+        super::init_vm(info);
+
         let kbd = &mut *(&raw mut STDIN);
         kbd.reset();
         System::set_stdin(kbd);

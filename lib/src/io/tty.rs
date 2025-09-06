@@ -1,5 +1,7 @@
 //! Simple Console I/O
 
+pub mod vt100;
+
 use core::num::NonZero;
 
 pub trait SimpleTextInput {

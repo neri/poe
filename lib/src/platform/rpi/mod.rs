@@ -59,7 +59,7 @@ impl PlatformTrait for Platform {
             System::set_stdin(uart0::Uart0::shared());
             System::set_stdout(uart0::Uart0::shared());
             System::set_stderr(uart0::Uart0::shared());
-            println!("\nStarting Raspberry Pi...");
+            println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
 
             let boot_info = System::boot_info_mut();
             boot_info.platform = Platform::RaspberryPi;
@@ -126,6 +126,7 @@ impl PlatformTrait for Platform {
 
     unsafe fn init(_arg: usize) {
         // TODO:
+        println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
     }
 
     unsafe fn exit() {

@@ -29,31 +29,13 @@ impl PlatformTrait for Platform {
 
             match info.platform {
                 Platform::Nec98 => {
-                    nec98::init_early();
+                    nec98::init(&info);
                 }
                 Platform::PcBios => {
-                    ibm_pc::init_early();
+                    ibm_pc::init(&info);
                 }
                 Platform::FmTowns => {
-                    fm_towns::init_early();
-                }
-                _ => unreachable!(),
-            }
-
-            vm86::VM86::init();
-            pic::Pic::init(info.platform);
-            pit::Pit::init(info.platform);
-            Hal::cpu().enable_interrupt();
-
-            match info.platform {
-                Platform::Nec98 => {
-                    nec98::init_late();
-                }
-                Platform::PcBios => {
-                    ibm_pc::init_late();
-                }
-                Platform::FmTowns => {
-                    fm_towns::init_late();
+                    fm_towns::init(&info);
                 }
                 _ => unreachable!(),
             }
@@ -110,7 +92,18 @@ impl PlatformTrait for Platform {
                 _ => unreachable!(),
             }
 
-            Hal::cpu().stop();
+            Hal::cpu().halt();
         }
+    }
+}
+
+/// Initialize VM86 mode, PIC, PIT, and enable CPU interrupt.
+#[inline(always)]
+unsafe fn init_vm(info: &BootInfo) {
+    unsafe {
+        vm86::VM86::init();
+        pic::Pic::init(info.platform);
+        pit::Pit::init(info.platform);
+        Hal::cpu().enable_interrupt();
     }
 }

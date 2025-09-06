@@ -14,7 +14,6 @@ static mut VMM: UnsafeCell<VM86> = UnsafeCell::new(VM86::new());
 /// Simple Virtual 8086 Mode Manager
 pub struct VM86 {
     vmbp: Linear32,
-    vmbp_csip: Far16Ptr,
     vm_stack: Option<ManagedLowMemory>,
     jmp_buf: JmpBuf,
     context: *mut X86StackContext,
@@ -28,7 +27,6 @@ impl VM86 {
     const fn new() -> Self {
         Self {
             vmbp: Linear32::NULL,
-            vmbp_csip: Far16Ptr::NULL,
             vm_stack: None,
             jmp_buf: JmpBuf::new(),
             context: null_mut(),
@@ -56,7 +54,6 @@ impl VM86 {
                 panic!("VMBP not found");
             }
             shared.vmbp = vmbp;
-            shared.vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
 
             Idt::handle_exception(Exception::InvalidOpcode, Self::_handle_ud);
             Idt::handle_exception(Exception::GeneralProtection, Self::_handle_gpf);
@@ -93,13 +90,14 @@ impl VM86 {
             ctx.adjust_vm_eflags();
             ctx.set_ss3(vm_stack.sel());
             ctx.set_esp3(Pointer32::from_u16(vm_stack.limit().as_u16() & 0xfffe));
-            ctx.set_cs(shared.vmbp_csip.sel());
-            ctx.eip = Pointer32::from(shared.vmbp_csip.off());
+            let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
+            ctx.set_cs(vmbp_csip.sel());
+            ctx.eip = Pointer32::from(vmbp_csip.off());
             Self::redirect_vm_interrupt(int_vec, ctx, true);
 
             shared.context = ctx;
             if shared.jmp_buf.set_jmp().is_none() {
-                Cpu::iret_to_user_mode(ctx);
+                Cpu::enter_to_user_mode(ctx);
             }
 
             Gdt::set_tss_esp0(old_tss_esp0);
@@ -134,14 +132,15 @@ impl VM86 {
             ctx.adjust_vm_eflags();
             ctx.set_ss3(vm_stack.sel());
             ctx.set_esp3(Pointer32::from_u16(vm_stack.limit().as_u16() & 0xfffe));
-            ctx.vm_push16(shared.vmbp_csip.sel().as_u16());
-            ctx.vm_push16(shared.vmbp_csip.off().as_u16());
+            let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
+            ctx.vm_push16(vmbp_csip.sel().as_u16());
+            ctx.vm_push16(vmbp_csip.off().as_u16());
             ctx.set_cs(target.sel());
-            ctx.eip = Pointer32::from(shared.vmbp_csip.off());
+            ctx.eip = Pointer32::from(target.off());
 
             shared.context = ctx;
             if shared.jmp_buf.set_jmp().is_none() {
-                Cpu::iret_to_user_mode(ctx);
+                Cpu::enter_to_user_mode(ctx);
             }
 
             Gdt::set_tss_esp0(old_tss_esp0);
@@ -160,7 +159,7 @@ impl VM86 {
     }
 
     /// Handles #UD exception in virtual 8086 mode.
-    fn _handle_ud(ctx: &mut X86StackContext) -> bool {
+    unsafe fn _handle_ud(ctx: &mut X86StackContext) -> bool {
         unsafe {
             if ctx.is_vm() {
                 let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip.as_u16())).to_linear();
@@ -174,7 +173,7 @@ impl VM86 {
     }
 
     /// Handles #GP exception in virtual 8086 mode.
-    fn _handle_gpf(ctx: &mut X86StackContext) -> bool {
+    unsafe fn _handle_gpf(ctx: &mut X86StackContext) -> bool {
         unsafe {
             if ctx.is_vm() {
                 let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip.as_u16())).to_linear();

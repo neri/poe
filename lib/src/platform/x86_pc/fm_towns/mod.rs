@@ -11,27 +11,12 @@ use mem::{MemoryManager, MemoryType};
 mod fmt_kbd;
 mod fmt_text;
 
-pub(super) unsafe fn init_early() {
+pub(super) unsafe fn init(info: &BootInfo) {
     unsafe {
-        if true {
-            // In the future, all screens will be cleared, but currently we dare to keep some of the screens.
-            let p = 0xc_ff81 as *mut u8;
-            p.write_volatile(0x08);
-            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 / 4 * 400);
-
-            // "Reading system..." message
-            let p = 0xc_ff81 as *mut u8;
-            p.write_volatile(0x0f);
-            Cpu::rep_stosd((0xc_0000 + 80 * 16 * 20) as *mut u32, 0, 80 / 4 * 5 * 16);
-
-            // Tsugaru compatible ROM annotations
-            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 / 4 * 7 * 16);
-        } else {
-            // Clear GVRAM
-            let p = 0xc_ff81 as *mut u8;
-            p.write_volatile(0x0f);
-            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 * 400);
-        }
+        // Clear GVRAM
+        let p = 0xc_ff81 as *mut u8;
+        p.write_volatile(0x0f);
+        Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 * 400);
 
         fmt_text::FmtText::init();
 
@@ -39,11 +24,9 @@ pub(super) unsafe fn init_early() {
         // 8000_0000-bfff_ffff video subsystem
         // c000_0000-ffff_ffff rom space
         MemoryManager::register_memmap(0x4000_0000..0x1_0000_0000, MemoryType::Reserved).unwrap();
-    }
-}
 
-pub(super) unsafe fn init_late() {
-    unsafe {
+        super::init_vm(info);
+
         fmt_kbd::FmtKbd::init();
 
         // Irq(11).register(irq11).unwrap();

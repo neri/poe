@@ -56,7 +56,7 @@ pub trait HalCpu {
     unsafe fn interrupt_guard(&self) -> InterruptGuard;
 
     #[inline]
-    fn stop(&self) -> ! {
+    fn halt(&self) -> ! {
         compiler_fence(Ordering::SeqCst);
         loop {
             unsafe {

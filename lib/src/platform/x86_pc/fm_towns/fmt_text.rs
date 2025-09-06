@@ -311,11 +311,11 @@ impl SimpleTextOutput for FmtText {
     }
 
     fn set_attribute(&mut self, attribute: u8) {
-        if attribute == 0 {
-            self.mode.attribute = System::DEFAULT_STDOUT_ATTRIBUTE;
+        self.mode.attribute = if attribute == 0 {
+            System::DEFAULT_STDOUT_ATTRIBUTE
         } else {
-            self.mode.attribute = attribute;
-        }
+            attribute
+        };
         self.fg_color_u32 = Self::octuple(self.mode.attribute & 0x0F);
         self.bg_color_u32 = Self::octuple((self.mode.attribute & 0xF0) >> 4);
     }

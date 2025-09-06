@@ -264,7 +264,7 @@ fn panic(info: &PanicInfo) -> ! {
     stderr.set_attribute(0x1F);
     let _ = writeln!(stderr, "{}", info);
     loop {
-        Hal::cpu().stop();
+        Hal::cpu().halt();
     }
 }
 

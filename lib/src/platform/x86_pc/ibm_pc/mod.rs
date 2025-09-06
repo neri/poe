@@ -18,7 +18,7 @@ use core::{ffi::c_void, iter::Iterator, ops::Range};
 use smbios::{SMBIOS_GUID, SmBios};
 use x86::gpr::Eflags;
 
-pub(super) unsafe fn init_early() {
+pub(super) unsafe fn init(info: &BootInfo) {
     unsafe {
         cga_text::CgaText::init();
 
@@ -76,12 +76,9 @@ pub(super) unsafe fn init_early() {
         if let Some(smbios) = smbios {
             System::add_config_table_entry(SMBIOS_GUID, smbios);
         }
-    }
-}
 
-pub(super) unsafe fn init_late() {
-    // let info = Environment::boot_info();
-    unsafe {
+        super::init_vm(info);
+
         let mut smap_supported = false;
         let buf = LoMemoryManager::alloc_page();
         let mut regs = X86StackContext::default();

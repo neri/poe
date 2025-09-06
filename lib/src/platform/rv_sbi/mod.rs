@@ -18,11 +18,11 @@ impl PlatformTrait for Platform {
         let hart_id = arg;
         unsafe {
             sbi_console::SbiConsole::init();
-            System::set_stdin(sbi_console::SbiConsole::shared());
-            System::set_stdout(sbi_console::SbiConsole::shared());
-            System::set_stderr(sbi_console::SbiConsole::shared());
-            println!("\nStarting riscv...");
+            System::set_stdin(sbi_console::SbiConsole::shared_in());
+            System::set_stdout(sbi_console::SbiConsole::shared_out());
+            System::set_stderr(sbi_console::SbiConsole::shared_out());
 
+            println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
             let spec_ver = sbi::base::get_spec_version();
             let impl_id = sbi::base::get_impl_id().unwrap();
             let impl_ver = sbi::base::get_impl_version().unwrap();
@@ -33,7 +33,6 @@ impl PlatformTrait for Platform {
                 impl_id,
                 impl_ver
             );
-
             println!("Hart ID: {}", hart_id);
 
             let boot_info = System::boot_info_mut();
@@ -50,14 +49,17 @@ impl PlatformTrait for Platform {
             }
 
             CSR::STVEC.write(_arch_stvec as usize);
-            // CSR::SIE.set(1 << 5);
+            CSR::SIE.set(1 << 5);
             sbi::legacy::set_timer(1);
-            // Hal::cpu().enable_interrupt();
         }
     }
 
     unsafe fn init(_arg: usize) {
         // TODO:
+        println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
+        // unsafe {
+        //     Hal::cpu().enable_interrupt();
+        // }
     }
 
     unsafe fn exit() {

@@ -353,6 +353,7 @@ impl Pic {
         }
     }
 
+    /// Register a new IRQ handler
     pub unsafe fn register(irq: Irq, f: IrqHandler) -> Result<(), ()> {
         without_interrupts!(unsafe {
             let shared = Self::shared();
@@ -367,37 +368,28 @@ impl Pic {
         })
     }
 
+    /// Set the redirect flag for a specific IRQ
     #[allow(unused)]
     pub unsafe fn set_redirect(irq: Irq) -> Result<(), ()> {
         without_interrupts!(unsafe {
             let shared = Self::shared();
             let irq_index = irq.0 as usize;
             shared.redirect_bitmap |= 1 << irq_index;
+            Self::set_irq_enabled(irq, true);
             Ok(())
         })
     }
 
+    /// Set the IRQ enabled state
     pub unsafe fn set_irq_enabled(irq: Irq, enabled: bool) {
         without_interrupts!(unsafe {
             let shared = Self::shared();
             if irq.is_slave() {
-                let irq = irq.local_number();
-                let mut imr = shared.slave.read_imr();
-                if enabled {
-                    imr &= !(1 << irq);
-                } else {
-                    imr |= 1 << irq;
-                }
-                shared.slave.write_imr(imr);
+                let local_irq = irq.local_number();
+                shared.slave.set_enabled(local_irq, enabled);
             } else {
-                let irq = irq.local_number();
-                let mut imr = shared.master.read_imr();
-                if enabled {
-                    imr &= !(1 << irq);
-                } else {
-                    imr |= 1 << irq;
-                }
-                shared.master.write_imr(imr);
+                let local_irq = irq.local_number();
+                shared.master.set_enabled(local_irq, enabled);
             }
         })
     }
@@ -492,6 +484,19 @@ impl I8259Device {
     #[inline]
     unsafe fn write_imr(&self, val: u8) {
         unsafe { self.write_a1(val) }
+    }
+
+    #[inline]
+    unsafe fn set_enabled(&self, local_irq: u8, enabled: bool) {
+        unsafe {
+            let mut imr = self.read_imr();
+            if enabled {
+                imr &= !(1 << local_irq);
+            } else {
+                imr |= 1 << local_irq;
+            }
+            self.write_imr(imr);
+        }
     }
 }
 

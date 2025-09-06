@@ -1,10 +1,13 @@
 // use super::*;
-use crate::*;
+use crate::{vt100::VT100, *};
 use core::{cell::UnsafeCell, fmt};
 
 pub struct SbiConsole;
 
-static mut SHARED: UnsafeCell<SbiConsole> = UnsafeCell::new(SbiConsole {});
+static mut RAW: UnsafeCell<SbiConsole> = UnsafeCell::new(SbiConsole {});
+
+static mut SHARED: UnsafeCell<VT100> =
+    UnsafeCell::new(VT100::new(unsafe { &mut *(&raw mut RAW) }.get_mut()));
 
 impl SbiConsole {
     #[inline]
@@ -13,7 +16,12 @@ impl SbiConsole {
     }
 
     #[inline]
-    pub fn shared() -> &'static mut Self {
+    pub fn shared_in() -> &'static mut SbiConsole {
+        unsafe { (&mut *(&raw mut RAW)).get_mut() }
+    }
+
+    #[inline]
+    pub fn shared_out() -> &'static mut VT100<'static> {
         unsafe { (&mut *(&raw mut SHARED)).get_mut() }
     }
 

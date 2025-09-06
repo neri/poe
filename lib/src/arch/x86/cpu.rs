@@ -33,7 +33,7 @@ impl Cpu {
 
     /// Enter to user mode with specified stack context
     #[inline(always)]
-    pub unsafe fn iret_to_user_mode(regs: &mut X86StackContext) -> ! {
+    pub unsafe fn enter_to_user_mode(regs: &mut X86StackContext) -> ! {
         compiler_fence(Ordering::SeqCst);
         unsafe {
             Self::_iret_to_user_mode(regs, &mut Gdt::shared().tss);
@@ -337,7 +337,7 @@ impl Gdt {
 #[repr(C, align(16))]
 pub struct Idt {
     table: [DescriptorEntry; Self::MAX],
-    exceptions: [Option<fn(&mut X86StackContext) -> bool>; 32],
+    exceptions: [Option<unsafe fn(&mut X86StackContext) -> bool>; 32],
 }
 
 impl Idt {
@@ -404,7 +404,10 @@ impl Idt {
     }
 
     #[inline]
-    pub unsafe fn handle_exception(exc: Exception, handler: fn(&mut X86StackContext) -> bool) {
+    pub unsafe fn handle_exception(
+        exc: Exception,
+        handler: unsafe fn(&mut X86StackContext) -> bool,
+    ) {
         unsafe {
             Self::shared().exceptions[exc.as_vec().0 as usize] = Some(handler);
         }
@@ -412,7 +415,8 @@ impl Idt {
 }
 
 unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext) {
-    if unsafe { Idt::shared() }.exceptions[ctx.vector().0 as usize].map_or(false, |f| f(ctx)) {
+    let idt = unsafe { Idt::shared() };
+    if idt.exceptions[ctx.vector().0 as usize].map_or(false, |f| unsafe { f(ctx) }) {
         return;
     }
 
@@ -438,7 +442,7 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
         let _ = writeln!(
             stderr,
             "CS:IP {:04x}:{:04x} SS:SP {:04x}:{:04x}",
-            ctx.cs().0,
+            ctx.cs(),
             ctx.eip.as_u16(),
             ss,
             esp.as_u16(),
@@ -472,5 +476,5 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
         ctx.eflags,
     );
 
-    Hal::cpu().stop();
+    Hal::cpu().halt();
 }
