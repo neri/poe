@@ -1,6 +1,6 @@
 //! MiniOS Execution Environment
 
-use crate::{platform::*, *};
+use crate::{null::NullTty, platform::*, *};
 use core::{fmt, iter::Iterator, mem::MaybeUninit, ops::Range, panic::PanicInfo, ptr::NonNull};
 use io::tty::{SimpleTextInput, SimpleTextOutput};
 use mem::MemoryManager;

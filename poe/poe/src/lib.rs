@@ -17,8 +17,7 @@ pub fn main() {
     let memsize2 = MemoryManager::total_extended_memory_size();
 
     let stdout = System::stdout();
-    stdout.set_attribute(0);
-    stdout.clear_screen();
+    stdout.reset();
 
     #[rustfmt::skip]
     let logo = [
@@ -50,6 +49,13 @@ pub fn main() {
         print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
     }
     println!(", PLATFORM {}", info.platform);
+    println!("");
+
+    let mode = stdout.current_mode();
+    println!(
+        "TTY MODE: {} x {} cursor at {}, {}",
+        mode.columns, mode.rows, mode.cursor_column, mode.cursor_row
+    );
     println!("");
 
     if true {

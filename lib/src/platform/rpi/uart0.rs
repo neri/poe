@@ -1,9 +1,10 @@
 use super::{gpio::*, mbox::*, *};
-use crate::{Hal, HalCpu, HalTrait, mem::mmio::Mmio32};
-use core::fmt;
+use crate::{Hal, HalCpu, HalTrait, mem::mmio::Mmio32, vt100::VT100};
 
 #[allow(dead_code)]
 static mut UART0: Uart0 = Uart0::CR;
+
+static mut SHARED: UnsafeCell<VT100> = UnsafeCell::new(VT100::new(Uart0::shared_raw()));
 
 /// Uart 0 (PL011)
 #[allow(dead_code)]
@@ -40,8 +41,13 @@ unsafe impl Mmio32 for Uart0 {
 #[allow(dead_code)]
 impl Uart0 {
     #[inline]
-    pub fn shared<'a>() -> &'a mut Self {
+    pub const fn shared_raw<'a>() -> &'a mut Self {
         unsafe { &mut *(&raw mut UART0) }
+    }
+
+    #[inline]
+    pub const fn shared() -> &'static mut VT100<'static> {
+        unsafe { &mut *(&raw mut SHARED) }.get_mut()
     }
 
     #[inline(never)]
@@ -75,7 +81,7 @@ impl Uart0 {
             // Enable UART0, receive & transfer part of UART.
             Uart0::CR.write(0x301);
         }
-        Ok(Self::shared())
+        Ok(Self::shared_raw())
     }
 
     #[inline]
@@ -87,76 +93,30 @@ impl Uart0 {
     fn is_input_ready(&mut self) -> bool {
         unsafe { (Uart0::FR.read() & 0x10) == 0 }
     }
+}
 
-    fn write_byte(&mut self, ch: u8) {
+impl SerialIo for Uart0 {
+    #[inline]
+    fn reset(&mut self) {
+        //
+    }
+
+    #[inline]
+    fn write_byte(&mut self, byte: u8) {
         while !self.is_output_ready() {
             Hal::cpu().no_op();
         }
         unsafe {
-            Uart0::DR.write(ch as u32);
+            Uart0::DR.write(byte as u32);
         }
     }
 
-    fn read_byte(&mut self) -> u8 {
-        while !self.is_input_ready() {
-            Hal::cpu().no_op();
+    #[inline]
+    fn read_byte(&mut self) -> Option<u8> {
+        if self.is_input_ready() {
+            Some(unsafe { Uart0::DR.read() as u8 })
+        } else {
+            None
         }
-        unsafe { Uart0::DR.read() as u8 }
-    }
-}
-
-impl fmt::Write for Uart0 {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        for ch in s.bytes() {
-            self.write_byte(ch);
-        }
-        Ok(())
-    }
-}
-
-impl SimpleTextOutput for Uart0 {
-    fn reset(&mut self) {
-        //
-    }
-
-    fn set_attribute(&mut self, _attribute: u8) {
-        //
-    }
-
-    fn clear_screen(&mut self) {
-        //
-    }
-
-    fn set_cursor_position(&mut self, _col: u32, _row: u32) {
-        //
-    }
-
-    fn enable_cursor(&mut self, _visible: bool) -> bool {
-        false
-    }
-
-    fn current_mode(&self) -> SimpleTextOutputMode {
-        SimpleTextOutputMode {
-            columns: 80,
-            rows: 24,
-            cursor_column: 0,
-            cursor_row: 0,
-            attribute: 0,
-            cursor_visible: 0,
-        }
-    }
-}
-
-impl SimpleTextInput for Uart0 {
-    fn reset(&mut self) {
-        //
-    }
-
-    fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        // if !self.is_input_ready() {
-        //     return None;
-        // }
-        let ch = self.read_byte();
-        NonZeroInputKey::new(0xffff, ch as u16)
     }
 }

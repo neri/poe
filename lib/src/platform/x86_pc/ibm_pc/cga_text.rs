@@ -220,7 +220,7 @@ impl SimpleTextOutput for CgaText {
         old_value
     }
 
-    fn current_mode(&self) -> SimpleTextOutputMode {
+    fn current_mode(&mut self) -> SimpleTextOutputMode {
         self.mode.clone()
     }
 }

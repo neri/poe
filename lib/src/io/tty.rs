@@ -1,5 +1,6 @@
 //! Simple Console I/O
 
+pub mod null;
 pub mod vt100;
 
 use core::num::NonZero;
@@ -28,7 +29,7 @@ pub trait SimpleTextOutput: core::fmt::Write {
 
     fn enable_cursor(&mut self, visible: bool) -> bool;
 
-    fn current_mode(&self) -> SimpleTextOutputMode;
+    fn current_mode(&mut self) -> SimpleTextOutputMode;
 }
 
 #[repr(C)]
@@ -43,6 +44,18 @@ pub struct SimpleTextOutputMode {
 }
 
 impl SimpleTextOutputMode {
+    #[inline]
+    pub const fn default() -> Self {
+        Self {
+            columns: 80,
+            rows: 24,
+            cursor_column: 0,
+            cursor_row: 0,
+            attribute: 0,
+            cursor_visible: 1,
+        }
+    }
+
     #[inline]
     pub const fn is_cursor_visible(&self) -> bool {
         self.cursor_visible != 0
@@ -85,43 +98,20 @@ impl From<InputKey> for Option<NonZeroInputKey> {
     }
 }
 
-pub struct NullTty;
+pub trait SerialIo {
+    fn reset(&mut self);
 
-impl SimpleTextInput for NullTty {
-    fn reset(&mut self) {}
+    fn write_byte(&mut self, byte: u8);
 
-    fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        None
-    }
-}
+    fn read_byte(&mut self) -> Option<u8>;
 
-impl core::fmt::Write for NullTty {
-    fn write_str(&mut self, _s: &str) -> core::fmt::Result {
-        Ok(())
-    }
-}
-
-impl SimpleTextOutput for NullTty {
-    fn reset(&mut self) {}
-
-    fn set_attribute(&mut self, _attribute: u8) {}
-
-    fn clear_screen(&mut self) {}
-
-    fn set_cursor_position(&mut self, _col: u32, _row: u32) {}
-
-    fn enable_cursor(&mut self, _visible: bool) -> bool {
-        false
-    }
-
-    fn current_mode(&self) -> SimpleTextOutputMode {
-        SimpleTextOutputMode {
-            columns: 80,
-            rows: 25,
-            cursor_column: 0,
-            cursor_row: 0,
-            attribute: 0,
-            cursor_visible: 0,
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.write_byte(b);
         }
+    }
+
+    fn flush_input(&mut self) {
+        while self.read_byte().is_some() {}
     }
 }

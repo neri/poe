@@ -18,9 +18,9 @@ impl PlatformTrait for Platform {
         let hart_id = arg;
         unsafe {
             sbi_console::SbiConsole::init();
-            System::set_stdin(sbi_console::SbiConsole::shared_in());
-            System::set_stdout(sbi_console::SbiConsole::shared_out());
-            System::set_stderr(sbi_console::SbiConsole::shared_out());
+            System::set_stdin(sbi_console::SbiConsole::shared());
+            System::set_stdout(sbi_console::SbiConsole::shared());
+            System::set_stderr(sbi_console::SbiConsole::shared());
 
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
             let spec_ver = sbi::base::get_spec_version();
