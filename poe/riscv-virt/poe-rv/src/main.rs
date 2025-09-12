@@ -15,23 +15,8 @@ unsafe extern "C" {
 #[unsafe(link_section = ".text.boot")]
 unsafe extern "C" fn _start() -> ! {
     naked_asm!(
-        "
-            j 1f
-            .balign 8
-            // Linux Kernel Image Header
-            .dword __kernel_base - 0x80000000   /* Image load offset, little endian */
-            .dword __edata - __kernel_base      /* Effective Image size, little endian */
-            .dword 0            /* kernel flags, little endian */
-            .word 0x00000002    /* Version of this header */
-            .word 0             /* Reserved */
-            .dword 0            /* Reserved */
-            .dword 0x5643534952 /* Magic number, little endian, \"RISCV\" */
-            .word 0x05435352    /* Magic number 2, little endian, \"RSC\x05\" */
-            .word 0             /* Reserved for PE COFF offset */
-        1:
-            la sp, __stack_top
-            j {start}
-            ",
+        "la sp, __stack_top",
+        "j {start}",
         start = sym _arch_riscv_start,
     )
 }

@@ -9,7 +9,6 @@ use core::{
     sync::atomic::{Ordering, compiler_fence},
 };
 use fb::Fb;
-use fdt::FdtNode;
 use minilib::rand::*;
 
 pub mod fb;

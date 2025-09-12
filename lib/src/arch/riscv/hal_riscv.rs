@@ -1,7 +1,12 @@
 //! Hardware Abstraction Layer for riscv
 
 use crate::{arch::csr::CSR, *};
-use core::{arch::asm, fmt, marker::PhantomData};
+use core::{
+    arch::asm,
+    fmt,
+    marker::PhantomData,
+    sync::atomic::{Ordering, compiler_fence},
+};
 
 impl HalTrait for Hal {
     #[inline]
@@ -25,6 +30,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     fn wait_for_interrupt(&self) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("wfi", options(nomem, nostack));
         }
@@ -32,6 +38,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     unsafe fn enable_interrupt(&self) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("csrsi sstatus, 0x02", options(nomem, nostack));
         }
@@ -39,6 +46,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     unsafe fn disable_interrupt(&self) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("csrci sstatus, 0x02", options(nomem, nostack));
         }
@@ -46,6 +54,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     unsafe fn is_interrupt_enabled(&self) -> bool {
+        compiler_fence(Ordering::SeqCst);
         unsafe { CSR::SSTATUS.read() & STATUS_SIE != 0 }
     }
 

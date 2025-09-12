@@ -10,6 +10,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "edid"
+version = "0.1.0"
+
+[[package]]
 name = "fdt"
 version = "0.1.0"
 dependencies = [
@@ -25,6 +29,7 @@ name = "libminios"
 version = "0.1.0"
 dependencies = [
  "acpi",
+ "edid",
  "fdt",
  "libhid",
  "minilib",
@@ -50,6 +55,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 name = "poe"
 version = "0.1.0"
 dependencies = [
+ "fdt",
  "libminios",
 ]
 

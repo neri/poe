@@ -1,7 +1,7 @@
-use core::mem::transmute;
-
 use super::mbox::{Mbox, PixelOrder, Tag};
 use crate::*;
+use core::mem::transmute;
+use edid::Edid;
 
 #[allow(dead_code)]
 pub struct Fb;
@@ -51,24 +51,17 @@ impl Fb {
 
         match mbox.call() {
             Ok(mbox) => {
-                let edid = mbox.response_slice::<32>(index_edid + 2);
+                let edid: &[u32; 32] = mbox.response_slice(index_edid + 2);
                 let edid: &[u8; 128] = unsafe { transmute(edid) };
+                let edid = Edid::new(edid).ok_or(())?;
 
-                if edid[0..8] != [0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00] {
-                    return Err(());
-                }
-                if edid.iter().fold(0u8, |acc, &x| acc.wrapping_add(x)) != 0 {
-                    return Err(());
-                }
-
-                let x = edid[0x38] as u32 | ((edid[0x3a] as u32 & 0xf0) << 4);
-                let y = edid[0x3b] as u32 | ((edid[0x3d] as u32 & 0xf0) << 4);
+                let (x, y) = edid.active_pixels();
 
                 if let Some(result) = result {
-                    result.copy_from_slice(edid);
+                    result.copy_from_slice(edid.as_slice());
                 }
 
-                Ok((x, y))
+                Ok((x as u32, y as u32))
             }
             Err(_) => Err(()),
         }

@@ -1,6 +1,9 @@
 //! RISCV Control and Status Registers
 
-use core::arch::asm;
+use core::{
+    arch::asm,
+    sync::atomic::{Ordering, compiler_fence},
+};
 
 /// Control and Status Registers
 #[derive(Debug, Clone, Copy)]
@@ -34,6 +37,7 @@ impl CSR {
     pub const SCONTEXT: CsrReg<0x5A8> = CsrReg;
 
     pub fn rdtime() -> usize {
+        compiler_fence(Ordering::SeqCst);
         let result: usize;
         unsafe {
             asm!("rdtime {0}", lateout(reg) result,);
@@ -47,6 +51,7 @@ pub struct CsrReg<const N: usize>;
 impl<const N: usize> CsrReg<N> {
     #[inline]
     pub unsafe fn read(&self) -> usize {
+        compiler_fence(Ordering::SeqCst);
         let result: usize;
         unsafe {
             asm!("csrr {0}, {csr}", lateout(reg) result, csr = const N,);
@@ -56,6 +61,7 @@ impl<const N: usize> CsrReg<N> {
 
     #[inline]
     pub unsafe fn write(&self, val: usize) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("csrw {csr}, {0}", in(reg) val, csr = const N,);
         }
@@ -63,6 +69,7 @@ impl<const N: usize> CsrReg<N> {
 
     #[inline]
     pub unsafe fn set(&self, bits: usize) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("csrs {csr}, {0}", in(reg) bits, csr = const N,);
         }
@@ -70,6 +77,7 @@ impl<const N: usize> CsrReg<N> {
 
     #[inline]
     pub unsafe fn clear(&self, bits: usize) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("csrc {csr}, {0}", in(reg) bits, csr = const N,);
         }

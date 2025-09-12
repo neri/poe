@@ -6,6 +6,7 @@ use core::{
     fmt,
     marker::PhantomData,
     mem::transmute,
+    ops::Deref,
     ptr::null,
     slice::{self, Iter},
     str,
@@ -99,6 +100,23 @@ impl DeviceTree<'_> {
         let root = self.root();
         root.find_first_child(NodeName::RESERVED_MEMORY)
     }
+
+    pub fn find_by_phandle<'a>(&'a self, phandle: PHandle) -> Option<Node<'a>> {
+        fn find_in_node<'a>(node: &Node<'a>, phandle: PHandle) -> Option<Node<'a>> {
+            if node.phandle() == Some(phandle) {
+                return Some(node.clone());
+            }
+            for child in node.children() {
+                let found = find_in_node(&child, phandle);
+                if let Some(found) = found {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        find_in_node(self.root(), phandle)
+    }
 }
 
 #[non_exhaustive]
@@ -120,12 +138,7 @@ impl BeU32 {
 
     #[inline]
     pub const fn as_u32(&self) -> u32 {
-        self.to_be()
-    }
-
-    #[inline]
-    pub const fn to_be(&self) -> u32 {
-        self.0.to_be()
+        u32::from_be(self.0)
     }
 }
 
@@ -141,12 +154,7 @@ impl BeU64 {
 
     #[inline]
     pub const fn as_u64(&self) -> u64 {
-        self.to_be()
-    }
-
-    #[inline]
-    pub const fn to_be(&self) -> u64 {
-        self.0.to_be()
+        u64::from_be(self.0)
     }
 }
 
@@ -178,7 +186,7 @@ impl Header {
 
     #[inline]
     pub const fn magic(&self) -> u32 {
-        self.magic.to_be()
+        self.magic.as_u32()
     }
 
     #[inline]
@@ -188,32 +196,32 @@ impl Header {
 
     #[inline]
     pub const fn total_size(&self) -> usize {
-        self.totalsize.to_be() as usize
+        self.totalsize.as_u32() as usize
     }
 
     #[inline]
     pub const fn off_dt_struct(&self) -> usize {
-        self.off_dt_struct.to_be() as usize
+        self.off_dt_struct.as_u32() as usize
     }
 
     #[inline]
     pub const fn off_dt_strings(&self) -> usize {
-        self.off_dt_strings.to_be() as usize
+        self.off_dt_strings.as_u32() as usize
     }
 
     #[inline]
     pub const fn off_mem_rsvmap(&self) -> usize {
-        self.off_mem_rsvmap.to_be() as usize
+        self.off_mem_rsvmap.as_u32() as usize
     }
 
     #[inline]
     pub const fn version(&self) -> u32 {
-        self.version.to_be()
+        self.version.as_u32()
     }
 
     #[inline]
     pub const fn last_comp_version(&self) -> u32 {
-        self.last_comp_version.to_be()
+        self.last_comp_version.as_u32()
     }
 
     #[inline]
@@ -255,6 +263,7 @@ pub enum Token<'a> {
     Prop(PropName<'a>, *const c_void, usize),
 }
 
+#[derive(Clone)]
 struct FdtTokens<'a> {
     header: &'a Header,
     index: usize,
@@ -285,7 +294,7 @@ impl<'a> Iterator for FdtTokens<'a> {
             let mut index = self.index;
             let mut ptr = self.header.struct_ptr().add(index);
             let result = loop {
-                let token = ptr.read_volatile().to_be();
+                let token = ptr.read_volatile().as_u32();
                 match token {
                     DeviceTree::FDT_NOP => {
                         ptr = ptr.add(1);
@@ -299,8 +308,8 @@ impl<'a> Iterator for FdtTokens<'a> {
                         break Token::BeginNode(name);
                     }
                     DeviceTree::FDT_PROP => {
-                        let data_len = ptr.add(1).read_volatile().to_be() as usize;
-                        let name_ptr = ptr.add(2).read_volatile().to_be() as usize;
+                        let data_len = ptr.add(1).read_volatile().as_u32() as usize;
+                        let name_ptr = ptr.add(2).read_volatile().as_u32() as usize;
                         let name = PropName(_c_string(self.header.string_ptr().add(name_ptr), 255));
                         index += 3 + ((data_len + 3) / 4);
                         break Token::Prop(name, ptr.add(3) as *const c_void, data_len);
@@ -319,109 +328,13 @@ impl<'a> Iterator for FdtTokens<'a> {
     }
 }
 
-pub trait FdtNode {
-    fn node<'a>(&'a self) -> &'a Node<'a>;
-
-    #[inline]
-    fn name(&self) -> NodeName<'_> {
-        self.node().name
-    }
-
-    #[inline]
-    fn props(&self) -> FdtProps<'_> {
-        FdtProps::new(self.node().tokens())
-    }
-
-    fn get_prop(&self, prop_name: PropName) -> Option<FdtProperty<'_>> {
-        for prop in self.props() {
-            if prop.name() == prop_name {
-                return Some(prop);
-            }
-        }
-        None
-    }
-
-    #[inline]
-    fn get_prop_str(&self, prop_name: PropName) -> Option<&str> {
-        self.get_prop(prop_name).map(|v| v.as_str())
-    }
-
-    #[inline]
-    fn get_prop_u32(&self, prop_name: PropName) -> Option<u32> {
-        self.get_prop(prop_name).and_then(|v| v.as_u32())
-    }
-
-    fn find_first_child(&self, prefix: NodeName) -> Option<Node<'_>> {
-        let mut level = 0;
-        let mut iter = self.node().tokens();
-        while let Some(token) = iter.next() {
-            match token {
-                Token::BeginNode(name) => {
-                    if level == 0 && name.without_unit() == prefix {
-                        let address_cells = self.node().address_cells().unwrap_or(0);
-                        let size_cells = self.node().size_cells().unwrap_or(0);
-                        return Some(Node::new(iter, name, address_cells, size_cells));
-                    }
-                    level += 1;
-                }
-                Token::Prop(_, _, _) => continue,
-                Token::EndNode => {
-                    if level == 0 {
-                        break;
-                    }
-                    level -= 1;
-                }
-            }
-        }
-        None
-    }
-
-    fn find_child_exact(&self, node_name: NodeName) -> Option<Node<'_>> {
-        let mut level = 0;
-        let mut iter = self.node().tokens();
-        while let Some(token) = iter.next() {
-            match token {
-                Token::BeginNode(name) => {
-                    if level == 0 && name == node_name {
-                        let address_cells = self.node().address_cells().unwrap_or(0);
-                        let size_cells = self.node().size_cells().unwrap_or(0);
-                        return Some(Node::new(iter, name, address_cells, size_cells));
-                    }
-                    level += 1;
-                }
-                Token::Prop(_, _, _) => continue,
-                Token::EndNode => {
-                    if level == 0 {
-                        break;
-                    }
-                    level -= 1;
-                }
-            }
-        }
-        None
-    }
-
-    #[inline]
-    fn children(&self) -> FdtChildNodes<'_> {
-        let address_cells = self.node().address_cells().unwrap_or(0);
-        let size_cells = self.node().size_cells().unwrap_or(0);
-        FdtChildNodes::new(self.node().tokens(), address_cells, size_cells)
-    }
-}
-
+#[derive(Clone)]
 pub struct Node<'a> {
     header: &'a Header,
     index: usize,
     name: NodeName<'a>,
     address_cells: u32,
     size_cells: u32,
-}
-
-impl FdtNode for Node<'_> {
-    #[inline]
-    fn node(&self) -> &Node<'_> {
-        self
-    }
 }
 
 impl<'a> Node<'a> {
@@ -442,11 +355,102 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    fn tokens(&'a self) -> FdtTokens<'a> {
+    pub fn children(&self) -> FdtChildNodes<'a> {
+        let address_cells = self.address_cells().unwrap_or(0);
+        let size_cells = self.size_cells().unwrap_or(0);
+        FdtChildNodes::new(self.tokens(), address_cells, size_cells)
+    }
+
+    #[inline]
+    fn tokens(&self) -> FdtTokens<'a> {
         FdtTokens {
             header: self.header,
             index: self.index,
         }
+    }
+
+    #[inline]
+    pub fn name(&self) -> NodeName<'_> {
+        self.name
+    }
+
+    #[inline]
+    pub fn props(&self) -> FdtProps<'_> {
+        FdtProps::new(self.tokens())
+    }
+
+    pub fn get_prop(&self, prop_name: PropName) -> Option<FdtProperty<'_>> {
+        for prop in self.props() {
+            if prop.name() == prop_name {
+                return Some(prop);
+            }
+        }
+        None
+    }
+
+    #[inline]
+    pub fn get_prop_str(&self, prop_name: PropName) -> Option<&str> {
+        self.get_prop(prop_name).map(|v| v.as_str())
+    }
+
+    #[inline]
+    pub fn get_prop_u32(&self, prop_name: PropName) -> Option<u32> {
+        self.get_prop(prop_name).and_then(|v| v.as_u32())
+    }
+
+    pub fn find_first_child(&self, prefix: NodeName) -> Option<Node<'_>> {
+        let mut level = 0;
+        let mut iter = self.tokens();
+        while let Some(token) = iter.next() {
+            match token {
+                Token::BeginNode(name) => {
+                    if level == 0 && name.without_unit() == prefix {
+                        let address_cells = self.address_cells().unwrap_or(0);
+                        let size_cells = self.size_cells().unwrap_or(0);
+                        return Some(Node::new(iter, name, address_cells, size_cells));
+                    }
+                    level += 1;
+                }
+                Token::Prop(_, _, _) => continue,
+                Token::EndNode => {
+                    if level == 0 {
+                        break;
+                    }
+                    level -= 1;
+                }
+            }
+        }
+        None
+    }
+
+    pub fn find_child_exact(&self, node_name: NodeName) -> Option<Node<'_>> {
+        let mut level = 0;
+        let mut iter = self.tokens();
+        while let Some(token) = iter.next() {
+            match token {
+                Token::BeginNode(name) => {
+                    if level == 0 && name == node_name {
+                        let address_cells = self.address_cells().unwrap_or(0);
+                        let size_cells = self.size_cells().unwrap_or(0);
+                        return Some(Node::new(iter, name, address_cells, size_cells));
+                    }
+                    level += 1;
+                }
+                Token::Prop(_, _, _) => continue,
+                Token::EndNode => {
+                    if level == 0 {
+                        break;
+                    }
+                    level -= 1;
+                }
+            }
+        }
+        None
+    }
+
+    #[inline]
+    pub fn phandle(&self) -> Option<PHandle> {
+        self.get_prop_u32(PropName::PHANDLE).map(PHandle)
     }
 
     /// Well-known property name `#address-cells`
@@ -519,20 +523,20 @@ impl<'a> Node<'a> {
 
 pub struct RootNode<'a> {
     node: Node<'a>,
-}
-
-impl FdtNode for RootNode<'_> {
-    #[inline]
-    fn node(&self) -> &Node<'_> {
-        &self.node
-    }
+    address_cells: u32,
+    size_cells: u32,
 }
 
 impl<'a> RootNode<'a> {
     #[inline]
     fn new(iter: FdtTokens<'a>) -> Self {
+        let node = Node::new(iter, NodeName::ROOT, 0, 0);
+        let address_cells = node.address_cells().unwrap_or(2);
+        let size_cells = node.size_cells().unwrap_or(1);
         Self {
-            node: Node::new(iter, NodeName::ROOT, 0, 0),
+            node,
+            address_cells,
+            size_cells,
         }
     }
 }
@@ -540,58 +544,59 @@ impl<'a> RootNode<'a> {
 impl RootNode<'_> {
     #[inline]
     pub fn address_cells(&self) -> u32 {
-        self.node().address_cells().unwrap_or_default()
+        self.address_cells
     }
 
     #[inline]
     pub fn size_cells(&self) -> u32 {
-        self.node().size_cells().unwrap_or_default()
+        self.size_cells
     }
 
     #[inline]
     pub fn model(&self) -> &str {
-        self.node()
-            .get_prop_str(PropName::MODEL)
-            .unwrap_or_default()
-    }
-
-    #[inline]
-    pub fn compatible(&self) -> Option<impl Iterator<Item = &str>> {
-        self.node().compatible()
+        self.get_prop_str(PropName::MODEL).unwrap_or_default()
     }
 
     #[inline]
     pub fn serial_number(&self) -> Option<&str> {
-        self.node().get_prop_str(PropName::SERIAL_NUMBER)
+        self.get_prop_str(PropName::SERIAL_NUMBER)
     }
 
     /// TODO: multiple nodes
     #[inline]
     pub fn aliases(&self) -> Option<Node<'_>> {
-        self.node().find_first_child(NodeName::ALIASES)
+        self.find_first_child(NodeName::ALIASES)
     }
 
     /// TODO: multiple nodes
     #[inline]
     pub fn memory(&self) -> Option<Node<'_>> {
-        self.node().find_first_child(NodeName::MEMORY)
+        self.find_first_child(NodeName::MEMORY)
     }
 
     #[inline]
     pub fn reserved_memory(&self) -> Option<Node<'_>> {
-        self.node().find_first_child(NodeName::RESERVED_MEMORY)
+        self.find_first_child(NodeName::RESERVED_MEMORY)
     }
 
     #[inline]
     pub fn chosen(&self) -> Option<ChosenNode<'_>> {
-        self.node()
-            .find_first_child(NodeName::CHOSEN)
+        self.find_first_child(NodeName::CHOSEN)
             .map(|node| ChosenNode { node })
     }
 
     #[inline]
     pub fn cpus(&self) -> Option<Node<'_>> {
-        self.node().find_first_child(NodeName::CPUS)
+        self.find_first_child(NodeName::CPUS)
+    }
+}
+
+impl<'a> Deref for RootNode<'a> {
+    type Target = Node<'a>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.node
     }
 }
 
@@ -599,28 +604,24 @@ pub struct CpusNode<'a> {
     node: Node<'a>,
 }
 
-impl FdtNode for CpusNode<'_> {
-    #[inline]
-    fn node(&self) -> &Node<'_> {
-        &self.node
+impl CpusNode<'_> {
+    pub fn cpus(&self) -> ! {
+        // TODO:
+        todo!()
     }
 }
 
-impl CpusNode<'_> {
-    pub fn cpus(&self) -> ! {
-        todo!()
+impl<'a> Deref for CpusNode<'a> {
+    type Target = Node<'a>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.node
     }
 }
 
 pub struct ChosenNode<'a> {
     node: Node<'a>,
-}
-
-impl FdtNode for ChosenNode<'_> {
-    #[inline]
-    fn node(&self) -> &Node<'_> {
-        &self.node
-    }
 }
 
 impl ChosenNode<'_> {
@@ -637,6 +638,15 @@ impl ChosenNode<'_> {
     #[inline]
     pub fn stdin_path(&self) -> Option<&str> {
         self.node.get_prop_str(PropName::STDIN_PATH)
+    }
+}
+
+impl<'a> Deref for ChosenNode<'a> {
+    type Target = Node<'a>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.node
     }
 }
 
@@ -777,6 +787,7 @@ impl fmt::Display for PropName<'_> {
     }
 }
 
+#[derive(Clone)]
 pub struct FdtChildNodes<'a> {
     tokens: FdtTokens<'a>,
     level: isize,
@@ -894,7 +905,7 @@ impl<'a> FdtProperty<'a> {
     #[inline]
     pub fn as_u32(&self) -> Option<u32> {
         if self.len == 4 {
-            Some(unsafe { (self.ptr as *const BeU32).read_volatile() }.to_be())
+            Some(unsafe { (self.ptr as *const BeU32).read_volatile() }.as_u32())
         } else {
             None
         }
@@ -917,8 +928,8 @@ impl Iterator for FdtRsvMapIter<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let ptr = self.header.reserve_map_ptr().add(self.index);
-            let base = ptr.read_volatile().to_be();
-            let size = ptr.add(1).read_volatile().to_be();
+            let base = ptr.read_volatile().as_u64();
+            let size = ptr.add(1).read_volatile().as_u64();
             if size > 0 {
                 self.index += 2;
                 Some((base, size))
@@ -1047,12 +1058,16 @@ impl Iterator for RangeTripleIter<'_> {
 fn fdt_get_reg_val(iter: &mut Iter<BeU32>, cell_size: u32) -> Result<u64, ()> {
     match cell_size {
         0 => Ok(0),
-        1 => Ok(iter.next().ok_or(())?.to_be() as u64),
+        1 => Ok(iter.next().ok_or(())?.as_u32() as u64),
         2 => {
-            let hi = iter.next().ok_or(())?.to_be() as u64;
-            let lo = iter.next().ok_or(())?.to_be() as u64;
+            let hi = iter.next().ok_or(())?.as_u32() as u64;
+            let lo = iter.next().ok_or(())?.as_u32() as u64;
             Ok((hi << 32) + lo)
         }
         _ => Err(()),
     }
 }
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PHandle(pub u32);

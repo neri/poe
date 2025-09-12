@@ -21,7 +21,7 @@ pub struct System {
 }
 
 impl System {
-    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x1f;
+    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x07; //0x1f;
 
     /// Initialize with boot information and main function
     #[inline]
@@ -167,15 +167,12 @@ impl System {
                     let key = key.get();
                     let c = key.unicode_char as u8 as char;
                     match c {
-                        // '\0' => {
-                        //     continue;
-                        // }
                         // ctrl-c
                         '\x03' => {
                             return None;
                         }
                         // backspace
-                        '\x08' => match buf.pop() {
+                        '\x08' | '\x7f' => match buf.pop() {
                             Some(c) => {
                                 if c < ' ' {
                                     stdout.write_str("\x08\x08  \x08\x08").unwrap();
@@ -221,6 +218,17 @@ impl System {
     pub fn config_table<'a>() -> impl Iterator<Item = &'a ConfigurationTableEntry> {
         let shared = Self::shared();
         shared.config_table.iter()
+    }
+
+    #[inline]
+    pub fn find_config_table_entry(guid: &Guid) -> Option<&'static ConfigurationTableEntry> {
+        let shared = Self::shared();
+        for entry in &shared.config_table {
+            if &entry.guid == guid {
+                return Some(entry);
+            }
+        }
+        None
     }
 
     #[inline]

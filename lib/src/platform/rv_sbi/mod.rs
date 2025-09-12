@@ -161,7 +161,7 @@ unsafe fn _arch_handle_trap(context: &ExceptionContext) {
         let stval = CSR::STVAL.read();
         let user_pc = CSR::SEPC.read();
 
-        println!("\n\x1b[0;1;101m#### UNHANDLED EXCEPTION ####");
+        println!("\n\x1b[0;30;101m#### UNHANDLED EXCEPTION ####");
         println!(
             "scause={:08x}, stval={:08x}, sepc={:016x}",
             scause, stval, user_pc,

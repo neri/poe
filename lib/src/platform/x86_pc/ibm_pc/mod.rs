@@ -177,7 +177,7 @@ impl SimpleTextInput for BiosTextInput {
             regs.eax.set_d(0);
             VM86::call_bios(bios::INT16, &mut regs);
             InputKey {
-                usage: regs.eax.h() as u16,
+                scan_code: regs.eax.h() as u16,
                 unicode_char: regs.eax.b() as u16,
             }
             .into()

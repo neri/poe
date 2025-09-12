@@ -23,6 +23,7 @@ libhid = { path = "./hid/" }
 minilib = { path = "./minilib/" }
 smbios = { path = "./smbios/", features = ["uuid"] }
 uuid = { path = "./uuid/" }
+edid = { path = "./edid/" }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 x86 = { path = "./x86/" }
@@ -42,4 +43,5 @@ members = [
     "sbi",
     "smbios",
     "x86",
+    "edid",
 ]

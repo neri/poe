@@ -9,12 +9,25 @@ pub trait SimpleTextInput {
     fn reset(&mut self);
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey>;
+
+    fn wait_for_key(&mut self, timeout: usize) -> Option<NonZeroInputKey> {
+        loop {
+            if let Some(key) = self.read_key_stroke() {
+                return Some(key);
+            }
+            if timeout == 0 {
+                return None;
+            } else {
+                // TODO:
+            }
+        }
+    }
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InputKey {
-    pub usage: u16,
+    pub scan_code: u16,
     pub unicode_char: u16,
 }
 
@@ -74,18 +87,18 @@ pub struct NonZeroInputKey(NonZero<u32>);
 impl NonZeroInputKey {
     #[inline]
     pub const fn new(scan_code: u16, unicode_char: u16) -> Option<Self> {
-        let raw = scan_code as u32 | (unicode_char as u32) << 16;
-        match NonZero::new(raw) {
-            Some(key) => Some(Self(key)),
-            None => None,
+        if scan_code == 0 {
+            return None;
         }
+        let raw = scan_code as u32 | (unicode_char as u32) << 16;
+        Some(Self(unsafe { NonZero::new_unchecked(raw) }))
     }
 
     #[inline]
     pub fn get(self) -> InputKey {
         let raw = self.0.get();
         InputKey {
-            usage: raw as u16,
+            scan_code: raw as u16,
             unicode_char: (raw >> 16) as u16,
         }
     }
@@ -94,7 +107,7 @@ impl NonZeroInputKey {
 impl From<InputKey> for Option<NonZeroInputKey> {
     #[inline]
     fn from(key: InputKey) -> Self {
-        NonZeroInputKey::new(key.usage, key.unicode_char)
+        NonZeroInputKey::new(key.scan_code, key.unicode_char)
     }
 }
 

@@ -32,9 +32,10 @@ refresh: clean
 	-rm **/Cargo.lock
 
 run:
-	qemu-system-riscv64 -M virt \
-	-kernel $(POE_BIN) \
-	-serial mon:stdio
+	qemu-system-riscv64 -smp 4 -M virt \
+		-device virtio-vga \
+		-kernel $(POE_BIN) \
+		-serial mon:stdio
 
 test: poe
 

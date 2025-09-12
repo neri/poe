@@ -69,11 +69,11 @@ impl FmtKbd {
                 Modifier::LEFT_SHIFT,
                 leading.contains(KbdLeadingData::HAS_SHIFT),
             );
-            let usage = Usage(SCAN_TO_HID[0x7F & data as usize]);
-            if usage >= Usage::MOD_MIN && usage < Usage::MOD_MAX {
-                let bit_position = Modifier::from_bits_retain(1 << (usage.0 - Usage::MOD_MIN.0));
+            let scan_code = Usage(SCAN_TO_HID[0x7F & data as usize]);
+            if scan_code >= Usage::MOD_MIN && scan_code < Usage::MOD_MAX {
+                let bit_position =
+                    Modifier::from_bits_retain(1 << (scan_code.0 - Usage::MOD_MIN.0));
                 self.key_modifier.set(bit_position, !is_break);
-                // KeyEvent::new(Usage::NONE, self.key_modifier, flags).post();
             } else {
                 let ascii = SCAN_TO_ASCII[0x7F & data as usize];
                 let ascii = match ascii {
@@ -97,10 +97,9 @@ impl FmtKbd {
                 };
                 self.last_key_data = InputKey {
                     unicode_char: ascii as u16,
-                    usage: usage.0 as u16,
+                    scan_code: scan_code.0 as u16,
                 }
                 .into();
-                // KeyEvent::new(usage, self.key_modifier, flags).post();
             }
         }
     }
