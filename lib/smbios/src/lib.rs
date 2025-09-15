@@ -2,11 +2,10 @@
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
-use alloc::{borrow::ToOwned, string::String};
-use core::{ffi::c_void, slice, str};
+use core::{ffi::c_void, marker::PhantomData, slice, str};
 
 #[cfg(feature = "uuid")]
-use uuid::{guid, Guid};
+use uuid::{Guid, guid};
 
 /// EFI GUID of the SMBIOS 1.0 table.
 #[cfg(feature = "uuid")]
@@ -18,57 +17,108 @@ pub const SMBIOS3_GUID: Guid = guid!("f2fd1544-9794-4a2c-992e-e5bbcf20e394");
 
 /// System Management BIOS Entry Point
 pub struct SmBios {
-    base: usize,
+    base: *const u8,
     n_structures: usize,
+    ver_major: u8,
+    ver_minor: u8,
+    table_length: u16,
 }
 
 impl SmBios {
     #[inline]
     pub unsafe fn parse(ptr: *const c_void) -> Option<Self> {
         let ep = unsafe { &*(ptr as *const SmBiosEntryV1) };
-        ep.is_valid_anchor().then(|| ())?;
+        ep.is_valid().then(|| ())?;
 
-        let base = ep.base as usize;
-        let n_structures = ep.n_structures as usize;
-        Some(Self { base, n_structures })
+        Some(Self {
+            base: ep.base as *const u8,
+            n_structures: ep.n_structures as usize,
+            ver_major: ep.ver_major,
+            ver_minor: ep.ver_minor,
+            table_length: ep.structure_table_len,
+        })
+    }
+
+    #[inline]
+    pub const fn major_version(&self) -> u8 {
+        self.ver_major
+    }
+
+    #[inline]
+    pub const fn minor_version(&self) -> u8 {
+        self.ver_minor
+    }
+
+    #[inline]
+    pub const fn n_structures(&self) -> usize {
+        self.n_structures
+    }
+
+    #[inline]
+    pub const fn table_length(&self) -> usize {
+        self.table_length as usize
     }
 
     /// Returns the system manufacturer name, if available
     #[inline]
-    pub fn manufacturer_name(&self) -> Option<String> {
-        self.find(HeaderType::SYSTEM_INFO)
-            .and_then(|h| {
-                let slice = h.as_slice();
-                h.string(slice[4] as usize)
-            })
-            .map(|v| v.to_owned())
+    pub fn manufacturer(&self) -> Option<&str> {
+        self.find(HeaderType::SYSTEM_INFO).and_then(|h| {
+            let slice = h.as_slice();
+            h.string(slice[4] as usize)
+        })
     }
 
-    /// Returns the system model name, if available
+    /// Returns the system product name, if available
     #[inline]
-    pub fn model_name(&self) -> Option<String> {
-        self.find(HeaderType::SYSTEM_INFO)
-            .and_then(|h| {
-                let slice = h.as_slice();
-                h.string(slice[5] as usize)
-            })
-            .map(|v| v.to_owned())
+    pub fn product_name(&self) -> Option<&str> {
+        self.find(HeaderType::SYSTEM_INFO).and_then(|h| {
+            let slice = h.as_slice();
+            h.string(slice[5] as usize)
+        })
+    }
+
+    /// Returns the serial number, if available
+    #[inline]
+    pub fn serial_number(&self) -> Option<&str> {
+        self.find(HeaderType::SYSTEM_INFO).and_then(|h| {
+            let slice = h.as_slice();
+            h.string(slice[7] as usize)
+        })
+    }
+
+    #[inline]
+    pub fn system_uuid(&self) -> Option<uuid::Uuid> {
+        self.find(HeaderType::SYSTEM_INFO).and_then(|h| {
+            let slice = h.as_slice();
+            if slice.len() >= 0x19 {
+                let raw = &slice[0x08..0x18];
+                let uuid = uuid::Uuid::from_bytes(raw.try_into().unwrap());
+                if uuid != uuid::Uuid::null() {
+                    Some(uuid)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
     }
 
     /// Returns an iterator that iterates through the SMBIOS structure
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &'static SmBiosHeader> {
+    pub fn iter<'a>(&self) -> impl Iterator<Item = &'a SmBiosHeader> {
         SmBiosStructIterator {
             base: self.base,
             offset: 0,
             index: 0,
             limit: self.n_structures,
+            _phantom: PhantomData,
         }
     }
 
     /// Find the first structure matching the specified header type.
     #[inline]
-    pub fn find(&self, header_type: HeaderType) -> Option<&'static SmBiosHeader> {
+    pub fn find<'a>(&self, header_type: HeaderType) -> Option<&'a SmBiosHeader> {
         self.iter().find(|v| v.header_type() == header_type)
     }
 }
@@ -128,19 +178,40 @@ impl HeaderType {
 #[repr(C)]
 #[allow(dead_code)]
 pub struct SmBiosEntryV1 {
+    /// Anchor string "_SM_"
     anchor: [u8; 4],
+    /// Checksum of the Entry Point Structure (EPS)
+    /// This value, when added to all other bytes in the EPS,
+    /// results in the value 00h (using 8-bit addition calculations).
+    /// Values in the EPS are summed starting at offset 00h, for Entry Point Length bytes.
     checksum: u8,
+    /// Length of the entry point structure, typically 0x1F
     len: u8,
+    /// SMBIOS major version
     ver_major: u8,
+    /// SMBIOS minor version
     ver_minor: u8,
+    /// Maximum structure size
     max_struct: u16,
+    /// Entry point revision
     revision: u8,
+    /// Formatted Area
+    /// Value present in the Entry Point Revision field defines the interpretation to be placed upon these 5 bytes
     formatted: [u8; 5],
+    /// Anchor string "_DMI_"
     anchor2: [u8; 5],
+    /// Checksum of Intermediate Entry Point Structure (IEPS).
+    /// This value, when added to all other bytes in the IEPS,
+    /// results in the value 00h (using 8-bit addition calculations).
+    /// Values in the IEPS are summed starting at offset 10h, for 0Fh bytes.
     checksum2: u8,
-    len2: u8,
+    /// Length of the structure table
+    structure_table_len: u16,
+    /// Physical address of the SMBIOS structure table
     base: u32,
+    /// Number of SMBIOS structures
     n_structures: u16,
+    /// SMBIOS BCD revision
     rev: u8,
 }
 
@@ -152,17 +223,35 @@ impl SmBiosEntryV1 {
     pub fn is_valid_anchor(&self) -> bool {
         (self.anchor == Self::ANCHOR) && (self.anchor2 == Self::ANCHOR2)
     }
+
+    pub fn is_valid(&self) -> bool {
+        if self.is_valid_anchor() == false {
+            return false;
+        }
+
+        let base = self as *const _ as *const u8;
+        let sum1: u8 = unsafe {
+            let slice = slice::from_raw_parts(base, self.len as usize);
+            slice.iter().copied().sum()
+        };
+        let sum2: u8 = unsafe {
+            let slice = slice::from_raw_parts(base.add(0x10), 0x0F);
+            slice.iter().copied().sum()
+        };
+        (sum1 == 0) && (sum2 == 0)
+    }
 }
 
-struct SmBiosStructIterator {
-    base: usize,
+struct SmBiosStructIterator<'a> {
+    base: *const u8,
     offset: usize,
     index: usize,
     limit: usize,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl Iterator for SmBiosStructIterator {
-    type Item = &'static SmBiosHeader;
+impl<'a> Iterator for SmBiosStructIterator<'a> {
+    type Item = &'a SmBiosHeader;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -170,7 +259,7 @@ impl Iterator for SmBiosStructIterator {
             return None;
         }
         unsafe {
-            let p = (self.base + self.offset) as *const SmBiosHeader;
+            let p = self.base.add(self.offset) as *const SmBiosHeader;
             let r = &*p;
             self.offset += r.struct_size();
             self.index += 1;
@@ -189,9 +278,9 @@ pub struct SmBiosHeader {
 
 impl SmBiosHeader {
     /// Some products return meaningless strings.
-    pub const DEFAULT_STRING: &'static str = "Default string";
+    pub const DEFAULT_STRING: &str = "Default string";
     /// Some products return meaningless strings.
-    pub const TO_BE_FILLED_BY_OEM: &'static str = "To be filled by O.E.M.";
+    pub const TO_BE_FILLED_BY_OEM: &str = "To be filled by O.E.M.";
 
     #[inline]
     pub const fn header_type(&self) -> HeaderType {
@@ -204,8 +293,8 @@ impl SmBiosHeader {
     }
 
     #[inline]
-    pub fn handle(&self) -> u16 {
-        unsafe { (&self.handle as *const u16).read_unaligned() }
+    pub fn handle(&self) -> Handle {
+        Handle(unsafe { (&self.handle as *const u16).read_unaligned() })
     }
 
     #[inline]
@@ -216,9 +305,13 @@ impl SmBiosHeader {
     }
 
     #[inline]
-    fn strings(&self) -> SmBiosStrings {
-        let base = self as *const _ as usize + self.header_size();
-        SmBiosStrings { base, offset: 0 }
+    fn strings<'a>(&self) -> SmBiosStrings<'a> {
+        let base = unsafe { (self as *const _ as *const u8).add(self.header_size()) };
+        SmBiosStrings {
+            base,
+            offset: 0,
+            _phantom: PhantomData,
+        }
     }
 
     #[inline]
@@ -247,18 +340,23 @@ impl SmBiosHeader {
     }
 }
 
-struct SmBiosStrings {
-    base: usize,
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Handle(pub u16);
+
+struct SmBiosStrings<'a> {
+    base: *const u8,
     offset: usize,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl Iterator for SmBiosStrings {
-    type Item = &'static str;
+impl<'a> Iterator for SmBiosStrings<'a> {
+    type Item = &'a str;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let ptr = (self.base + self.offset) as *const u8;
+            let ptr = self.base.add(self.offset);
             let len = strlen(ptr);
             if len > 0 {
                 self.offset += len + 1;

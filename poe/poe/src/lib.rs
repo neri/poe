@@ -51,6 +51,33 @@ pub fn main() {
     println!(", PLATFORM {}", info.platform);
     println!("");
 
+    if true {
+        if let Some(smbios) = System::smbios() {
+            println!(
+                "SMBIOS Version {}.{}",
+                smbios.major_version(),
+                smbios.minor_version()
+            );
+            println!("  Number of Structures: {}", smbios.n_structures());
+            println!("  Total Size: {} bytes", smbios.table_length());
+            println!(
+                "  Manufacturer: {}",
+                smbios.manufacturer().unwrap_or("Unknown")
+            );
+            println!(
+                "  Product Name: {}",
+                smbios.product_name().unwrap_or("Unknown")
+            );
+            if let Some(serial_number) = smbios.serial_number() {
+                println!("  Serial Number: {}", serial_number);
+            }
+            if let Some(uuid) = smbios.system_uuid() {
+                println!("  System UUID: {}", uuid);
+            }
+            println!("");
+        }
+    }
+
     let mode = stdout.current_mode();
     println!(
         "TTY MODE: {} x {} cursor at {}, {}",
@@ -74,10 +101,8 @@ pub fn main() {
         stdout.set_attribute(0);
     }
 
-    if false {
-        if let Some(item) = System::find_config_table_entry(&fdt::DTB_TABLE_GUID) {
-            let fdt = unsafe { fdt::DeviceTree::parse(item.address.get().as_usize() as *const u8) }
-                .unwrap();
+    if true {
+        if let Some(fdt) = System::device_tree() {
             dump_fdt_node(fdt.root(), 0);
         }
     }
@@ -101,14 +126,16 @@ pub fn main() {
 fn dump_fdt_node(node: &fdt::Node, level: usize) {
     use fdt::*;
 
-    for _ in 0..level {
-        print!("  ");
+    if let Some(compatible) = node.get_prop_str(PropName::COMPATIBLE) {
+        println!(
+            "{}{} ({:?})",
+            "  ".repeat(level),
+            node.name().as_str(),
+            compatible,
+        );
+    } else {
+        println!("{}{}", "  ".repeat(level), node.name().as_str(),);
     }
-    println!(
-        "{} ({:?})",
-        node.name().as_str(),
-        node.get_prop_str(PropName::COMPATIBLE).unwrap_or_default(),
-    );
 
     for prop in node.props() {
         match prop.name() {

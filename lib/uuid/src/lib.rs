@@ -12,7 +12,7 @@ pub use uuid_identify::*;
 #[repr(C)]
 #[derive(Copy, Clone, Eq)]
 pub struct Uuid {
-    data: [u8; 16],
+    bytes: [u8; 16],
 }
 
 impl Uuid {
@@ -25,7 +25,7 @@ impl Uuid {
         let c = c.to_be_bytes();
         let d = d.to_be_bytes();
         Self {
-            data: [
+            bytes: [
                 a[0], a[1], a[2], a[3], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], e[2], e[3],
                 e[4], e[5],
             ],
@@ -33,36 +33,36 @@ impl Uuid {
     }
 
     #[inline]
-    pub const fn from_raw(data: [u8; 16]) -> Self {
-        Self { data }
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self { bytes }
     }
 
     #[inline]
     pub const fn a(&self) -> u32 {
-        ((self.data[0] as u32) << 24)
-            + ((self.data[1] as u32) << 16)
-            + ((self.data[2] as u32) << 8)
-            + (self.data[3] as u32)
+        ((self.bytes[0] as u32) << 24)
+            + ((self.bytes[1] as u32) << 16)
+            + ((self.bytes[2] as u32) << 8)
+            + (self.bytes[3] as u32)
     }
 
     #[inline]
     pub const fn b(&self) -> u16 {
-        ((self.data[4] as u16) << 8) + (self.data[5] as u16)
+        ((self.bytes[4] as u16) << 8) + (self.bytes[5] as u16)
     }
 
     #[inline]
     pub const fn c(&self) -> u16 {
-        ((self.data[6] as u16) << 8) + (self.data[7] as u16)
+        ((self.bytes[6] as u16) << 8) + (self.bytes[7] as u16)
     }
 
     #[inline]
     pub const fn d(&self) -> u16 {
-        ((self.data[8] as u16) << 8) + (self.data[9] as u16)
+        ((self.bytes[8] as u16) << 8) + (self.bytes[9] as u16)
     }
 
     #[inline]
     pub fn e(&self) -> &[u8] {
-        &self.data[10..]
+        &self.bytes[10..]
     }
 
     #[inline]
@@ -72,7 +72,7 @@ impl Uuid {
 
     #[inline]
     pub const fn null() -> Self {
-        Self { data: [0; 16] }
+        Self { bytes: [0; 16] }
     }
 
     #[inline]
@@ -82,12 +82,12 @@ impl Uuid {
 
     #[inline]
     pub const fn into_raw(self) -> [u8; 16] {
-        self.data
+        self.bytes
     }
 
     #[inline]
     pub const fn as_slice(&self) -> &[u8; 16] {
-        &self.data
+        &self.bytes
     }
 
     #[inline]
@@ -97,7 +97,7 @@ impl Uuid {
 
     #[inline]
     pub fn version(&self) -> Option<UuidVersion> {
-        unsafe { transmute(self.data[6] >> 4) }
+        unsafe { transmute(self.bytes[6] >> 4) }
     }
 }
 
@@ -119,6 +119,20 @@ impl Ord for Uuid {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.as_slice().cmp(other.as_slice())
+    }
+}
+
+impl fmt::Display for Uuid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+            self.a(),
+            self.b(),
+            self.c(),
+            self.d(),
+            self.e_u48(),
+        )
     }
 }
 
@@ -295,14 +309,14 @@ impl PartialEq for Guid {
 impl From<Uuid> for Guid {
     #[inline]
     fn from(uuid: Uuid) -> Self {
-        Self { data: uuid.data }
+        Self { data: uuid.bytes }
     }
 }
 
 impl From<Guid> for Uuid {
     #[inline]
     fn from(guid: Guid) -> Self {
-        Uuid { data: guid.data }
+        Uuid { bytes: guid.data }
     }
 }
 

@@ -18,6 +18,9 @@ pub struct System {
     stdin: NonNull<dyn SimpleTextInput>,
     stdout: NonNull<dyn SimpleTextOutput>,
     stderr: NonNull<dyn SimpleTextOutput>,
+
+    smbios: Option<smbios::SmBios>,
+    device_tree: Option<fdt::DeviceTree<'static>>,
 }
 
 impl System {
@@ -33,6 +36,8 @@ impl System {
                 stdin: NonNull::new_unchecked(&raw mut NULL),
                 stdout: NonNull::new_unchecked(&raw mut NULL),
                 stderr: NonNull::new_unchecked(&raw mut NULL),
+                smbios: None,
+                device_tree: None,
             };
 
             (&mut *(&raw mut SYSTEM)).write(env);
@@ -48,10 +53,8 @@ impl System {
     #[cfg(feature = "device_tree")]
     #[inline]
     pub unsafe fn init_dt(dtb: usize, arg: usize, main: fn() -> ()) -> ! {
-        use fdt::DTB_TABLE_GUID;
-
         unsafe {
-            let env = System {
+            let mut shared = System {
                 info: BootInfo {
                     platform: Platform::DeviceTree,
                     bios_boot_drive: BiosDriveSpec(0),
@@ -64,16 +67,20 @@ impl System {
                 stdin: NonNull::new_unchecked(&raw mut NULL),
                 stdout: NonNull::new_unchecked(&raw mut NULL),
                 stderr: NonNull::new_unchecked(&raw mut NULL),
+                smbios: None,
+                device_tree: None,
             };
-            (&mut *(&raw mut SYSTEM)).write(env);
+            shared.device_tree = fdt::DeviceTree::parse(dtb as *const u8).ok();
+            (&mut *(&raw mut SYSTEM)).write(shared);
 
-            let dt = fdt::DeviceTree::parse(dtb as *const u8).unwrap();
+            let dt = Self::device_tree().unwrap();
+
             Platform::init_dt_early(&dt, arg);
 
             MemoryManager::init_dt(&dt);
 
-            if let Some(dt) = NonNullPhysicalAddress::from_ptr(dt.into_ptr()) {
-                System::add_config_table_entry(DTB_TABLE_GUID, dt);
+            if let Some(dt) = NonNullPhysicalAddress::from_ptr(dt.as_ptr()) {
+                System::add_config_table_entry(fdt::DTB_TABLE_GUID, dt);
             }
 
             Platform::init(arg);
@@ -83,6 +90,17 @@ impl System {
 
     #[inline(always)]
     fn _init(main: fn() -> ()) -> ! {
+        unsafe {
+            let shared = Self::shared_mut();
+
+            if let Some(item) = Self::find_config_table_entry(&smbios::SMBIOS_GUID) {
+                let smbios = smbios::SmBios::parse(
+                    item.address.get().as_usize() as *const core::ffi::c_void
+                );
+                shared.smbios = smbios;
+            }
+        }
+
         main();
 
         panic!("The system has halted");
@@ -115,6 +133,18 @@ impl System {
     #[inline]
     pub fn platform() -> Platform {
         Self::boot_info().platform
+    }
+
+    #[inline]
+    pub fn smbios<'a>() -> Option<&'a smbios::SmBios> {
+        let shared = Self::shared();
+        shared.smbios.as_ref()
+    }
+
+    #[inline]
+    pub fn device_tree<'a>() -> Option<&'a fdt::DeviceTree<'a>> {
+        let shared = Self::shared();
+        shared.device_tree.as_ref()
     }
 
     /// # Safety
