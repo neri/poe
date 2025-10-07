@@ -33,12 +33,12 @@ default: $(BIN) $(TARGETS)
 
 all: test $(TARGET_ALL)
 
-install: $(TARGET_FD)
+install: test $(TARGET_FD)
 
 iso: $(TARGET_ISO)
 
 clean:
-	-rm -rf $(POE_SRC)/target
+	(cd $(POE_SRC) && cargo clean)
 	-rm -rf $(TARGETS) $(POE_LD)
 
 refresh: clean
@@ -48,12 +48,18 @@ run:
 	qemu-system-i386 -machine q35 -boot d -rtc base=localtime,clock=host -serial mon:stdio \
 	-fda $(TARGET_FD) \
 	-device nec-usb-xhci,id=xhci \
-	-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick \
+	-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick
 
 #	-cdrom $(TARGET_ISO) \
 
 run_cd:
 	qemu-system-i386 -cdrom $(TARGET_ISO) -rtc base=localtime,clock=host -serial mon:stdio
+
+run_headless:
+	qemu-system-i386 -boot a -rtc base=localtime,clock=host -nographic \
+	-fda $(TARGET_FD) \
+	-device nec-usb-xhci,id=xhci \
+	-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick \
 
 # Check for use of i486 or later instructions
 test: poe
@@ -83,7 +89,7 @@ poe:
 	(cd $(POE_SRC) && cargo build --release)
 
 $(POE_CEF): $(POE_LD) poe
-	$(ELF2BIN) -c -v1 $(POE_LD) $(POE_CEF)
+	$(ELF2BIN) -v1 $(POE_LD) $(POE_CEF)
 
 $(POE_BIN): $(BIN)/ssbl.bin $(POE_CEF)
 	cat $^ > $@

@@ -25,7 +25,7 @@ all: test default
 install: $(POE_BIN)
 
 clean:
-	-rm -rf $(POE_SRC)/target
+	(cd $(POE_SRC) && cargo clean)
 	-rm -rf $(TARGETS) $(POE_LD)
 
 refresh: clean

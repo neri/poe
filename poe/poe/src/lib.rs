@@ -3,9 +3,9 @@
 #![no_main]
 
 extern crate alloc;
-use libminios::{mem::MemoryManager, prelude::*};
+use minios::{mem::MemoryManager, prelude::*};
 
-pub use libminios::prelude;
+pub use minios::prelude;
 
 static SYSTEM_NAME: &str = "POE";
 
@@ -58,8 +58,6 @@ pub fn main() {
                 smbios.major_version(),
                 smbios.minor_version()
             );
-            println!("  Number of Structures: {}", smbios.n_structures());
-            println!("  Total Size: {} bytes", smbios.table_length());
             println!(
                 "  Manufacturer: {}",
                 smbios.manufacturer().unwrap_or("Unknown")
@@ -75,6 +73,20 @@ pub fn main() {
                 println!("  System UUID: {}", uuid);
             }
             println!("");
+        }
+    }
+
+    if false {
+        if let Some(fdt) = System::device_tree() {
+            println!("DEVICE TREE:");
+            println!("  Model: {}", fdt.root().model());
+            // println!("  Compatible: {}", fdt.root().compatible());
+            println!("");
+
+            if false {
+                dump_fdt_node(fdt.root(), 0);
+                println!("");
+            }
         }
     }
 
@@ -99,12 +111,6 @@ pub fn main() {
         }
         println!("");
         stdout.set_attribute(0);
-    }
-
-    if true {
-        if let Some(fdt) = System::device_tree() {
-            dump_fdt_node(fdt.root(), 0);
-        }
     }
 
     println!("POE super-shell v0.0");

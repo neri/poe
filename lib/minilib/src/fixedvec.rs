@@ -1,9 +1,7 @@
-use core::{
-    mem::MaybeUninit,
-    ops::{Deref, DerefMut},
-    ptr::{self, copy_nonoverlapping},
-    slice,
-};
+use core::mem::MaybeUninit;
+use core::ops::{Deref, DerefMut};
+use core::ptr::{self, copy_nonoverlapping};
+use core::slice;
 
 pub struct FixedVec<T, const N: usize> {
     data: [MaybeUninit<T>; N],

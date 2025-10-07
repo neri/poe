@@ -5,7 +5,7 @@ use crate::*;
 use core::{
     arch::{asm, global_asm, naked_asm},
     cell::UnsafeCell,
-    mem::{MaybeUninit, offset_of, size_of, transmute},
+    mem::{offset_of, size_of},
     ptr,
     sync::atomic::{Ordering, compiler_fence},
 };
@@ -116,19 +116,6 @@ impl Cpu {
     }
 }
 
-macro_rules! register_exception {
-    ($mnemonic:ident) => {
-        paste! {
-            Self::register(
-                Exception::$mnemonic.as_vec(),
-                [<exc_ $mnemonic>] as usize,
-                DPL0,
-                true,
-            );
-        }
-    };
-}
-
 macro_rules! exception_handler {
     ($mnemonic:ident) => {
         paste! {
@@ -229,7 +216,24 @@ impl Gdt {
 
     #[inline]
     const fn new() -> Self {
-        unsafe { transmute(MaybeUninit::<Self>::zeroed()) }
+        let mut gdt = Self {
+            table: [DescriptorEntry::NULL; Self::NUM_ITEMS],
+            tss: TaskStateSegment32::new(),
+            iopb: [0; 8192],
+        };
+
+        unsafe {
+            gdt.set_item_const(KERNEL_CSEL, DescriptorEntry::flat_code_segment(DPL0, USE32))
+                .unwrap();
+            gdt.set_item_const(KERNEL_DSEL, DescriptorEntry::flat_data_segment(DPL0))
+                .unwrap();
+
+            gdt.set_item_const(USER_CSEL, DescriptorEntry::flat_code_segment(DPL3, USE32))
+                .unwrap();
+            gdt.set_item_const(USER_DSEL, DescriptorEntry::flat_data_segment(DPL3))
+                .unwrap();
+        }
+        gdt
     }
 
     #[inline]
@@ -241,22 +245,12 @@ impl Gdt {
         unsafe {
             let gdt = Self::shared();
 
-            gdt.set_item(KERNEL_CSEL, DescriptorEntry::flat_code_segment(DPL0, USE32))
-                .unwrap();
-            gdt.set_item(KERNEL_DSEL, DescriptorEntry::flat_data_segment(DPL0))
-                .unwrap();
-
-            gdt.set_item(USER_CSEL, DescriptorEntry::flat_code_segment(DPL3, USE32))
-                .unwrap();
-            gdt.set_item(USER_DSEL, DescriptorEntry::flat_data_segment(DPL3))
-                .unwrap();
-
             gdt.tss.ss0 = KERNEL_DSEL.as_u16() as u32;
             let iopb_base = (offset_of!(Self, iopb) - offset_of!(Self, tss)) as u16;
             gdt.tss.iopb_base = iopb_base;
             let tss_base = Linear32::new(&gdt.tss as *const _ as u32);
             let tss_limit = Limit16::new(iopb_base + 8191);
-            gdt.set_item(SYSTEM_TSS, DescriptorEntry::tss32(tss_base, tss_limit))
+            gdt.set_item_const(SYSTEM_TSS, DescriptorEntry::tss32(tss_base, tss_limit))
                 .unwrap();
 
             gdt.reload();
@@ -286,19 +280,33 @@ impl Gdt {
     }
 
     #[inline]
-    pub unsafe fn set_item(
+    pub const unsafe fn set_item(
         &mut self,
         selector: Selector,
         desc: DescriptorEntry,
     ) -> Result<(), SetDescriptorError> {
-        let index = selector.index();
-        if selector.rpl() != desc.dpl().as_rpl() {
+        if selector.rpl().ne(&desc.dpl().as_rpl()) {
             return Err(SetDescriptorError::PriviledgeMismatch);
         }
-        self.table
-            .get_mut(index)
-            .map(|v| *v = desc)
-            .ok_or(SetDescriptorError::OutOfIndex)
+        let index = selector.index();
+        if index < self.table.len() {
+            self.table[index] = desc;
+            Ok(())
+        } else {
+            Err(SetDescriptorError::OutOfIndex)
+        }
+    }
+
+    #[inline]
+    pub const unsafe fn set_item_const(
+        &mut self,
+        selector: Selector,
+        desc: DescriptorEntry,
+    ) -> Option<()> {
+        match unsafe { self.set_item(selector, desc) } {
+            Ok(()) => Some(()),
+            Err(_) => None,
+        }
     }
 
     /// Reload GDT
@@ -345,7 +353,7 @@ impl Idt {
 
     const fn new() -> Self {
         Self {
-            table: [DescriptorEntry::null(); Self::MAX],
+            table: [DescriptorEntry::NULL; Self::MAX],
             exceptions: [None; 32],
         }
     }
@@ -353,6 +361,19 @@ impl Idt {
     unsafe fn init() {
         unsafe {
             let idt = Self::shared();
+
+            macro_rules! register_exception {
+                ($mnemonic:ident) => {
+                    paste! {
+                        Self::register(
+                            Exception::$mnemonic.as_vec(),
+                            [<exc_ $mnemonic>] as usize,
+                            DPL0,
+                            true,
+                        );
+                    }
+                };
+            }
 
             register_exception!(DivideError);
             register_exception!(Breakpoint);

@@ -1,82 +1,55 @@
-//! Programmable Interval Timer i8253/i8254
+//! PIT: Programmable Interval Timer i8253/i8254
 
 use super::pic::Irq;
-use crate::platform::Platform;
+use crate::platform::x86_pc::pic::IrqHandler;
 use core::{arch::asm, cell::UnsafeCell};
+use x86::isolated_io::IoPortWB;
 // use core::time::Duration;
 
 static mut PIT: UnsafeCell<Pit> = UnsafeCell::new(Pit::new());
 
-/// Programmable Interval Timer i8253/i8254
+/// PIT: Programmable Interval Timer i8253/i8254
 pub struct Pit {
     monotonic: u64,
-    tmr_cnt0: u32,
-    beep_cnt0: u32,
-    tmr_ctl: u32,
-    timer_val: usize,
+    tmr_cnt0: u16,
+    beep_cnt0: u16,
+    tmr_ctl: u16,
 }
 
 impl Pit {
     const TIMER_RES: u64 = 1;
 
+    #[inline]
     const fn new() -> Self {
         Self {
             monotonic: 0,
             tmr_cnt0: 0,
             beep_cnt0: 0,
             tmr_ctl: 0,
-            timer_val: 0,
         }
     }
 
-    pub(crate) unsafe fn init(platform: Platform) {
+    #[inline]
+    pub(super) unsafe fn init(
+        tmr_cnt0: u16,
+        beep_cnt0: u16,
+        tmr_ctl: u16,
+        timer_val: u16,
+        irq: Irq,
+        irq_handler: IrqHandler,
+    ) {
         unsafe {
             let shared = Self::shared();
-            match platform {
-                Platform::PcBios => {
-                    shared.tmr_cnt0 = 0x0040;
-                    shared.beep_cnt0 = 0x0042;
-                    shared.tmr_ctl = 0x0043;
-                    shared.timer_val = 1193;
-                    Irq(0).register(Self::timer_irq_handler_pc).unwrap();
-                }
-                Platform::Nec98 => {
-                    shared.tmr_cnt0 = 0x0071;
-                    shared.beep_cnt0 = 0x3fdb;
-                    shared.tmr_ctl = 0x0077;
-                    shared.timer_val = 2457;
-                    Irq(0).register(Self::timer_irq_handler_pc).unwrap();
-                }
-                Platform::FmTowns => {
-                    shared.tmr_cnt0 = 0x0040;
-                    shared.beep_cnt0 = 0x0044;
-                    shared.tmr_ctl = 0x0046;
-                    shared.timer_val = 307;
-                    Irq(0).register(Self::timer_irq_handler_fmt).unwrap();
-                    asm!(
-                        "mov al, 0x81",
-                        "out 0x60, al",
-                        out ("al") _,
-                    );
-                }
-                _ => unreachable!(),
-            }
+            shared.tmr_cnt0 = tmr_cnt0;
+            shared.beep_cnt0 = beep_cnt0;
+            shared.tmr_ctl = tmr_ctl;
 
-            asm!(
-                "out dx, al",
-                in ("edx") shared.tmr_ctl,
-                in ("al") 0b0011_0110u8
-            );
-            asm!(
-                "out dx, al",
-                "mov al, ah",
-                "out dx, al",
-                in ("edx") shared.tmr_cnt0,
-                inout ("eax") shared.timer_val => _,
-            );
+            irq.register(irq_handler).unwrap();
+            IoPortWB(tmr_ctl).write(0b0011_0110u8);
 
-            // Timer::set_timer(&PIT);
-            // AudioManager::set_beep_driver(&PIT);
+            let cnt = IoPortWB(tmr_cnt0);
+            cnt.write((timer_val & 0xff) as u8);
+            cnt.write((timer_val >> 8) as u8);
         }
     }
 
@@ -86,13 +59,13 @@ impl Pit {
     }
 
     /// Timer IRQ handler for IBM PC and NEC PC98
-    fn timer_irq_handler_pc(_irq: Irq) {
+    pub(super) unsafe fn timer_irq_handler_pc(_irq: Irq) {
         let shared = unsafe { Self::shared() };
         shared.monotonic += Self::TIMER_RES;
     }
 
     /// Timer IRQ handler for FM TOWNS
-    fn timer_irq_handler_fmt(_irq: Irq) {
+    pub(super) unsafe fn timer_irq_handler_fmt(_irq: Irq) {
         let shared = unsafe { Self::shared() };
         shared.monotonic += Self::TIMER_RES;
         unsafe {

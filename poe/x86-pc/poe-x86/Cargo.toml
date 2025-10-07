@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 poe = { path = "../../poe/" }
-libminios = { path = "../../../lib/", features = ["pc"] }
+minios = { path = "../../../minios/", features = ["pc"] }
 
 [profile.release]
 lto = true

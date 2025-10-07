@@ -87,6 +87,11 @@ static mut FMT_TEXT: UnsafeCell<FmtText> = UnsafeCell::new(FmtText {
 impl FmtText {
     pub(super) unsafe fn init() {
         unsafe {
+            // Clear GVRAM
+            let p = 0xc_ff81 as *mut u8;
+            p.write_volatile(0x0f);
+            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 * 400);
+
             let stdout = (&mut *(&raw mut FMT_TEXT)).get_mut();
             stdout.hw_set_mode();
             stdout.reset();

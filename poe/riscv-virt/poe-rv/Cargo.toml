@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 poe = { path = "../../poe/" }
-libminios = { path = "../../../lib/", features = ["sbi", "device_tree"] }
+minios = { path = "../../../minios/", features = ["sbi", "device_tree"] }
 
 [profile.release]
 lto = true

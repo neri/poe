@@ -109,7 +109,7 @@ impl<KnownType, RawType: Clone> Clone for Unknown<KnownType, RawType> {
     fn clone(&self) -> Self {
         Self {
             raw: self.raw.clone(),
-            _phantom: self._phantom.clone(),
+            _phantom: PhantomData,
         }
     }
 }

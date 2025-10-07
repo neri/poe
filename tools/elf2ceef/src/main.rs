@@ -30,7 +30,6 @@ fn main() {
     let mut args = env::args();
     let _ = args.next().unwrap();
 
-    let mut checked = false;
     let mut version = CeefVersion::CURRENT;
     let mut in_file = None;
     let mut out_file = None;
@@ -39,9 +38,6 @@ fn main() {
             match arg.as_str() {
                 "-o" => {
                     out_file = args.next();
-                }
-                "-c" => {
-                    checked = true;
                 }
                 "-v0" => {
                     version = CeefVersion::V0;
@@ -69,9 +65,11 @@ fn main() {
         None => return usage(),
     });
 
-    let mut is = File::open(in_file).unwrap();
+    let mut is = File::open(in_file).expect("Failed to open input file");
     let mut src_blob = Vec::new();
-    let _ = is.read_to_end(&mut src_blob).unwrap();
+    let _ = is
+        .read_to_end(&mut src_blob)
+        .expect("Failed to read input file");
 
     let mut data: Vec<u8> = Vec::with_capacity(src_blob.len());
 
@@ -147,7 +145,7 @@ fn main() {
                 new_header.version, new_header.base, new_header.minalloc, new_header.entry,
             );
 
-            let mut os = File::create(out_file).unwrap();
+            let mut os = File::create(out_file).expect("Failed to create output file");
             os.write_all(&new_header.as_bytes()).unwrap();
             for section in ceef_sec_hdr {
                 os.write_all(&section.as_bytes()).unwrap();
@@ -207,11 +205,7 @@ fn main() {
                 new_header.version, new_header.base, new_header.minalloc, new_header.entry,
             );
 
-            let compressed = if checked {
-                Stk1::encode_with_test(&data, Configuration::default()).unwrap()
-            } else {
-                Stk1::encode(&data, Configuration::default()).unwrap()
-            };
+            let compressed = Stk1::encode_with_test(&data, Configuration::default()).unwrap();
             println!(
                 "* compressed: {} <= {} ({:.2}%)",
                 compressed.len(),
@@ -219,7 +213,7 @@ fn main() {
                 compressed.len() as f64 / data.len() as f64 * 100.0
             );
 
-            let mut os = File::create(out_file).unwrap();
+            let mut os = File::create(out_file).expect("Failed to create output file");
             os.write_all(&new_header.as_bytes()).unwrap();
 
             let mut mini_header = Vec::new();

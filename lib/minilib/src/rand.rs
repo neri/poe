@@ -1,9 +1,7 @@
 //! Random Number Generator
 
-use core::{
-    convert::Infallible,
-    num::{NonZeroU32, NonZeroU64},
-};
+use core::convert::Infallible;
+use core::num::{NonZeroU32, NonZeroU64};
 
 /// Random Number Generator
 pub trait Rng {

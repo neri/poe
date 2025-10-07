@@ -6,8 +6,8 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libminios = { path = "../../lib/" }
-fdt = { path = "../../lib/fdt/", features = ["uuid"] }
+minios = { path = "../../minios/" }
+fdt = { path = "../../lib/fdt/", features = ["guid"] }
 
 [profile.release]
 lto = true

@@ -15,10 +15,7 @@ impl DescriptorEntry {
 
     pub const BIG_DATA: u64 = 0x0040_0000_0000_0000;
 
-    #[inline]
-    pub const fn null() -> Self {
-        Self(0)
-    }
+    pub const NULL: Self = Self(0);
 
     #[inline]
     pub const fn flat_code_segment(dpl: DPL, opr_size: DefaultOperandSize) -> DescriptorEntry {
@@ -466,6 +463,16 @@ macro_rules! privilege_level_impl {
                 $vis const SUPERVISOR: Self = Self(PrivilegeLevel::Supervisor);
 
                 $vis const USER: Self = Self(PrivilegeLevel::User);
+
+                #[inline]
+                pub const fn eq(&self, rhs: &Self) -> bool {
+                    self.0 as usize == rhs.0 as usize
+                }
+
+                #[inline]
+                pub const fn ne(&self, rhs: &Self) -> bool {
+                    self.0 as usize != rhs.0 as usize
+                }
             }
 
             paste! {

@@ -4,16 +4,13 @@
 extern crate alloc;
 use core::{ffi::c_void, marker::PhantomData, slice, str};
 
-#[cfg(feature = "uuid")]
-use uuid::{Guid, guid};
-
 /// EFI GUID of the SMBIOS 1.0 table.
-#[cfg(feature = "uuid")]
-pub const SMBIOS_GUID: Guid = guid!("eb9d2d31-2d88-11d3-9a16-0090273fc14d");
+#[cfg(feature = "guid")]
+pub const SMBIOS_GUID: guid::Guid = guid::guid!("eb9d2d31-2d88-11d3-9a16-0090273fc14d");
 
 /// EFI GUID of the SMBIOS 3.0 table.
-#[cfg(feature = "uuid")]
-pub const SMBIOS3_GUID: Guid = guid!("f2fd1544-9794-4a2c-992e-e5bbcf20e394");
+#[cfg(feature = "guid")]
+pub const SMBIOS3_GUID: guid::Guid = guid::guid!("f2fd1544-9794-4a2c-992e-e5bbcf20e394");
 
 /// System Management BIOS Entry Point
 pub struct SmBios {

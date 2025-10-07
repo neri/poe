@@ -9,13 +9,14 @@ pub mod bios;
 pub mod pc98_text;
 
 use crate::arch::vm86::{VM86, X86StackContext};
+use crate::platform::x86_pc::pic::Irq;
 use crate::*;
 use mem::{MemoryManager, MemoryType};
 use x86::isolated_io::LoIoPortDummyB;
 
 pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
 
-pub(super) unsafe fn init(info: &BootInfo) {
+pub(super) unsafe fn init(_info: &BootInfo) {
     unsafe {
         pc98_text::Pc98Text::init();
 
@@ -37,7 +38,33 @@ pub(super) unsafe fn init(info: &BootInfo) {
             .unwrap();
         }
 
-        super::init_vm(info);
+        arch::vm86::VM86::init();
+
+        super::pic::Pic::init(
+            0x00,
+            0x02,
+            0x08,
+            0x0a,
+            0b00010001,
+            0x07,
+            0b0001_1101,
+            0b0000_1001,
+            0b0111_1111_0111_1110,
+            [
+                0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+                0x16, 0x17,
+            ],
+        );
+
+        super::pit::Pit::init(
+            0x0071,
+            0x3fdb,
+            0x0077,
+            2457,
+            Irq(0),
+            super::pit::Pit::timer_irq_handler_pc,
+        );
+        Hal::cpu().enable_interrupt();
 
         let kbd = &mut *(&raw mut STDIN);
         kbd.reset();

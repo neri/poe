@@ -4,29 +4,27 @@ use super::*;
 use crate::System;
 use core::fmt::Write;
 
-const COLOR_TABLE: [u8; 8] = [0, 4, 2, 6, 1, 3, 5, 7];
+const COLOR_TABLE: [u8; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 
 pub struct VT100<'a> {
     inner: VT100Inner<'a>,
     mode: SimpleTextOutputMode,
 }
 
-struct VT100Inner<'a> {
-    inner: &'a mut dyn SerialIo,
-}
+struct VT100Inner<'a>(&'a mut dyn SerialIo);
 
 impl<'a> VT100<'a> {
     #[inline]
     pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
         Self {
-            inner: VT100Inner { inner },
+            inner: VT100Inner(inner),
             mode: SimpleTextOutputMode::default(),
         }
     }
 
     #[inline]
     pub fn wait_response(&mut self, expected: &[u8]) -> Option<u8> {
-        while let Some(ch) = self.inner.inner.read_byte() {
+        while let Some(ch) = self.inner.0.read_byte() {
             if expected.contains(&ch) {
                 return Some(ch);
             }
@@ -36,14 +34,15 @@ impl<'a> VT100<'a> {
 
     pub fn wait_byte(&mut self) -> u8 {
         loop {
-            if let Some(ch) = self.inner.inner.read_byte() {
+            if let Some(ch) = self.inner.0.read_byte() {
                 return ch;
             }
         }
     }
 
     pub fn get_cursor_position(&mut self) -> Option<(u8, u8)> {
-        self.inner.inner.flush_input();
+        // TODO: timeout
+        self.inner.0.flush_input();
         let _ = self.inner.write_str("\x1b[6n");
         let mut buf = [0u8; 16];
         let mut i = 0;
@@ -92,7 +91,7 @@ impl Write for VT100<'_> {
 impl Write for VT100Inner<'_> {
     #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.inner.write_bytes(s.as_bytes());
+        self.0.write_bytes(s.as_bytes());
         Ok(())
     }
 }
@@ -101,15 +100,15 @@ impl SimpleTextOutput for VT100<'_> {
     fn reset(&mut self) {
         let _ = self.inner.write_str("\x1b[255;255H");
         if let Some((col, row)) = self.get_cursor_position() {
-            self.mode.columns = col + 1;
-            self.mode.rows = row + 1;
+            self.mode.columns = col.saturating_add(1);
+            self.mode.rows = row.saturating_add(1);
         }
         // let _ = self.inner.write_str("\x1bc");
         self.set_attribute(0);
         let _ = self.inner.write_str("\x1b[2J\x1b[H");
         self.mode.cursor_column = 0;
         self.mode.cursor_row = 0;
-        self.inner.inner.reset();
+        self.inner.0.reset();
     }
 
     fn set_attribute(&mut self, attribute: u8) {
@@ -165,11 +164,11 @@ impl SimpleTextOutput for VT100<'_> {
 
 impl SimpleTextInput for VT100<'_> {
     fn reset(&mut self) {
-        self.inner.inner.reset();
+        self.inner.0.reset();
     }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        match self.inner.inner.read_byte() {
+        match self.inner.0.read_byte() {
             Some(ch) => NonZeroInputKey::new(0xffff, ch as u16),
             None => None,
         }

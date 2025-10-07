@@ -1,13 +1,10 @@
 [package]
-name = "acpi"
+authors = ["Nerry <108566+neri@users.noreply.github.com>"]
+name = "guid"
 version = "0.1.0"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = []
-all = ["guid"]
-
 [dependencies]
-guid = { path = "../guid/", optional = true }
+uuid = { path = "../uuid/" }

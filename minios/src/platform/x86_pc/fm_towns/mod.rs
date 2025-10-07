@@ -5,19 +5,16 @@
 //! May not work or may need to be adjusted as it has not been fully verified on actual hardware.
 //!
 
-use crate::{arch::cpu::Cpu, *};
+use super::pic::Irq;
+use crate::*;
 use mem::{MemoryManager, MemoryType};
+use x86::isolated_io::LoIoPortWB;
 
 mod fmt_kbd;
 mod fmt_text;
 
-pub(super) unsafe fn init(info: &BootInfo) {
+pub(super) unsafe fn init(_info: &BootInfo) {
     unsafe {
-        // Clear GVRAM
-        let p = 0xc_ff81 as *mut u8;
-        p.write_volatile(0x0f);
-        Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 * 400);
-
         fmt_text::FmtText::init();
 
         // 4000_0000-7fff_ffff io space
@@ -25,7 +22,34 @@ pub(super) unsafe fn init(info: &BootInfo) {
         // c000_0000-ffff_ffff rom space
         MemoryManager::register_memmap(0x4000_0000..0x1_0000_0000, MemoryType::Reserved).unwrap();
 
-        super::init_vm(info);
+        arch::vm86::VM86::init();
+
+        super::pic::Pic::init(
+            0x00,
+            0x02,
+            0x10,
+            0x12,
+            0b00011001,
+            0x07,
+            0b0001_1101,
+            0b0000_1001,
+            0,
+            [
+                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d,
+                0x4e, 0x4f,
+            ],
+        );
+
+        super::pit::Pit::init(
+            0x0040,
+            0x0044,
+            0x0046,
+            307,
+            Irq(0),
+            super::pit::Pit::timer_irq_handler_fmt,
+        );
+        LoIoPortWB::<0x60>::new().write(0x81);
+        Hal::cpu().enable_interrupt();
 
         fmt_kbd::FmtKbd::init();
 

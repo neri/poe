@@ -1,3 +1,5 @@
+//! General Purpose Registers and Flags
+
 use crate::{
     prot::{IOPL, Offset32},
     real::Offset16,

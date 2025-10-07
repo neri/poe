@@ -1,3 +1,5 @@
+//! Model Specific Registers (MSR)
+
 use core::{
     arch::asm,
     mem::transmute,

@@ -105,7 +105,10 @@ impl EntryHeader {
     }
 
     #[inline]
-    pub fn assume<T: RawEntry + Sized>(&self) -> Option<&T> {
+    pub fn assume<T>(&self) -> Option<&T>
+    where
+        T: RawEntry + Sized,
+    {
         (self.entry_type() == T::ENTRY_TYPE).then(|| unsafe { transmute(self) })
     }
 }

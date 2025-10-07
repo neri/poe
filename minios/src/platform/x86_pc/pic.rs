@@ -1,29 +1,25 @@
-//! Programmable Interrupt Controller i8259
+//! PIC: 8259 Programmable Interrupt Controller
 
 use super::cpu::{Idt, KERNEL_DSEL};
 use super::vm86::{VM86, X86StackContext};
-use crate::platform::Platform;
 use crate::*;
-use core::{
-    arch::{asm, global_asm},
-    cell::UnsafeCell,
-    num::NonZeroUsize,
-};
+use core::{arch::global_asm, cell::UnsafeCell, num::NonZeroUsize};
 use paste::paste;
 use seq_macro::seq;
+use x86::isolated_io::{IoPortRB, IoPortRWB, IoPortWB};
 use x86::prot::{DPL0, InterruptVector};
 
 static mut PIC: UnsafeCell<Pic> = UnsafeCell::new(Pic::new());
 
-pub type IrqHandler = fn(Irq) -> ();
+pub type IrqHandler = unsafe fn(Irq) -> ();
 
-/// Programmable Interrupt Controller i8259
+/// PIC: 8259 Programmable Interrupt Controller
 pub struct Pic {
     master: I8259Device,
     slave: I8259Device,
     chain_eoi: u8,
-    old_imr: u32,
-    redirect_bitmap: u32,
+    old_imr: u16,
+    redirect_bitmap: u16,
     redirect_table: [u8; 16],
     icw1: u8,
     slave_id: u8,
@@ -186,10 +182,11 @@ pub unsafe extern "fastcall" fn pic_handle_slave_irq(lirq: u8, regs: &mut X86Sta
 }
 
 impl Pic {
+    #[inline]
     const fn new() -> Self {
         Self {
-            master: I8259Device::zero(),
-            slave: I8259Device::zero(),
+            master: I8259Device::empty(),
+            slave: I8259Device::empty(),
             chain_eoi: 0,
             old_imr: 0,
             redirect_bitmap: 0,
@@ -202,57 +199,25 @@ impl Pic {
         }
     }
 
-    pub(crate) unsafe fn init(platform: Platform) {
+    #[inline]
+    pub(super) unsafe fn init(
+        ma0: u16,
+        ma1: u16,
+        sa0: u16,
+        sa1: u16,
+        icw1: u8,
+        slave_id: u8,
+        icw4_m: u8,
+        icw4_s: u8,
+        redirect_mask: u16,
+        redirect_table: [u8; 16],
+    ) {
         unsafe {
             let shared = Self::shared();
-            match platform {
-                Platform::PcBios => {
-                    shared.master.set_addrs(0x0020, 0x0021);
-                    shared.slave.set_addrs(0x00a0, 0x00a1);
-                    shared.redirect_table = [
-                        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x70, 0x71, 0x72, 0x73,
-                        0x74, 0x75, 0x76, 0x77,
-                    ];
-                    shared.init_pic(
-                        0b00010001,
-                        0x02,
-                        0b0001_0101,
-                        0b0000_0001,
-                        0b0111_1111_1111_1010,
-                    );
-                }
-                Platform::Nec98 => {
-                    shared.master.set_addrs(0x0000, 0x0002);
-                    shared.slave.set_addrs(0x0008, 0x000a);
-                    shared.redirect_table = [
-                        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13,
-                        0x14, 0x15, 0x16, 0x17,
-                    ];
-                    shared.init_pic(
-                        0b00010001,
-                        0x07,
-                        0b0001_1101,
-                        0b0000_1001,
-                        0b0111_1111_0111_1110,
-                    );
-                }
-                Platform::FmTowns => {
-                    shared.master.set_addrs(0x0000, 0x0002);
-                    shared.slave.set_addrs(0x0010, 0x0012);
-                    shared.redirect_table = [
-                        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b,
-                        0x4c, 0x4d, 0x4e, 0x4f,
-                    ];
-                    shared.init_pic(
-                        0b00011001,
-                        0x07,
-                        0b0001_1101,
-                        0b0000_1001,
-                        0b0000_0000_0000_0000,
-                    );
-                }
-                _ => unreachable!(),
-            }
+            shared.master.set_addrs(ma0, ma1);
+            shared.slave.set_addrs(sa0, sa1);
+            shared.redirect_table = redirect_table;
+            shared.init_pic(icw1, slave_id, icw4_m, icw4_s, redirect_mask);
 
             seq!(N in 0..8 {
                 Idt::register(
@@ -289,7 +254,7 @@ impl Pic {
         slave_id: u8,
         icw4_m: u8,
         icw4_s: u8,
-        redirect_mask: u32,
+        redirect_mask: u16,
     ) {
         self.icw1 = icw1;
         self.slave_id = slave_id;
@@ -298,7 +263,7 @@ impl Pic {
         unsafe {
             let old_imr0 = self.master.read_imr();
             let old_imr1 = self.slave.read_imr();
-            self.old_imr = (old_imr1 as u32) << 8 | old_imr0 as u32;
+            self.old_imr = (old_imr1 as u16) << 8 | old_imr0 as u16;
 
             self.master.write_imr(u8::MAX);
             self.slave.write_imr(u8::MAX);
@@ -396,19 +361,19 @@ impl Pic {
 }
 
 struct I8259Device {
-    a0: u32,
-    a1: u32,
+    a0: u16,
+    a1: u16,
 }
 
 #[allow(unused)]
 impl I8259Device {
     #[inline]
-    const fn zero() -> Self {
+    const fn empty() -> Self {
         Self { a0: 0, a1: 0 }
     }
 
     #[inline]
-    fn set_addrs(&mut self, a0: u32, a1: u32) {
+    fn set_addrs(&mut self, a0: u16, a1: u16) {
         self.a0 = a0;
         self.a1 = a1;
     }
@@ -416,63 +381,34 @@ impl I8259Device {
     #[inline]
     unsafe fn write_a0(&self, val: u8) {
         unsafe {
-            asm!(
-                "out dx, al",
-                in("edx") self.a0,
-                in("al") val,
-            );
+            IoPortWB(self.a0).write(val);
         }
     }
 
     #[inline]
     unsafe fn write_a1(&self, val: u8) {
         unsafe {
-            asm!(
-                "out dx, al",
-                in("edx") self.a1,
-                in("al") val,
-            );
+            IoPortWB(self.a1).write(val);
         }
     }
 
     #[inline]
     unsafe fn read_a0(&self) -> u8 {
-        let result: u8;
-        unsafe {
-            asm!(
-                "in al, dx",
-                in ("edx") self.a0,
-                lateout ("al") result,
-            );
-        }
-        result
+        unsafe { IoPortRB(self.a0).read() }
     }
 
     #[inline]
     unsafe fn read_a1(&self) -> u8 {
-        let result: u8;
-        unsafe {
-            asm!(
-                "in al, dx",
-                in ("edx") self.a1,
-                lateout ("al") result,
-            );
-        }
-        result
+        unsafe { IoPortRB(self.a1).read() }
     }
 
     #[inline]
     unsafe fn read_isr(&self) -> u8 {
         unsafe {
-            let result: u8;
-            asm!(
-                "out dx, al",
-                "nop",
-                "in al, dx",
-                inout("al") 0x0bu8 => result,
-                in("edx") self.a0,
-            );
-            result
+            let port = IoPortRWB(self.a0);
+            port.write(0x0b);
+            Hal::cpu().no_op();
+            port.read()
         }
     }
 

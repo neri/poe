@@ -7,6 +7,7 @@ use core::{
     str::from_utf8_unchecked,
 };
 
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TableId(pub [u8; 4]);
 

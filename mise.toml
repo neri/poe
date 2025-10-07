@@ -11,3 +11,7 @@ run = "make clean"
 confirm = "Are you sure?"
 description = "Refresh the dependencies"
 run = "make refresh"
+
+[tasks.test]
+description = "Run the tests"
+run = "make test"

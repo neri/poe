@@ -11,16 +11,13 @@ pub mod madt;
 
 use core::ffi::c_void;
 
-#[cfg(feature = "uuid")]
-use uuid::{Guid, guid};
-
 /// EFI GUID of the old ACPI 1 RSDP
-#[cfg(feature = "uuid")]
-pub const ACPI_10_TABLE_GUID: Guid = guid!("eb9d2d30-2d88-11d3-9a16-0090273fc14d");
+#[cfg(feature = "guid")]
+pub const ACPI_10_TABLE_GUID: guid::Guid = guid::guid!("eb9d2d30-2d88-11d3-9a16-0090273fc14d");
 
 /// EFI GUID of the ACPI 2 RSDP
-#[cfg(feature = "uuid")]
-pub const ACPI_20_TABLE_GUID: Guid = guid!("8868e871-e4f1-11d3-bc22-0080c73c8881");
+#[cfg(feature = "guid")]
+pub const ACPI_20_TABLE_GUID: guid::Guid = guid::guid!("8868e871-e4f1-11d3-bc22-0080c73c8881");
 
 pub type RsdPtr = RsdPtrV2;
 

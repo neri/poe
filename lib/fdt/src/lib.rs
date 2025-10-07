@@ -12,12 +12,9 @@ use core::{
     str,
 };
 
-#[cfg(feature = "uuid")]
-use uuid::{Guid, guid};
-
 /// EFI GUID of the Device Tree Table
-#[cfg(feature = "uuid")]
-pub const DTB_TABLE_GUID: Guid = guid!("b1b621d5-f19c-41a5-830b-d9152c69aae0");
+#[cfg(feature = "guid")]
+pub const DTB_TABLE_GUID: guid::Guid = guid::guid!("b1b621d5-f19c-41a5-830b-d9152c69aae0");
 
 pub struct DeviceTree<'a> {
     header: &'a Header,
@@ -693,7 +690,11 @@ impl<'a> NodeName<'a> {
 
     #[inline]
     pub const fn as_str(&'a self) -> &'a str {
-        if self.0.len() == 0 { "/" } else { self.0 }
+        if self.0.len() == 0 {
+            "/"
+        } else {
+            self.0
+        }
     }
 }
 

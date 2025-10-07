@@ -1,4 +1,4 @@
-//! x86 Control Registers
+//! Control Registers
 
 use core::{
     arch::asm,

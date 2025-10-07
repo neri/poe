@@ -3,24 +3,36 @@
 pub mod bios;
 mod cga_text;
 mod disk_bios;
+mod uart;
 // mod ps2;
 
-use crate::{
-    arch::{
-        lomem::LoMemoryManager,
-        vm86::{VM86, X86StackContext},
-    },
-    mem::{MemoryManager, MemoryType},
-    *,
+use crate::arch::{
+    lomem::LoMemoryManager,
+    vm86::{VM86, X86StackContext},
 };
+use crate::mem::{MemoryManager, MemoryType};
+use crate::platform::x86_pc::pic::Irq;
+use crate::*;
 use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
 use core::{ffi::c_void, iter::Iterator, ops::Range};
 use smbios::{SMBIOS_GUID, SmBios};
 use x86::gpr::Eflags;
 
-pub(super) unsafe fn init(info: &BootInfo) {
+const USE_UART_STDIO: bool = true;
+
+pub(super) unsafe fn init(_info: &BootInfo) {
     unsafe {
-        cga_text::CgaText::init();
+        if USE_UART_STDIO {
+            uart::Uart16550::init((0x400 as *const u16).read_volatile());
+            let stdout = uart::Uart16550::shared();
+            System::set_stdout(stdout);
+            let stderr = uart::Uart16550::shared();
+            System::set_stderr(stderr);
+            let stdin = uart::Uart16550::shared();
+            System::set_stdin(stdin);
+        } else {
+            cga_text::CgaText::init();
+        }
 
         let ebda = ((0x40e as *const u16).read_volatile() as u32) << 4;
 
@@ -77,7 +89,33 @@ pub(super) unsafe fn init(info: &BootInfo) {
             System::add_config_table_entry(SMBIOS_GUID, smbios);
         }
 
-        super::init_vm(info);
+        arch::vm86::VM86::init();
+
+        super::pic::Pic::init(
+            0x20,
+            0x21,
+            0xa0,
+            0xa1,
+            0b00010001,
+            0x02,
+            0b0001_0101,
+            0b0000_0001,
+            0b0111_1111_1111_1010,
+            [
+                0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75,
+                0x76, 0x77,
+            ],
+        );
+
+        super::pit::Pit::init(
+            0x0040,
+            0x0042,
+            0x0043,
+            1193,
+            Irq(0),
+            super::pit::Pit::timer_irq_handler_pc,
+        );
+        Hal::cpu().enable_interrupt();
 
         let mut smap_supported = false;
         let buf = LoMemoryManager::alloc_page();
@@ -121,9 +159,11 @@ pub(super) unsafe fn init(info: &BootInfo) {
             // TODO:
         }
 
-        let kbd = &mut *(&raw mut STDIN);
-        kbd.reset();
-        System::set_stdin(kbd);
+        if !USE_UART_STDIO {
+            let kbd = &mut *(&raw mut STDIN);
+            kbd.reset();
+            System::set_stdin(kbd);
+        }
 
         disk_bios::DiskBios::init();
     }

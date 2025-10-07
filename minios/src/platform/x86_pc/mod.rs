@@ -96,14 +96,3 @@ impl PlatformTrait for Platform {
         }
     }
 }
-
-/// Initialize VM86 mode, PIC, PIT, and enable CPU interrupt.
-#[inline(always)]
-unsafe fn init_vm(info: &BootInfo) {
-    unsafe {
-        vm86::VM86::init();
-        pic::Pic::init(info.platform);
-        pit::Pit::init(info.platform);
-        Hal::cpu().enable_interrupt();
-    }
-}

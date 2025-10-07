@@ -2,9 +2,9 @@
 
 use crate::{null::NullTty, platform::*, *};
 use core::{fmt, iter::Iterator, mem::MaybeUninit, ops::Range, panic::PanicInfo, ptr::NonNull};
+use guid::Guid;
 use io::tty::{SimpleTextInput, SimpleTextOutput};
 use mem::MemoryManager;
-use uuid::Guid;
 
 static mut SYSTEM: MaybeUninit<System> = MaybeUninit::zeroed();
 
@@ -299,7 +299,7 @@ impl System {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     let stderr = System::stderr();
-    stderr.set_attribute(0x1F);
+    stderr.set_attribute(0xcf);
     let _ = writeln!(stderr, "{}", info);
     loop {
         Hal::cpu().halt();
