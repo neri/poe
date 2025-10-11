@@ -93,6 +93,16 @@ impl Pointer32 {
     pub const fn as_u16(&self) -> u16 {
         self.0 as u16
     }
+
+    #[inline]
+    pub const fn offset32(&self) -> Offset32 {
+        Offset32::new(self.0)
+    }
+
+    #[inline]
+    pub const fn offset16(&self) -> Offset16 {
+        Offset16::new(self.0 as u16)
+    }
 }
 
 impl From<u16> for Pointer32 {

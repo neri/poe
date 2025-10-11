@@ -254,6 +254,11 @@ impl Linear32 {
     }
 
     #[inline]
+    pub const fn as_ptr<T: Sized>(&self) -> *mut T {
+        self.0 as *mut T
+    }
+
+    #[inline]
     pub const fn as_segment_base(&self) -> u64 {
         ((self.0 as u64 & 0x00FF_FFFF) << 16) | ((self.0 as u64 & 0xFF00_0000) << 32)
     }
@@ -271,6 +276,11 @@ impl Linear64 {
     }
 
     #[inline]
+    pub const fn as_ptr<T: Sized>(&self) -> *mut T {
+        self.0 as *mut T
+    }
+
+    #[inline]
     pub const fn as_segment_base_pair(&self) -> (u64, u64) {
         let low = Linear32(self.0 as u32).as_segment_base();
         let high = self.0 >> 32;
@@ -284,6 +294,11 @@ impl Linear64 {
 pub struct Offset32(u32);
 
 impl Offset32 {
+    #[inline]
+    pub const fn new(off: u32) -> Self {
+        Self(off)
+    }
+
     #[inline]
     pub const fn as_u32(&self) -> u32 {
         self.0
@@ -409,16 +424,16 @@ impl LowerHex for Selector {
 /// 32-bit aligned selector
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Selector32(pub u32);
+pub struct AlignedSelector32(pub u32);
 
-impl Selector32 {
+impl AlignedSelector32 {
     #[inline]
     pub const fn sel(&self) -> Selector {
         Selector(self.0 as u16)
     }
 }
 
-impl From<Selector> for Selector32 {
+impl From<Selector> for AlignedSelector32 {
     #[inline]
     fn from(value: Selector) -> Self {
         Self(value.as_u16() as u32)

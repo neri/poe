@@ -1,7 +1,10 @@
 //! Hardware Abstraction Layer for x86
 
 use crate::*;
-use core::{arch::asm, fmt, marker::PhantomData};
+use core::arch::asm;
+use core::fmt;
+use core::marker::PhantomData;
+use core::sync::atomic::{Ordering, compiler_fence};
 use x86::gpr::Flags;
 
 impl HalTrait for Hal {
@@ -52,6 +55,7 @@ impl HalCpu for CpuImpl {
     #[inline]
     unsafe fn interrupt_guard(&self) -> InterruptGuard {
         let mut flags: usize;
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!(
                 "pushfd",
@@ -60,6 +64,7 @@ impl HalCpu for CpuImpl {
                 lateout(reg) flags,
             );
         }
+        compiler_fence(Ordering::SeqCst);
         InterruptGuard {
             flags,
             _phatom: PhantomData,
@@ -70,6 +75,7 @@ impl HalCpu for CpuImpl {
     #[inline]
     unsafe fn interrupt_guard(&self) -> InterruptGuard {
         let mut flags: usize;
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!(
                 "pushfq",
@@ -78,6 +84,7 @@ impl HalCpu for CpuImpl {
                 lateout(reg) flags,
             );
         }
+        compiler_fence(Ordering::SeqCst);
         InterruptGuard {
             flags,
             _phatom: PhantomData,
@@ -94,6 +101,7 @@ pub struct InterruptGuard {
 impl Drop for InterruptGuard {
     #[inline]
     fn drop(&mut self) {
+        compiler_fence(Ordering::SeqCst);
         if Flags::from_bits_retain(self.flags).contains(Flags::IF) {
             unsafe {
                 Hal::cpu().enable_interrupt();

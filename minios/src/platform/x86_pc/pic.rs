@@ -3,7 +3,9 @@
 use super::cpu::{Idt, KERNEL_DSEL};
 use super::vm86::{VM86, X86StackContext};
 use crate::*;
-use core::{arch::global_asm, cell::UnsafeCell, num::NonZeroUsize};
+use core::arch::global_asm;
+use core::cell::UnsafeCell;
+use core::num::NonZeroUsize;
 use paste::paste;
 use seq_macro::seq;
 use x86::isolated_io::{IoPortRB, IoPortRWB, IoPortWB};
@@ -147,10 +149,6 @@ pub unsafe extern "fastcall" fn pic_handle_master_irq(irq: Irq, regs: &mut X86St
 
             // EOI
             shared.master.write_a0(0x60 + irq.local_number());
-
-            // if irq == Irq(0) {
-            //     Scheduler::reschedule();
-            // }
         }
     }
 }

@@ -180,7 +180,7 @@ impl ManagedLowMemory {
     pub fn as_slice<'a>(&self) -> &'a mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
-                self.base().as_u32() as *mut u8,
+                self.base().as_ptr(),
                 self.limit().as_u32() as usize + 1,
             )
         }

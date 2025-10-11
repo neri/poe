@@ -76,7 +76,8 @@ pub fn main() {
         }
     }
 
-    if false {
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    if true {
         if let Some(fdt) = System::device_tree() {
             println!("DEVICE TREE:");
             println!("  Model: {}", fdt.root().model());

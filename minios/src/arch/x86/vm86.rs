@@ -6,7 +6,9 @@ use super::{
     setjmp::JmpBuf,
 };
 use crate::*;
-use core::{cell::UnsafeCell, num::NonZeroUsize, ptr::null_mut};
+use core::cell::UnsafeCell;
+use core::num::NonZeroUsize;
+use core::ptr::null_mut;
 use x86::{gpr::*, prot::*, real::*};
 
 static mut VMM: UnsafeCell<VM86> = UnsafeCell::new(VM86::new());
@@ -93,10 +95,10 @@ impl VM86 {
             let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
             ctx.set_cs(vmbp_csip.sel());
             ctx.eip = Pointer32::from(vmbp_csip.off());
-            Self::redirect_vm_interrupt(int_vec, ctx, true);
+            Self::redirect_interrupt_on_vm(int_vec, ctx, true);
 
             shared.context = ctx;
-            if shared.jmp_buf.set_jmp().is_none() {
+            if shared.jmp_buf.set_jmp().is_returned() {
                 Cpu::enter_to_user_mode(ctx);
             }
 
@@ -139,7 +141,7 @@ impl VM86 {
             ctx.eip = Pointer32::from(target.off());
 
             shared.context = ctx;
-            if shared.jmp_buf.set_jmp().is_none() {
+            if shared.jmp_buf.set_jmp().is_returned() {
                 Cpu::enter_to_user_mode(ctx);
             }
 
@@ -184,7 +186,7 @@ impl VM86 {
 
                 let err = ctx.selector_error_code();
                 if let Some(int_vec) = err.int_vec() {
-                    Self::redirect_vm_interrupt(int_vec, ctx, false);
+                    Self::redirect_interrupt_on_vm(int_vec, ctx, false);
                     return true;
                 } else {
                     return Self::simulate_vm_instruction(ctx);
@@ -201,7 +203,7 @@ impl VM86 {
     pub unsafe fn redirect_interrupt(int_vec: InterruptVector, ctx: &mut X86StackContext) {
         unsafe {
             if ctx.is_vm() {
-                Self::redirect_vm_interrupt(int_vec, ctx, true);
+                Self::redirect_interrupt_on_vm(int_vec, ctx, true);
             } else {
                 let mut regs = X86StackContext::default();
                 Self::call_bios(int_vec, &mut regs);
@@ -210,7 +212,7 @@ impl VM86 {
     }
 
     /// Redirect interrupts by adjusting the stack context in virtual 8086 mode.
-    unsafe fn redirect_vm_interrupt(
+    unsafe fn redirect_interrupt_on_vm(
         int_vec: InterruptVector,
         ctx: &mut X86StackContext,
         is_external: bool,
@@ -299,12 +301,12 @@ impl VM86 {
                 0xCD => {
                     // CD nn: INT N
                     let int_vec = InterruptVector(vm_csip.add(skip + 1).read_volatile() as u8);
-                    Self::redirect_vm_interrupt(int_vec, ctx, false);
+                    Self::redirect_interrupt_on_vm(int_vec, ctx, false);
                     return true;
                 }
                 0xCC => {
                     // CC: INT3
-                    Self::redirect_vm_interrupt(Exception::Breakpoint.as_vec(), ctx, false);
+                    Self::redirect_interrupt_on_vm(Exception::Breakpoint.as_vec(), ctx, false);
                     return true;
                 }
                 0xCF => {
@@ -361,10 +363,10 @@ impl VM86 {
 #[repr(C)]
 #[derive(Debug, Clone, Default)]
 pub struct X86StackContext {
-    _es: Selector32,
-    _ds: Selector32,
-    _fs: Selector32,
-    _gs: Selector32,
+    _es: AlignedSelector32,
+    _ds: AlignedSelector32,
+    _fs: AlignedSelector32,
+    _gs: AlignedSelector32,
 
     pub edi: Gpr32,
     pub esi: Gpr32,
@@ -380,18 +382,18 @@ pub struct X86StackContext {
     _error_code: u32,
 
     pub eip: Pointer32,
-    _cs: Selector32,
+    _cs: AlignedSelector32,
     pub eflags: Eflags,
 
     // Valid only if `is_user()` is `true` after this point.
     _esp3: Pointer32,
-    _ss3: Selector32,
+    _ss3: AlignedSelector32,
 
     // Valid only if `is_vm()` is `true` after this point.
-    _vmes: Selector32,
-    _vmds: Selector32,
-    _vmfs: Selector32,
-    _vmgs: Selector32,
+    _vmes: AlignedSelector32,
+    _vmds: AlignedSelector32,
+    _vmfs: AlignedSelector32,
+    _vmgs: AlignedSelector32,
 }
 
 #[allow(unused)]
@@ -399,10 +401,10 @@ impl X86StackContext {
     #[inline]
     pub const fn empty() -> Self {
         Self {
-            _es: Selector32(0),
-            _ds: Selector32(0),
-            _fs: Selector32(0),
-            _gs: Selector32(0),
+            _es: AlignedSelector32(0),
+            _ds: AlignedSelector32(0),
+            _fs: AlignedSelector32(0),
+            _gs: AlignedSelector32(0),
             edi: Gpr32(0),
             esi: Gpr32(0),
             ebp: Gpr32(0),
@@ -414,22 +416,24 @@ impl X86StackContext {
             _vector: 0,
             _error_code: 0,
             eip: Pointer32(0),
-            _cs: Selector32(0),
+            _cs: AlignedSelector32(0),
             eflags: Eflags::empty(),
             _esp3: Pointer32(0),
-            _ss3: Selector32(0),
-            _vmes: Selector32(0),
-            _vmds: Selector32(0),
-            _vmfs: Selector32(0),
-            _vmgs: Selector32(0),
+            _ss3: AlignedSelector32(0),
+            _vmes: AlignedSelector32(0),
+            _vmds: AlignedSelector32(0),
+            _vmfs: AlignedSelector32(0),
+            _vmgs: AlignedSelector32(0),
         }
     }
 
+    /// Returns `true` if the context is in virtual 8086 mode.
     #[inline]
     pub fn is_vm(&self) -> bool {
         self.eflags.contains(Eflags::VM)
     }
 
+    /// Returns `true` if the context is in user mode or virtual 8086 mode.
     #[inline]
     pub fn is_user(&self) -> bool {
         self.is_vm() || (self.cs().rpl() != RPL0)
@@ -533,27 +537,27 @@ impl X86StackContext {
 
     #[inline]
     pub unsafe fn set_vmds(&mut self, vmds: Selector) {
-        self._vmds = Selector32::from(vmds);
+        self._vmds = AlignedSelector32::from(vmds);
     }
 
     #[inline]
     pub unsafe fn set_vmes(&mut self, vmes: Selector) {
-        self._vmes = Selector32::from(vmes);
+        self._vmes = AlignedSelector32::from(vmes);
     }
 
     #[inline]
     pub unsafe fn set_vmfs(&mut self, vmfs: Selector) {
-        self._vmfs = Selector32::from(vmfs);
+        self._vmfs = AlignedSelector32::from(vmfs);
     }
 
     #[inline]
     pub unsafe fn set_vmgs(&mut self, vmgs: Selector) {
-        self._vmgs = Selector32::from(vmgs);
+        self._vmgs = AlignedSelector32::from(vmgs);
     }
 
     #[inline]
     pub fn set_cs(&mut self, cs: Selector) {
-        self._cs = Selector32::from(cs);
+        self._cs = AlignedSelector32::from(cs);
     }
 
     #[inline]
@@ -607,7 +611,7 @@ impl X86StackContext {
 
     #[inline]
     pub unsafe fn set_ss3(&mut self, ss3: Selector) {
-        self._ss3 = Selector32::from(ss3);
+        self._ss3 = AlignedSelector32::from(ss3);
     }
 
     #[inline]
@@ -647,33 +651,33 @@ impl X86StackContext {
 
     #[inline]
     pub fn vm_csip_ptr(&self) -> *mut u8 {
-        Far16Ptr::new(self.cs(), Offset16::new(self.eip.as_u16())).to_ptr()
+        Far16Ptr::new(self.cs(), self.eip.offset16()).as_ptr()
     }
 
     #[inline]
-    pub unsafe fn vm_sssp_ptr(&self) -> *mut u16 {
+    pub unsafe fn vm_sssp_ptr16(&self) -> *mut u16 {
         let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
-        Far16Ptr::new(ss, Offset16::new(esp.as_u16())).to_ptr()
+        Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
     #[inline]
     pub unsafe fn vm_sssp_ptr32(&self) -> *mut u32 {
         let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
-        Far16Ptr::new(ss, Offset16::new(esp.as_u16())).to_ptr()
+        Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
     #[inline]
     pub unsafe fn vm_push16(&mut self, value: u16) {
         unsafe {
             self.update_sp3(|sp3| sp3.wrapping_sub(size_of_val(&value) as u16));
-            self.vm_sssp_ptr().write_volatile(value);
+            self.vm_sssp_ptr16().write_volatile(value);
         }
     }
 
     #[inline]
     pub unsafe fn vm_pop16(&mut self) -> u16 {
         unsafe {
-            let value = self.vm_sssp_ptr().read_volatile();
+            let value = self.vm_sssp_ptr16().read_volatile();
             self.update_sp3(|sp3| sp3.wrapping_add(size_of_val(&value) as u16));
             value
         }

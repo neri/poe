@@ -25,8 +25,8 @@ pub enum Platform {
     PcBios = 2,
     FmTowns = 3,
     Uefi = 4,
-    RaspberryPi = 5,
-    DeviceTree = 6,
+    DeviceTree = 5,
+    RaspberryPi = 6,
     OpenSbi = 7,
 }
 
@@ -39,8 +39,8 @@ impl Platform {
             Self::Nec98 => "PC-98",
             Self::FmTowns => "FM TOWNS",
             Self::Uefi => "UEFI",
-            Self::RaspberryPi => "Raspberry Pi",
             Self::DeviceTree => "Device Tree",
+            Self::RaspberryPi => "Raspberry Pi",
             Self::OpenSbi => "OpenSBI",
         }
     }

@@ -9,9 +9,9 @@ pub mod bios;
 pub mod pc98_text;
 
 use crate::arch::vm86::{VM86, X86StackContext};
+use crate::mem::{MemoryManager, MemoryType};
 use crate::platform::x86_pc::pic::Irq;
 use crate::*;
-use mem::{MemoryManager, MemoryType};
 use x86::isolated_io::LoIoPortDummyB;
 
 pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
@@ -56,14 +56,7 @@ pub(super) unsafe fn init(_info: &BootInfo) {
             ],
         );
 
-        super::pit::Pit::init(
-            0x0071,
-            0x3fdb,
-            0x0077,
-            2457,
-            Irq(0),
-            super::pit::Pit::timer_irq_handler_pc,
-        );
+        super::pit::Pit::init(0x0071, 0x3fdb, 0x0077, 2457, Irq(0), timer_irq_handler);
         Hal::cpu().enable_interrupt();
 
         let kbd = &mut *(&raw mut STDIN);
@@ -74,6 +67,10 @@ pub(super) unsafe fn init(_info: &BootInfo) {
 
 pub(super) unsafe fn exit() {
     // TODO:
+}
+
+fn timer_irq_handler(_irq: Irq) {
+    super::pit::Pit::advance_tick();
 }
 
 static mut STDIN: BiosTextInput = BiosTextInput {};

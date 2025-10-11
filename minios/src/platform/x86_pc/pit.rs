@@ -2,7 +2,7 @@
 
 use super::pic::Irq;
 use crate::platform::x86_pc::pic::IrqHandler;
-use core::{arch::asm, cell::UnsafeCell};
+use core::cell::UnsafeCell;
 use x86::isolated_io::IoPortWB;
 // use core::time::Duration;
 
@@ -58,25 +58,11 @@ impl Pit {
         unsafe { (&mut *(&raw mut PIT)).get_mut() }
     }
 
-    /// Timer IRQ handler for IBM PC and NEC PC98
-    pub(super) unsafe fn timer_irq_handler_pc(_irq: Irq) {
+    #[inline(always)]
+    #[allow(dead_code)]
+    pub(super) fn advance_tick() {
         let shared = unsafe { Self::shared() };
         shared.monotonic += Self::TIMER_RES;
-    }
-
-    /// Timer IRQ handler for FM TOWNS
-    pub(super) unsafe fn timer_irq_handler_fmt(_irq: Irq) {
-        let shared = unsafe { Self::shared() };
-        shared.monotonic += Self::TIMER_RES;
-        unsafe {
-            asm!(
-                "in al, 0x60",
-                "shr al, 2",
-                "or al, 0x80",
-                "out 0x60, al",
-                out ("al") _,
-            );
-        }
     }
 }
 

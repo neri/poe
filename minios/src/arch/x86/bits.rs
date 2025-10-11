@@ -1,9 +1,7 @@
-use core::{
-    arch::asm,
-    cell::UnsafeCell,
-    mem::transmute,
-    ops::{Deref, DerefMut},
-};
+use core::arch::asm;
+use core::cell::UnsafeCell;
+use core::mem::transmute;
+use core::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone)]
 pub struct BitArray<const N: usize> {

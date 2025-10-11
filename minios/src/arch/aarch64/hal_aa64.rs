@@ -1,7 +1,10 @@
 //! Hardware Abstraction Layer for aarch64
 
 use crate::*;
-use core::{arch::asm, fmt, marker::PhantomData};
+use core::arch::asm;
+use core::fmt;
+use core::marker::PhantomData;
+use core::sync::atomic::{Ordering, compiler_fence};
 
 impl HalTrait for Hal {
     #[inline]
@@ -51,12 +54,14 @@ impl HalCpu for CpuImpl {
     unsafe fn interrupt_guard(&self) -> InterruptGuard {
         unsafe {
             let old: usize;
+            compiler_fence(Ordering::SeqCst);
             asm!(
                 "mrs {0}, daif",
                 "msr daifset, #2",
                 out(reg)old,
                 options(nomem, nostack),
             );
+            compiler_fence(Ordering::SeqCst);
             InterruptGuard {
                 flags: old & 0x80,
                 _phatom: PhantomData,
@@ -74,6 +79,7 @@ pub struct InterruptGuard {
 impl Drop for InterruptGuard {
     #[inline]
     fn drop(&mut self) {
+        compiler_fence(Ordering::SeqCst);
         if self.flags != 0 {
             unsafe {
                 Hal::cpu().enable_interrupt();

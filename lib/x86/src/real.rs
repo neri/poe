@@ -71,8 +71,8 @@ impl Far16Ptr {
     }
 
     #[inline]
-    pub fn to_ptr<T>(&self) -> *mut T {
-        self.to_linear().as_u32() as *mut T
+    pub fn as_ptr<T>(&self) -> *mut T {
+        self.to_linear().as_ptr()
     }
 }
 

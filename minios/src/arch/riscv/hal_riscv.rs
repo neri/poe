@@ -1,12 +1,11 @@
 //! Hardware Abstraction Layer for riscv
 
-use crate::{arch::csr::CSR, *};
-use core::{
-    arch::asm,
-    fmt,
-    marker::PhantomData,
-    sync::atomic::{Ordering, compiler_fence},
-};
+use crate::arch::csr::CSR;
+use crate::*;
+use core::arch::asm;
+use core::fmt;
+use core::marker::PhantomData;
+use core::sync::atomic::{Ordering, compiler_fence};
 
 impl HalTrait for Hal {
     #[inline]
@@ -60,6 +59,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     unsafe fn interrupt_guard(&self) -> InterruptGuard {
+        compiler_fence(Ordering::SeqCst);
         let sie = STATUS_SIE;
         let mut result: usize;
         unsafe {
@@ -68,6 +68,7 @@ impl HalCpu for CpuImpl {
             result = lateout(reg)result,
             );
         }
+        compiler_fence(Ordering::SeqCst);
         InterruptGuard {
             flags: result & sie,
             _phatom: PhantomData,
@@ -84,6 +85,7 @@ pub struct InterruptGuard {
 impl Drop for InterruptGuard {
     #[inline]
     fn drop(&mut self) {
+        compiler_fence(Ordering::SeqCst);
         if self.flags != 0 {
             unsafe {
                 Hal::cpu().enable_interrupt();

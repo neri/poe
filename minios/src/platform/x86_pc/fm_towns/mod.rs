@@ -5,13 +5,13 @@
 //! May not work or may need to be adjusted as it has not been fully verified on actual hardware.
 //!
 
-use super::pic::Irq;
-use crate::*;
-use mem::{MemoryManager, MemoryType};
-use x86::isolated_io::LoIoPortWB;
-
 mod fmt_kbd;
 mod fmt_text;
+
+use crate::mem::{MemoryManager, MemoryType};
+use crate::platform::x86_pc::pic::Irq;
+use crate::*;
+use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
 pub(super) unsafe fn init(_info: &BootInfo) {
     unsafe {
@@ -40,14 +40,7 @@ pub(super) unsafe fn init(_info: &BootInfo) {
             ],
         );
 
-        super::pit::Pit::init(
-            0x0040,
-            0x0044,
-            0x0046,
-            307,
-            Irq(0),
-            super::pit::Pit::timer_irq_handler_fmt,
-        );
+        super::pit::Pit::init(0x0040, 0x0044, 0x0046, 307, Irq(0), timer_irq_handler);
         LoIoPortWB::<0x60>::new().write(0x81);
         Hal::cpu().enable_interrupt();
 
@@ -63,6 +56,15 @@ pub(super) unsafe fn init(_info: &BootInfo) {
 
 pub(super) unsafe fn exit() {
     // TODO:
+}
+
+fn timer_irq_handler(_irq: Irq) {
+    super::pit::Pit::advance_tick();
+    unsafe {
+        let mut al = LoIoPortRB::<0x60>::new().read();
+        al = (al >> 2) | 0x80;
+        LoIoPortWB::<0x60>::new().write(al);
+    }
 }
 
 // pub fn wait_us(us: usize) {

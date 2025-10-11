@@ -37,56 +37,60 @@ pub(super) unsafe fn init(_info: &BootInfo) {
         let ebda = ((0x40e as *const u16).read_volatile() as u32) << 4;
 
         // find ACPI RSD Ptr tables
-        let mut acpi1 = None;
-        let mut acpi2 = None;
+        {
+            let mut acpi1 = None;
+            let mut acpi2 = None;
 
-        if ebda > 0 {
-            for i in (0..0x400).step_by(16) {
+            if ebda > 0 {
+                for i in (0..0x400).step_by(16) {
+                    if acpi1.is_some() && acpi2.is_some() {
+                        break;
+                    }
+                    let p = (ebda + i) as *const c_void;
+                    if RsdPtr::parse_extended(p).is_some() {
+                        acpi2 = NonNullPhysicalAddress::from_ptr(p)
+                    } else if RsdPtrV1::parse(p).is_some() {
+                        acpi1 = NonNullPhysicalAddress::from_ptr(p)
+                    }
+                }
+            }
+
+            for i in (0xe0000..0xfffff).step_by(16) {
                 if acpi1.is_some() && acpi2.is_some() {
                     break;
                 }
-                let p = (ebda + i) as *const c_void;
+                let p = i as *const c_void;
                 if RsdPtr::parse_extended(p).is_some() {
                     acpi2 = NonNullPhysicalAddress::from_ptr(p)
                 } else if RsdPtrV1::parse(p).is_some() {
                     acpi1 = NonNullPhysicalAddress::from_ptr(p)
                 }
             }
-        }
 
-        for i in (0xe0000..0xfffff).step_by(16) {
-            if acpi1.is_some() && acpi2.is_some() {
-                break;
+            if let Some(acpi1) = acpi1 {
+                System::add_config_table_entry(ACPI_10_TABLE_GUID, acpi1);
             }
-            let p = i as *const c_void;
-            if RsdPtr::parse_extended(p).is_some() {
-                acpi2 = NonNullPhysicalAddress::from_ptr(p)
-            } else if RsdPtrV1::parse(p).is_some() {
-                acpi1 = NonNullPhysicalAddress::from_ptr(p)
+            if let Some(acpi2) = acpi2 {
+                System::add_config_table_entry(ACPI_20_TABLE_GUID, acpi2);
             }
-        }
-
-        if let Some(acpi1) = acpi1 {
-            System::add_config_table_entry(ACPI_10_TABLE_GUID, acpi1);
-        }
-        if let Some(acpi2) = acpi2 {
-            System::add_config_table_entry(ACPI_20_TABLE_GUID, acpi2);
         }
 
         // find SMBIOS entry
-        let mut smbios = None;
+        {
+            let mut smbios = None;
 
-        for i in (0xf0000..0xfffff).step_by(16) {
-            if smbios.is_some() {
-                break;
+            for i in (0xf0000..0xfffff).step_by(16) {
+                if smbios.is_some() {
+                    break;
+                }
+                let p = i as *const c_void;
+                if SmBios::parse(p).is_some() {
+                    smbios = NonNullPhysicalAddress::from_ptr(p);
+                }
             }
-            let p = i as *const c_void;
-            if SmBios::parse(p).is_some() {
-                smbios = NonNullPhysicalAddress::from_ptr(p);
+            if let Some(smbios) = smbios {
+                System::add_config_table_entry(SMBIOS_GUID, smbios);
             }
-        }
-        if let Some(smbios) = smbios {
-            System::add_config_table_entry(SMBIOS_GUID, smbios);
         }
 
         arch::vm86::VM86::init();
@@ -107,14 +111,7 @@ pub(super) unsafe fn init(_info: &BootInfo) {
             ],
         );
 
-        super::pit::Pit::init(
-            0x0040,
-            0x0042,
-            0x0043,
-            1193,
-            Irq(0),
-            super::pit::Pit::timer_irq_handler_pc,
-        );
+        super::pit::Pit::init(0x0040, 0x0042, 0x0043, 1193, Irq(0), timer_irq_handler);
         Hal::cpu().enable_interrupt();
 
         let mut smap_supported = false;
@@ -144,7 +141,7 @@ pub(super) unsafe fn init(_info: &BootInfo) {
                         .unwrap();
                     }
                 } else if range.start == 0x10_0000 {
-                    // reported from SSBL
+                    // already reported from SSBL
                 } else {
                     MemoryManager::register_memmap(range, mem_type).unwrap();
                 }
@@ -156,7 +153,7 @@ pub(super) unsafe fn init(_info: &BootInfo) {
         }
 
         if !smap_supported {
-            // TODO:
+            // TODO: other way to detect memory size
         }
 
         if !USE_UART_STDIO {
@@ -171,6 +168,10 @@ pub(super) unsafe fn init(_info: &BootInfo) {
 
 pub(super) unsafe fn exit() {
     // TODO:
+}
+
+fn timer_irq_handler(_irq: Irq) {
+    super::pit::Pit::advance_tick();
 }
 
 #[repr(C, packed)]

@@ -2,13 +2,11 @@
 
 use super::vm86::X86StackContext;
 use crate::*;
-use core::{
-    arch::{asm, global_asm, naked_asm},
-    cell::UnsafeCell,
-    mem::{offset_of, size_of},
-    ptr,
-    sync::atomic::{Ordering, compiler_fence},
-};
+use core::arch::{asm, global_asm, naked_asm};
+use core::cell::UnsafeCell;
+use core::mem::{offset_of, size_of};
+use core::ptr;
+use core::sync::atomic::{Ordering, compiler_fence};
 use paste::paste;
 use x86::{gpr::Pointer32, prot::*};
 
