@@ -98,14 +98,14 @@ impl Write for VT100Inner<'_> {
 
 impl SimpleTextOutput for VT100<'_> {
     fn reset(&mut self) {
-        let _ = self.inner.write_str("\x1b[255;255H");
+        let _ = self.inner.write_str("\x1bc\x1b[255;255H");
         if let Some((col, row)) = self.get_cursor_position() {
             self.mode.columns = col.saturating_add(1);
             self.mode.rows = row.saturating_add(1);
         }
         // let _ = self.inner.write_str("\x1bc");
         self.set_attribute(0);
-        let _ = self.inner.write_str("\x1b[2J\x1b[H");
+        let _ = self.inner.write_str("\x1b[H\x1b[2J");
         self.mode.cursor_column = 0;
         self.mode.cursor_row = 0;
         self.inner.0.reset();

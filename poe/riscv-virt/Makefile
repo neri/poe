@@ -9,7 +9,7 @@ MKFDFS		= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkfdfs --
 ELF2BIN		= cargo run --manifest-path $(TOOLS)/Cargo.toml -p elf2ceef --
 MKINITRD	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkinitrd --
 MKKRNIMG	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkkrnimg --
-OBJCOPY		= objcopy
+OBJCOPY		= llvm-objcopy
 
 POE_SRC		= ./poe-rv
 POE_LD		= $(POE_SRC)/target/riscv64gc-unknown-none-elf/release/poe-rv
@@ -45,5 +45,5 @@ $(BIN):
 poe:
 	(cd $(POE_SRC) && cargo build --release)
 
-$(POE_BIN): poe
+$(POE_BIN): poe $(BIN)
 	cp $(POE_LD) $(POE_BIN)

@@ -10,7 +10,7 @@ MKFDFS		= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkfdfs --
 ELF2BIN		= cargo run --manifest-path $(TOOLS)/Cargo.toml -p elf2ceef --
 MKINITRD	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkinitrd --
 MKKRNIMG	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkkrnimg --
-OBJDUMP		= objdump -d -M intel
+OBJDUMP		= llvm-objdump -d -M intel
 
 TARGET_FD	= $(BIN)/bootfd.img
 TARGET_FD2	= $(BIN)/bootfd.hdm
