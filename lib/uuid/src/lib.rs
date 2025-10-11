@@ -91,8 +91,8 @@ impl Uuid {
     }
 
     #[inline]
-    pub const unsafe fn as_u128(&self) -> &u128 {
-        unsafe { transmute(self) }
+    pub const unsafe fn as_u128(&self) -> u128 {
+        unsafe { transmute(*self) }
     }
 
     #[inline]
@@ -104,7 +104,7 @@ impl Uuid {
 impl PartialEq for Uuid {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        unsafe { *self.as_u128() == *other.as_u128() }
+        unsafe { self.as_u128() == other.as_u128() }
     }
 }
 
