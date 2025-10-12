@@ -103,9 +103,17 @@ impl SimpleTextOutput for VT100<'_> {
             self.mode.columns = col.saturating_add(1);
             self.mode.rows = row.saturating_add(1);
         }
-        // let _ = self.inner.write_str("\x1bc");
         self.set_attribute(0);
-        let _ = self.inner.write_str("\x1b[H\x1b[2J");
+        let _ = self.inner.write_str("\x1b[H");
+        for row in 0..self.mode.rows {
+            if row > 0 {
+                let _ = self.inner.write_char('\n');
+            }
+            for _ in 0..self.mode.columns {
+                let _ = self.inner.write_char(' ');
+            }
+        }
+        let _ = self.inner.write_str("\x1b[H");
         self.mode.cursor_column = 0;
         self.mode.cursor_row = 0;
         self.inner.0.reset();

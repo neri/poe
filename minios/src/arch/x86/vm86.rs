@@ -1,10 +1,10 @@
 //! Simple Virtual 8086 Mode Manager
 
-use super::{
-    cpu::{Cpu, Gdt, Idt},
-    lomem::{LoMemoryManager, ManagedLowMemory},
-    setjmp::JmpBuf,
-};
+use super::cpu::Cpu;
+use super::gdt::Gdt;
+use super::idt::Idt;
+use super::lomem::{LoMemoryManager, ManagedLowMemory};
+use super::setjmp::JmpBuf;
 use crate::*;
 use core::cell::UnsafeCell;
 use core::num::NonZeroUsize;
@@ -73,7 +73,30 @@ impl VM86 {
     #[allow(unused)]
     pub unsafe fn call_bios(int_vec: InterruptVector, ctx: &mut X86StackContext) {
         unsafe {
-            let guard = Hal::cpu().interrupt_guard();
+            Self::invoke(ctx, |ctx| {
+                ctx.vm_redirect_interrupt(int_vec, true);
+            });
+        }
+    }
+
+    /// Invokes virtual 8086 mode with FAR CALL instruction executed.
+    ///
+    #[allow(unused)]
+    pub unsafe fn call_far(target: Far16Ptr, ctx: &mut X86StackContext) {
+        unsafe {
+            Self::invoke(ctx, |ctx| {
+                ctx.vm_call_far(target);
+            });
+        }
+    }
+
+    /// Invokes virtual 8086 mode.
+    #[inline(always)]
+    pub unsafe fn invoke<F>(ctx: &mut X86StackContext, modifier: F)
+    where
+        F: FnOnce(&mut X86StackContext),
+    {
+        without_interrupts!(unsafe {
             let shared = Self::shared_mut();
             let old_vm_stack = shared.vm_stack.take();
             let old_jmp_buf = shared.jmp_buf.clone();
@@ -95,64 +118,22 @@ impl VM86 {
             let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
             ctx.set_cs(vmbp_csip.sel());
             ctx.eip = Pointer32::from(vmbp_csip.off());
-            Self::redirect_interrupt_on_vm(int_vec, ctx, true);
+            modifier(ctx);
 
             shared.context = ctx;
             if shared.jmp_buf.set_jmp().is_returned() {
                 Cpu::enter_to_user_mode(ctx);
             }
+            drop(temp_stack);
 
             Gdt::set_tss_esp0(old_tss_esp0);
             shared.jmp_buf = old_jmp_buf;
             shared.context = old_context;
             shared.vm_stack = old_vm_stack;
-            drop(guard);
-        }
+        });
     }
 
-    /// Invokes virtual 8086 mode with FAR CALL instruction executed.
-    ///
-    #[allow(unused)]
-    pub unsafe fn call_far(target: Far16Ptr, ctx: &mut X86StackContext) {
-        unsafe {
-            let guard = Hal::cpu().interrupt_guard();
-            let shared = Self::shared_mut();
-            let old_vm_stack = shared.vm_stack.take();
-            let old_jmp_buf = shared.jmp_buf.clone();
-            let old_context = shared.context;
-            let old_tss_esp0 = Gdt::get_tss_esp0();
-
-            let mut temp_stack = None;
-            let vm_stack = match old_vm_stack.as_ref() {
-                Some(v) => v,
-                None => {
-                    temp_stack = LoMemoryManager::alloc_page().into();
-                    temp_stack.as_ref().unwrap()
-                }
-            };
-
-            ctx.adjust_vm_eflags();
-            ctx.set_ss3(vm_stack.sel());
-            ctx.set_esp3(Pointer32::from_u16(vm_stack.limit().as_u16() & 0xfffe));
-            let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
-            ctx.vm_push16(vmbp_csip.sel().as_u16());
-            ctx.vm_push16(vmbp_csip.off().as_u16());
-            ctx.set_cs(target.sel());
-            ctx.eip = Pointer32::from(target.off());
-
-            shared.context = ctx;
-            if shared.jmp_buf.set_jmp().is_returned() {
-                Cpu::enter_to_user_mode(ctx);
-            }
-
-            Gdt::set_tss_esp0(old_tss_esp0);
-            shared.jmp_buf = old_jmp_buf;
-            shared.context = old_context;
-            shared.vm_stack = old_vm_stack;
-            drop(guard);
-        }
-    }
-
+    #[inline(always)]
     unsafe fn intercept_vmbp(&mut self, ctx: &X86StackContext) -> ! {
         unsafe {
             self.context.write_volatile(ctx.clone());
@@ -186,7 +167,7 @@ impl VM86 {
 
                 let err = ctx.selector_error_code();
                 if let Some(int_vec) = err.int_vec() {
-                    Self::redirect_interrupt_on_vm(int_vec, ctx, false);
+                    ctx.vm_redirect_interrupt(int_vec, false);
                     return true;
                 } else {
                     return Self::simulate_vm_instruction(ctx);
@@ -203,51 +184,11 @@ impl VM86 {
     pub unsafe fn redirect_interrupt(int_vec: InterruptVector, ctx: &mut X86StackContext) {
         unsafe {
             if ctx.is_vm() {
-                Self::redirect_interrupt_on_vm(int_vec, ctx, true);
+                ctx.vm_redirect_interrupt(int_vec, true);
             } else {
                 let mut regs = X86StackContext::default();
                 Self::call_bios(int_vec, &mut regs);
             }
-        }
-    }
-
-    /// Redirect interrupts by adjusting the stack context in virtual 8086 mode.
-    unsafe fn redirect_interrupt_on_vm(
-        int_vec: InterruptVector,
-        ctx: &mut X86StackContext,
-        is_external: bool,
-    ) {
-        unsafe {
-            let mut skip = 0;
-            if is_external || ctx.selector_error_code().is_external() {
-                // external int
-            } else {
-                let vm_csip = ctx.vm_csip_ptr();
-                match vm_csip.read_volatile() {
-                    0xCD => {
-                        if vm_csip.add(1).read_volatile() == int_vec.0 {
-                            // CD: int N
-                            skip = 2;
-                        }
-                    }
-                    0xCC => {
-                        if int_vec == Exception::Breakpoint.as_vec() {
-                            // CC: int3
-                            skip = 1;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            ctx.vm_push16(ctx.eflags.bits() as u16);
-            ctx.vm_push16(ctx.cs().as_u16());
-            ctx.vm_push16((ctx.eip.as_u16()).wrapping_add(skip));
-
-            let vm_intvec =
-                Far16Ptr::from_u32((((int_vec.0 as usize) << 2) as *const u32).read_volatile());
-            ctx.eip = Pointer32::from(vm_intvec.off());
-            ctx.set_cs(vm_intvec.sel());
         }
     }
 
@@ -301,12 +242,12 @@ impl VM86 {
                 0xCD => {
                     // CD nn: INT N
                     let int_vec = InterruptVector(vm_csip.add(skip + 1).read_volatile() as u8);
-                    Self::redirect_interrupt_on_vm(int_vec, ctx, false);
+                    ctx.vm_redirect_interrupt(int_vec, false);
                     return true;
                 }
                 0xCC => {
                     // CC: INT3
-                    Self::redirect_interrupt_on_vm(Exception::Breakpoint.as_vec(), ctx, false);
+                    ctx.vm_redirect_interrupt(Exception::Breakpoint.as_vec(), false);
                     return true;
                 }
                 0xCF => {
@@ -371,7 +312,8 @@ pub struct X86StackContext {
     pub edi: Gpr32,
     pub esi: Gpr32,
     pub ebp: Gpr32,
-    _esp_dummy: Gpr32,
+    // dummy for esp
+    _esp: Gpr32,
     pub ebx: Gpr32,
     pub edx: Gpr32,
     pub ecx: Gpr32,
@@ -408,7 +350,7 @@ impl X86StackContext {
             edi: Gpr32(0),
             esi: Gpr32(0),
             ebp: Gpr32(0),
-            _esp_dummy: Gpr32(0),
+            _esp: Gpr32(0),
             ebx: Gpr32(0),
             edx: Gpr32(0),
             ecx: Gpr32(0),
@@ -697,6 +639,55 @@ impl X86StackContext {
             let value = self.vm_sssp_ptr32().read_volatile();
             self.update_sp3(|sp3| sp3.wrapping_add(size_of_val(&value) as u16));
             value
+        }
+    }
+
+    /// Simulates a far call in virtual 8086 mode.
+    #[inline]
+    pub unsafe fn vm_call_far(&mut self, target: Far16Ptr) {
+        unsafe {
+            self.vm_push16(self.cs().as_u16());
+            self.vm_push16(self.eip.offset16().as_u16());
+            self.set_cs(target.sel());
+            self.eip = Pointer32::from(target.off());
+        }
+    }
+
+    /// Redirect interrupts by adjusting the stack context in virtual 8086 mode.
+    #[inline]
+    unsafe fn vm_redirect_interrupt(&mut self, int_vec: InterruptVector, is_external: bool) {
+        unsafe {
+            if is_external || self.selector_error_code().is_external() {
+                self.vm_push16(self.eflags.bits() as u16);
+                self.vm_push16(self.cs().as_u16());
+                self.vm_push16(self.eip.as_u16());
+            } else {
+                let mut skip = 0;
+                let vm_csip = self.vm_csip_ptr();
+                match vm_csip.read_volatile() {
+                    0xCD => {
+                        if vm_csip.add(1).read_volatile() == int_vec.0 {
+                            // CD: int N
+                            skip = 2;
+                        }
+                    }
+                    0xCC => {
+                        if int_vec == Exception::Breakpoint.as_vec() {
+                            // CC: int3
+                            skip = 1;
+                        }
+                    }
+                    _ => {}
+                }
+                self.vm_push16(self.eflags.bits() as u16);
+                self.vm_push16(self.cs().as_u16());
+                self.vm_push16((self.eip.as_u16()).wrapping_add(skip));
+            }
+
+            let vm_intvec =
+                Far16Ptr::from_u32((((int_vec.0 as usize) << 2) as *const u32).read_volatile());
+            self.eip = Pointer32::from(vm_intvec.off());
+            self.set_cs(vm_intvec.sel());
         }
     }
 }

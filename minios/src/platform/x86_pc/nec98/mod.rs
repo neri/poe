@@ -56,7 +56,14 @@ pub(super) unsafe fn init(_info: &BootInfo) {
             ],
         );
 
-        super::pit::Pit::init(0x0071, 0x3fdb, 0x0077, 2457, Irq(0), timer_irq_handler);
+        super::pit::Pit::init(
+            0x0071,
+            0x3fdb,
+            0x0077,
+            2457,
+            Irq(0),
+            super::pit::Pit::advance_tick,
+        );
         Hal::cpu().enable_interrupt();
 
         let kbd = &mut *(&raw mut STDIN);
@@ -67,10 +74,6 @@ pub(super) unsafe fn init(_info: &BootInfo) {
 
 pub(super) unsafe fn exit() {
     // TODO:
-}
-
-fn timer_irq_handler(_irq: Irq) {
-    super::pit::Pit::advance_tick();
 }
 
 static mut STDIN: BiosTextInput = BiosTextInput {};

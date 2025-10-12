@@ -58,8 +58,8 @@ pub(super) unsafe fn exit() {
     // TODO:
 }
 
-fn timer_irq_handler(_irq: Irq) {
-    super::pit::Pit::advance_tick();
+fn timer_irq_handler(irq: Irq) {
+    super::pit::Pit::advance_tick(irq);
     unsafe {
         let mut al = LoIoPortRB::<0x60>::new().read();
         al = (al >> 2) | 0x80;

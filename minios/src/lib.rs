@@ -2,6 +2,7 @@
 
 #![cfg_attr(not(test), no_std)]
 // #![feature(cfg_select)]
+#![feature(negative_impls)]
 
 extern crate alloc;
 

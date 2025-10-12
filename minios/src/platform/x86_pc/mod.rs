@@ -6,11 +6,9 @@ mod pic;
 mod pit;
 
 use super::{Platform, PlatformTrait};
-use crate::{
-    arch::{cpu, lomem, vm86},
-    mem::{MemoryManager, MemoryType},
-    *,
-};
+use crate::arch::{cpu, gdt, idt, lomem, vm86};
+use crate::mem::{MemoryManager, MemoryType};
+use crate::*;
 use x86::isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB};
 
 impl PlatformTrait for Platform {

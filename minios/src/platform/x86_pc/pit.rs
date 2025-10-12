@@ -60,7 +60,7 @@ impl Pit {
 
     #[inline(always)]
     #[allow(dead_code)]
-    pub(super) fn advance_tick() {
+    pub(super) fn advance_tick(_irq: Irq) {
         let shared = unsafe { Self::shared() };
         shared.monotonic += Self::TIMER_RES;
     }

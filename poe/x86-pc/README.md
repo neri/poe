@@ -18,7 +18,7 @@
 ## Build Environment
 
 * Rust nightly
-* llvm (ld.lld)
+* llvm
 * nasm
 
 ### building

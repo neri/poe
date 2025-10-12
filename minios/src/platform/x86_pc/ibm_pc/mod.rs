@@ -18,7 +18,7 @@ use core::{ffi::c_void, iter::Iterator, ops::Range};
 use smbios::{SMBIOS_GUID, SmBios};
 use x86::gpr::Eflags;
 
-const USE_UART_STDIO: bool = true;
+const USE_UART_STDIO: bool = false;
 
 pub(super) unsafe fn init(_info: &BootInfo) {
     unsafe {
@@ -111,7 +111,14 @@ pub(super) unsafe fn init(_info: &BootInfo) {
             ],
         );
 
-        super::pit::Pit::init(0x0040, 0x0042, 0x0043, 1193, Irq(0), timer_irq_handler);
+        super::pit::Pit::init(
+            0x0040,
+            0x0042,
+            0x0043,
+            1193,
+            Irq(0),
+            super::pit::Pit::advance_tick,
+        );
         Hal::cpu().enable_interrupt();
 
         let mut smap_supported = false;
@@ -168,10 +175,6 @@ pub(super) unsafe fn init(_info: &BootInfo) {
 
 pub(super) unsafe fn exit() {
     // TODO:
-}
-
-fn timer_irq_handler(_irq: Irq) {
-    super::pit::Pit::advance_tick();
 }
 
 #[repr(C, packed)]

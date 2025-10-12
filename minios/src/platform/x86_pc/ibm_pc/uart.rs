@@ -2,16 +2,34 @@
 
 use crate::{vt100::VT100, *};
 use core::cell::UnsafeCell;
-use x86::isolated_io::{IoPortRB, IoPortWB};
+use x86::isolated_io::{IoPortRB, IoPortRWB, IoPortWB};
+
+static mut RAW: UnsafeCell<Uart16550> = UnsafeCell::new(Uart16550::new());
+static mut SHARED: UnsafeCell<VT100> = UnsafeCell::new(VT100::new(Uart16550::shared_raw()));
 
 pub struct Uart16550 {
     base_port: u16,
+    uart_type: UartType,
 }
-static mut RAW: UnsafeCell<Uart16550> = UnsafeCell::new(Uart16550 { base_port: 0x3f8 });
 
-static mut SHARED: UnsafeCell<VT100> = UnsafeCell::new(VT100::new(Uart16550::shared_raw()));
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UartType {
+    _8250,
+    _16450,
+    _16550,
+    _16550A,
+    _16750,
+}
 
 impl Uart16550 {
+    #[inline]
+    const fn new() -> Self {
+        Self {
+            base_port: 0x3f8,
+            uart_type: UartType::_8250,
+        }
+    }
+
     #[inline]
     pub unsafe fn init(base_port: u16) {
         unsafe {
@@ -20,16 +38,39 @@ impl Uart16550 {
 
             // Disable all interrupts
             IoPortWB(uart.base_port + 1).write(0x00);
+
+            // Identify UART type
+            IoPortWB(uart.base_port + 2).write(0xe7);
+            let test = IoPortRB(uart.base_port + 2).read();
+            uart.uart_type = match test {
+                0xe0.. => UartType::_16750,
+                0xc0..=0xdf => UartType::_16550A,
+                0x80..=0xbf => UartType::_16550,
+                _ => {
+                    let scr = IoPortRWB(uart.base_port + 7);
+                    scr.write(0x2a);
+                    if scr.read() == 0x2a {
+                        UartType::_16450
+                    } else {
+                        UartType::_8250
+                    }
+                }
+            };
+
             // Enable DLAB (set baud rate divisor)
             IoPortWB(uart.base_port + 3).write(0x80);
-            // Set divisor to 3 (lo byte) 38400 baud
-            IoPortWB(uart.base_port + 0).write(0x03);
-            //                  (hi byte)
-            IoPortWB(uart.base_port + 1).write(0x00);
+            let baud = 115200 / 115200;
+            // Set divisor (lo byte)
+            IoPortWB(uart.base_port + 0).write((baud & 0xff) as u8);
+            //             (hi byte)
+            IoPortWB(uart.base_port + 1).write(((baud >> 8) & 0xff) as u8);
+
             // 8 bits, no parity, one stop bit
             IoPortWB(uart.base_port + 3).write(0x03);
+
             // Enable FIFO, clear them, with 14-byte threshold
             IoPortWB(uart.base_port + 2).write(0xC7);
+
             // IRQs enabled, RTS/DSR set
             IoPortWB(uart.base_port + 4).write(0x0B);
         }

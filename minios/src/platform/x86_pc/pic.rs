@@ -1,6 +1,7 @@
 //! PIC: 8259 Programmable Interrupt Controller
 
-use super::cpu::{Idt, KERNEL_DSEL};
+use super::gdt::KERNEL_DSEL;
+use super::idt::Idt;
 use super::vm86::{VM86, X86StackContext};
 use crate::*;
 use core::arch::global_asm;

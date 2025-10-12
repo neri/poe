@@ -8,6 +8,8 @@ use core::sync::atomic::{Ordering, compiler_fence};
 #[allow(unused)]
 pub struct JmpBuf([usize; 8]);
 
+impl !Send for JmpBuf {}
+
 impl JmpBuf {
     #[inline]
     pub const fn new() -> Self {
