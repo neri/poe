@@ -1,14 +1,10 @@
 //! General Purpose Registers and Flags
 
-use crate::{
-    prot::{IOPL, Offset32},
-    real::Offset16,
-};
-use core::{
-    arch::asm,
-    fmt::{self, LowerHex},
-    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign},
-};
+use crate::prot::{IOPL, Offset32};
+use crate::real::Offset16;
+use core::arch::asm;
+use core::fmt::{self, LowerHex};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
 
 #[cfg(target_arch = "x86")]
 pub type Eflags = Flags;

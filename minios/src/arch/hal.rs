@@ -11,9 +11,9 @@ use core::{
 #[allow(unused_imports)]
 use core::num::{NonZeroU32, NonZeroU64};
 
-// impl !Send for InterruptGuard {}
+impl !Send for InterruptGuard {}
 
-// impl !Sync for InterruptGuard {}
+impl !Sync for InterruptGuard {}
 
 pub struct Hal;
 

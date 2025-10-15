@@ -1,13 +1,9 @@
 //! Model Specific Registers (MSR)
 
-use core::{
-    arch::asm,
-    mem::transmute,
-    sync::atomic::{Ordering, compiler_fence},
-};
-
-#[allow(unused_imports)]
 use alloc::vec::Vec;
+use core::arch::asm;
+use core::mem::transmute;
+use core::sync::atomic::{Ordering, compiler_fence};
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -142,7 +138,7 @@ impl MSR {
 
         unsafe {
             MsrResult {
-                pair: EaxAndEdx { eax, edx },
+                pair: Acc32Pair { eax, edx },
             }
             .qword
         }
@@ -181,12 +177,12 @@ impl MSR {
 #[derive(Copy, Clone)]
 union MsrResult {
     qword: u64,
-    pair: EaxAndEdx,
+    pair: Acc32Pair,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
-pub struct EaxAndEdx {
+pub struct Acc32Pair {
     eax: u32,
     edx: u32,
 }

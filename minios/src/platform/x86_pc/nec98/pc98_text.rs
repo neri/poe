@@ -14,6 +14,7 @@ const COLOR_TABLE: [u8; 8] = [0, 1, 4, 5, 2, 3, 6, 7];
 pub const TGDC_STATUS: LoIoPortRB<0x60> = LoIoPortRB::new();
 pub const TGDC_PARAM: LoIoPortWB<0x60> = LoIoPortWB::new();
 pub const TGDC_COMMAND: LoIoPortWB<0x62> = LoIoPortWB::new();
+#[allow(unused)]
 pub const TGDC_DATA: LoIoPortWB<0x62> = LoIoPortWB::new();
 
 pub struct Pc98Text {

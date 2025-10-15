@@ -10,6 +10,8 @@ pub struct JmpBuf([usize; 8]);
 
 impl !Send for JmpBuf {}
 
+impl !Sync for JmpBuf {}
+
 impl JmpBuf {
     #[inline]
     pub const fn new() -> Self {

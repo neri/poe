@@ -1,6 +1,8 @@
 //! protected mode structures
 
-use core::{convert::TryFrom, fmt::LowerHex, mem::transmute};
+use core::convert::TryFrom;
+use core::fmt::LowerHex;
+use core::mem::transmute;
 use paste::paste;
 
 #[allow(unused_imports)]
@@ -11,52 +13,103 @@ use core::arch::asm;
 pub struct DescriptorEntry(u64);
 
 impl DescriptorEntry {
-    pub const PRESENT: u64 = 0x8000_0000_0000;
+    pub const PRESENT: u64 = 0x0000_8000_0000_0000;
+
+    pub const SEGMENT: u64 = 0x0000_1000_0000_0000;
+
+    pub const CODE_SEGMENT: u64 = 0x0000_1800_0000_0000;
+
+    pub const READ_WRITE: u64 = 0x0000_0200_0000_0000;
 
     pub const BIG_DATA: u64 = 0x0040_0000_0000_0000;
 
     pub const NULL: Self = Self(0);
 
     #[inline]
-    pub const fn flat_code_segment(dpl: DPL, opr_size: DefaultOperandSize) -> DescriptorEntry {
-        Self::code_segment(Linear32(0), Limit32::MAX, dpl, opr_size)
+    pub const fn is_null(&self) -> bool {
+        (self.0 & 0x0000_1f00_0000_0000) == 0
     }
 
     #[inline]
-    pub const fn code_segment(
+    pub const fn is_present(&self) -> bool {
+        (self.0 & Self::PRESENT) == Self::PRESENT
+    }
+
+    #[inline]
+    pub const fn is_segment(&self) -> bool {
+        (self.0 & Self::SEGMENT) == Self::SEGMENT
+    }
+
+    #[inline]
+    pub const fn is_code_segment(&self) -> bool {
+        (self.0 & Self::CODE_SEGMENT) == Self::CODE_SEGMENT
+    }
+
+    #[inline]
+    pub const fn default_operand_size(&self) -> Option<DefaultOperandSize> {
+        DefaultOperandSize::from_descriptor(*self)
+    }
+
+    #[inline]
+    pub const fn dpl(&self) -> DPL {
+        DPL::from_descriptor_entry(self.0)
+    }
+}
+
+pub struct SegmentDescriptor;
+
+impl SegmentDescriptor {
+    #[inline]
+    pub const fn flat_code32(dpl: DPL) -> DescriptorEntry {
+        Self::code(Linear32(0), Limit32::MAX, dpl, USE32)
+    }
+
+    #[inline]
+    pub const fn flat_code64(dpl: DPL) -> DescriptorEntry {
+        Self::code(Linear32(0), Limit32::MAX, dpl, USE64)
+    }
+
+    #[inline]
+    pub const fn flat_data(dpl: DPL) -> DescriptorEntry {
+        Self::data(Linear32(0), Limit32::MAX, dpl, true)
+    }
+
+    #[inline]
+    pub const fn code(
         base: Linear32,
         limit: Limit32,
         dpl: DPL,
         opr_size: DefaultOperandSize,
     ) -> DescriptorEntry {
         DescriptorEntry(
-            0x0000_1A00_0000_0000u64
+            DescriptorEntry::CODE_SEGMENT
+                | DescriptorEntry::READ_WRITE
                 | base.as_segment_base()
                 | limit.as_descriptor_entry()
-                | Self::PRESENT
+                | DescriptorEntry::PRESENT
                 | dpl.as_descriptor_entry()
                 | opr_size.as_descriptor_entry(),
         )
     }
 
     #[inline]
-    pub const fn flat_data_segment(dpl: DPL) -> DescriptorEntry {
-        Self::data_segment(Linear32(0), Limit32::MAX, dpl, true)
-    }
-
-    #[inline]
-    pub const fn data_segment(
+    pub const fn data(
         base: Linear32,
         limit: Limit32,
         dpl: DPL,
         is_big_data: bool,
     ) -> DescriptorEntry {
         DescriptorEntry(
-            0x0000_1200_0000_0000u64
+            DescriptorEntry::SEGMENT
+                | DescriptorEntry::READ_WRITE
                 | base.as_segment_base()
                 | limit.as_descriptor_entry()
-                | Self::PRESENT
-                | if is_big_data { Self::BIG_DATA } else { 0 }
+                | DescriptorEntry::PRESENT
+                | if is_big_data {
+                    DescriptorEntry::BIG_DATA
+                } else {
+                    0
+                }
                 | dpl.as_descriptor_entry(),
         )
     }
@@ -65,10 +118,10 @@ impl DescriptorEntry {
     #[inline]
     pub const fn tss32(base: Linear32, limit: Limit16) -> DescriptorEntry {
         DescriptorEntry(
-            DescriptorType::Tss.as_descriptor_entry()
+            DescriptorType::TSS.as_descriptor_entry()
                 | base.as_segment_base()
                 | limit.as_descriptor_entry()
-                | Self::PRESENT,
+                | DescriptorEntry::PRESENT,
         )
     }
 
@@ -77,37 +130,39 @@ impl DescriptorEntry {
     pub const fn tss64(base: Linear64, limit: Limit16) -> DescriptorPair {
         let (base_low, base_high) = base.as_segment_base_pair();
         let low = DescriptorEntry(
-            DescriptorType::Tss.as_descriptor_entry()
+            DescriptorType::TSS.as_descriptor_entry()
                 | base_low
                 | limit.as_descriptor_entry()
-                | Self::PRESENT,
+                | DescriptorEntry::PRESENT,
         );
         let high = DescriptorEntry(base_high);
         DescriptorPair::new(low, high)
     }
+}
 
+pub struct GateDescriptor;
+
+impl GateDescriptor {
     #[cfg(target_arch = "x86")]
     #[inline]
-    pub const fn gate32(
-        offset: usize,
+    pub const fn new(
+        offset: Offset32,
         sel: Selector,
         dpl: DPL,
         ty: DescriptorType,
     ) -> DescriptorEntry {
-        let offset = offset as u64;
         DescriptorEntry(
-            (offset & 0xFFFF)
-                | (sel.0 as u64) << 16
+            offset.as_gate_offset()
+                | (sel.as_u16() as u64) << 16
                 | dpl.as_descriptor_entry()
                 | ty.as_descriptor_entry()
-                | (offset & 0xFFFF_0000) << 32
-                | Self::PRESENT,
+                | DescriptorEntry::PRESENT,
         )
     }
 
     #[cfg(target_arch = "x86_64")]
     #[inline]
-    pub const fn gate64(
+    pub const fn new(
         offset: Offset64,
         sel: Selector,
         dpl: DPL,
@@ -125,41 +180,11 @@ impl DescriptorEntry {
                 | sel.as_descriptor_entry()
                 | ist
                 | dpl.as_descriptor_entry()
-                | Self::PRESENT,
+                | DescriptorEntry::PRESENT,
         );
         let high = DescriptorEntry(offset_high);
 
         DescriptorPair::new(low, high)
-    }
-
-    #[inline]
-    pub const fn is_null(&self) -> bool {
-        (self.0 & 0x1f00_0000_0000) == 0
-    }
-
-    #[inline]
-    pub const fn is_present(&self) -> bool {
-        (self.0 & Self::PRESENT) != 0
-    }
-
-    #[inline]
-    pub const fn is_segment(&self) -> bool {
-        (self.0 & 0x1000_0000_0000) != 0
-    }
-
-    #[inline]
-    pub const fn is_code_segment(&self) -> bool {
-        self.is_segment() && (self.0 & 0x0800_0000_0000) != 0
-    }
-
-    #[inline]
-    pub const fn default_operand_size(&self) -> Option<DefaultOperandSize> {
-        DefaultOperandSize::from_descriptor(*self)
-    }
-
-    #[inline]
-    pub const fn dpl(&self) -> DPL {
-        DPL::from_descriptor_entry(self.0)
     }
 }
 
@@ -183,6 +208,8 @@ impl DescriptorPair {
 pub struct Limit16(u16);
 
 impl Limit16 {
+    pub const MAX: Self = Self(u16::MAX);
+
     #[inline]
     pub const fn as_descriptor_entry(&self) -> u64 {
         self.0 as u64
@@ -270,6 +297,8 @@ impl Linear32 {
 pub struct Linear64(u64);
 
 impl Linear64 {
+    pub const MAX: Self = Self(u64::MAX);
+
     #[inline]
     pub const fn as_u64(&self) -> u64 {
         self.0
@@ -356,7 +385,7 @@ impl Selector {
 
     /// Returns the requested privilege level in the selector
     #[inline]
-    pub const fn rpl(self) -> RPL {
+    pub const fn rpl(&self) -> RPL {
         RPL::from_u16(self.0)
     }
 
@@ -384,17 +413,17 @@ impl Selector {
 
     /// Returns the index field in the selector
     #[inline]
-    pub const fn index(self) -> usize {
+    pub const fn index(&self) -> usize {
         (self.0 >> 3) as usize
     }
 
     #[inline]
-    pub const fn is_global(self) -> bool {
+    pub const fn is_global(&self) -> bool {
         !self.is_local()
     }
 
     #[inline]
-    pub const fn is_local(self) -> bool {
+    pub const fn is_local(&self) -> bool {
         (self.0 & Self::TI_LDT) == Self::TI_LDT
     }
 
@@ -445,9 +474,9 @@ impl From<Selector> for AlignedSelector32 {
 pub enum PrivilegeLevel {
     /// Ring 0, Supervisor mode
     Supervisor = 0,
-    /// Historical, Useless in 64bit mode
+    /// Useless in 64bit mode
     _Ring1 = 1,
-    /// Historical, Useless in 64bit mode
+    /// Useless in 64bit mode
     _Ring2 = 2,
     /// Ring 3, User mode
     User = 3,
@@ -569,10 +598,11 @@ impl IOPL {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DescriptorType {
-    Null = 0,
-    Tss = 9,
+    NULL = 0,
+    LDT = 2,
+    TSS = 9,
     TssBusy = 11,
     InterruptGate = 14,
     TrapGate = 15,
@@ -604,14 +634,14 @@ pub enum Exception {
     Breakpoint = 3,
     /// #OF
     Overflow = 4,
-    //Deprecated = 5,
+    // Deprecated = 5,
     /// #UD
     InvalidOpcode = 6,
     /// #NM
     DeviceNotAvailable = 7,
     /// #DF
     DoubleFault = 8,
-    //Deprecated = 9,
+    // Deprecated = 9,
     /// #TS
     InvalidTss = 10,
     /// #NP
@@ -622,7 +652,7 @@ pub enum Exception {
     GeneralProtection = 13,
     /// #PF
     PageFault = 14,
-    //Unavailable = 15,
+    // Unavailable = 15,
     /// #MF
     FloatingPointException = 16,
     /// #AC
@@ -635,10 +665,12 @@ pub enum Exception {
     Virtualization = 20,
     /// #CP
     ControlProtection = 21,
-    //Reserved
+    //
+    // Reserved
+    //
     /// #SX
     Security = 30,
-    //Reserved = 31,
+    // Reserved = 31,
     MAX = 32,
 }
 
@@ -720,7 +752,8 @@ impl Exception {
             Exception::SimdException => "#XM",
             Exception::Virtualization => "#VE",
             Exception::Security => "#SX",
-            _ => "",
+            Exception::ControlProtection => "#CP",
+            Exception::MAX => unreachable!(),
         }
     }
 }
@@ -859,10 +892,6 @@ impl TaskStateSegment64 {
 pub enum DefaultOperandSize {
     Use16 = 0x0000_0000_0000_0000,
     Use32 = 0x0040_0000_0000_0000,
-
-    #[cfg(target_arch = "x86")]
-    _Use64 = 0x0020_0000_0000_0000,
-    #[cfg(target_arch = "x86_64")]
     Use64 = 0x0020_0000_0000_0000,
 }
 
@@ -870,7 +899,6 @@ pub const USE16: DefaultOperandSize = DefaultOperandSize::Use16;
 
 pub const USE32: DefaultOperandSize = DefaultOperandSize::Use32;
 
-#[cfg(target_arch = "x86_64")]
 pub const USE64: DefaultOperandSize = DefaultOperandSize::Use64;
 
 impl DefaultOperandSize {
@@ -882,27 +910,13 @@ impl DefaultOperandSize {
     #[inline]
     pub const fn from_descriptor(value: DescriptorEntry) -> Option<Self> {
         if value.is_code_segment() {
-            #[cfg(target_arch = "x86")]
-            {
-                let is_32 = (value.0 & USE32.as_descriptor_entry()) != 0;
-                let is_64 = (value.0 & DefaultOperandSize::_Use64.as_descriptor_entry()) != 0;
-                match (is_32, is_64) {
-                    (false, false) => Some(USE16),
-                    (true, false) => Some(USE32),
-                    (_, true) => None,
-                }
-            }
-
-            #[cfg(target_arch = "x86_64")]
-            {
-                let is_32 = (value.0 & USE32.as_descriptor_entry()) != 0;
-                let is_64 = (value.0 & USE64.as_descriptor_entry()) != 0;
-                match (is_32, is_64) {
-                    (false, false) => Some(USE16),
-                    (false, true) => Some(USE64),
-                    (true, false) => Some(USE32),
-                    (true, true) => None,
-                }
+            let is_32 = (value.0 & USE32.as_descriptor_entry()) != 0;
+            let is_64 = (value.0 & USE64.as_descriptor_entry()) != 0;
+            match (is_32, is_64) {
+                (false, false) => Some(USE16),
+                (true, false) => Some(USE32),
+                (false, true) => Some(USE64),
+                _ => None,
             }
         } else {
             None

@@ -4,16 +4,12 @@ use crate::{
     System,
     arch::cpu::Cpu,
     io::tty::{SimpleTextOutput, SimpleTextOutputMode},
+    platform::x86_pc::fm_towns::crtc::Crtc,
 };
 use core::{cell::UnsafeCell, mem::transmute};
 use x86::isolated_io::*;
 
 const TVRAM_OFFSET_MASK: usize = 0x0003_ffff / 4;
-
-const CRTC_INDEX: IoPortWB = IoPortWB(0x440);
-const CRTC_DATA: IoPortWW = IoPortWW(0x442);
-const VIDEO_OUT_CTL_INDEX: IoPortWB = IoPortWB(0x448);
-const VIDEO_OUT_CTL_DATA: IoPortWB = IoPortWB(0x44a);
 
 const BITMAP_CONVERT_TABLE: [u32; 256] = [
     0x00000000, 0xf0000000, 0x0f000000, 0xff000000, 0x00f00000, 0xf0f00000, 0x0ff00000, 0xfff00000,
@@ -93,7 +89,7 @@ impl FmtText {
             Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 * 400);
 
             let stdout = (&mut *(&raw mut FMT_TEXT)).get_mut();
-            stdout.hw_set_mode();
+            Self::hw_set_mode();
             stdout.reset();
             System::set_stdout(stdout);
 
@@ -103,20 +99,9 @@ impl FmtText {
         }
     }
 
-    unsafe fn hw_set_mode(&self) {
-        let mut iter = TEXT_MODE_SETTINGS.iter();
+    pub unsafe fn hw_set_mode() {
         unsafe {
-            Self::crtc_out(0, *iter.next().unwrap());
-            Self::crtc_out(1, *iter.next().unwrap());
-
-            for (index, data) in (4..32).zip(iter) {
-                Self::crtc_out(index, *data);
-            }
-
-            Self::video_output_control(0, 0b0001_0101);
-            Self::video_output_control(1, 0b0000_1001);
-
-            IoPortWB(0xfda0).write(0x0f);
+            Crtc::set_mode(&TEXT_MODE_SETTINGS, 0b0001_0101, 0b0000_1001, 0b0000_1111);
             IoPortWB(0xff99).write(0x01);
         }
     }
@@ -138,25 +123,9 @@ impl FmtText {
     }
 
     #[inline]
-    unsafe fn crtc_out(index: u8, data: u16) {
-        unsafe {
-            CRTC_INDEX.write(index);
-            CRTC_DATA.write(data);
-        }
-    }
-
-    #[inline]
-    unsafe fn video_output_control(index: u8, data: u8) {
-        unsafe {
-            VIDEO_OUT_CTL_INDEX.write(index);
-            VIDEO_OUT_CTL_DATA.write(data);
-        }
-    }
-
-    #[inline]
     fn set_hw_scroll(&mut self, offset: u16) {
         unsafe {
-            Self::crtc_out(0x15, offset);
+            Crtc::crtc_out(0x15, offset);
         }
     }
 

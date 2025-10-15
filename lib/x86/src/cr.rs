@@ -1,10 +1,8 @@
 //! Control Registers
 
-use core::{
-    arch::asm,
-    ops::{BitOr, BitOrAssign},
-    sync::atomic::{Ordering, compiler_fence},
-};
+use core::arch::asm;
+use core::ops::{BitOr, BitOrAssign};
+use core::sync::atomic::{Ordering, compiler_fence};
 
 /// Control Register 0
 #[allow(dead_code)]

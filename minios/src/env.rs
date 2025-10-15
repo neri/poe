@@ -1,10 +1,18 @@
 //! MiniOS Execution Environment
 
-use crate::{null::NullTty, platform::*, *};
-use core::{fmt, iter::Iterator, mem::MaybeUninit, ops::Range, panic::PanicInfo, ptr::NonNull};
+use crate::io::graphics::{GraphicsOutput, PixelFormat};
+use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
+use crate::mem::MemoryManager;
+use crate::null::NullTty;
+use crate::platform::*;
+use crate::*;
+use core::fmt;
+use core::iter::Iterator;
+use core::mem::MaybeUninit;
+use core::ops::Range;
+use core::panic::PanicInfo;
+use core::ptr::NonNull;
 use guid::Guid;
-use io::tty::{SimpleTextInput, SimpleTextOutput};
-use mem::MemoryManager;
 
 static mut SYSTEM: MaybeUninit<System> = MaybeUninit::zeroed();
 
@@ -18,9 +26,17 @@ pub struct System {
     stdin: NonNull<dyn SimpleTextInput>,
     stdout: NonNull<dyn SimpleTextOutput>,
     stderr: NonNull<dyn SimpleTextOutput>,
+    console_controller: ConsoleController,
 
     smbios: Option<smbios::SmBios>,
     device_tree: Option<fdt::DeviceTree<'static>>,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct ConfigurationTableEntry {
+    pub guid: Guid,
+    pub address: NonNullPhysicalAddress,
 }
 
 impl System {
@@ -33,9 +49,10 @@ impl System {
             let env = System {
                 info: info.clone(),
                 config_table: Vec::new(),
-                stdin: NonNull::new_unchecked(&raw mut NULL),
-                stdout: NonNull::new_unchecked(&raw mut NULL),
-                stderr: NonNull::new_unchecked(&raw mut NULL),
+                stdin: NonNull::new(&raw mut NULL).unwrap(),
+                stdout: NonNull::new(&raw mut NULL).unwrap(),
+                stderr: NonNull::new(&raw mut NULL).unwrap(),
+                console_controller: ConsoleController::new(),
                 smbios: None,
                 device_tree: None,
             };
@@ -64,9 +81,10 @@ impl System {
                     conventional_memory_size: 0,
                 },
                 config_table: Vec::new(),
-                stdin: NonNull::new_unchecked(&raw mut NULL),
-                stdout: NonNull::new_unchecked(&raw mut NULL),
-                stderr: NonNull::new_unchecked(&raw mut NULL),
+                stdin: NonNull::new(&raw mut NULL).unwrap(),
+                stdout: NonNull::new(&raw mut NULL).unwrap(),
+                stderr: NonNull::new(&raw mut NULL).unwrap(),
+                console_controller: ConsoleController::new(),
                 smbios: None,
                 device_tree: None,
             };
@@ -184,6 +202,14 @@ impl System {
         }
     }
 
+    #[inline]
+    pub fn console_controller<'a>() -> &'a mut ConsoleController {
+        unsafe {
+            let shared = Self::shared_mut();
+            &mut shared.console_controller
+        }
+    }
+
     pub fn line_input(max_len: usize) -> Option<String> {
         let mut buf = Vec::with_capacity(max_len);
         let stdin = Self::stdin();
@@ -284,6 +310,7 @@ impl System {
         unsafe {
             let shared = Self::shared_mut();
             shared.stdout = NonNull::new_unchecked(stdout);
+            shared.console_controller.text_out = NonNull::new_unchecked(stdout);
         }
     }
 
@@ -395,9 +422,102 @@ impl fmt::Display for Version<'_> {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct ConfigurationTableEntry {
-    pub guid: Guid,
-    pub address: NonNullPhysicalAddress,
+/// Console Controller
+pub struct ConsoleController {
+    text_out: NonNull<dyn SimpleTextOutput>,
+    graphics_out: Option<Box<dyn GraphicsOutput>>,
+    is_text_mode: bool,
+}
+
+impl ConsoleController {
+    #[inline]
+    const fn new() -> Self {
+        Self {
+            text_out: NonNull::new(&raw mut NULL).unwrap(),
+            graphics_out: None,
+            is_text_mode: true,
+        }
+    }
+
+    #[inline]
+    pub fn set_graphics(&mut self, graphics: Box<dyn GraphicsOutput>) {
+        self.graphics_out = Some(graphics);
+    }
+
+    #[inline]
+    unsafe fn _set_stdout(stdout: &'static mut dyn SimpleTextOutput) {
+        unsafe {
+            let shared = System::shared_mut();
+            shared.stdout = NonNull::new_unchecked(stdout);
+        }
+    }
+
+    #[inline]
+    pub const fn is_text_mode(&self) -> bool {
+        self.is_text_mode
+    }
+
+    #[inline]
+    pub const fn is_graphics_mode(&self) -> bool {
+        !self.is_text_mode()
+    }
+
+    pub fn set_text_mode(&mut self) {
+        if let Some(graphics) = self.graphics_out.as_mut() {
+            graphics.deactivate();
+            unsafe {
+                Self::_set_stdout(self.text_out.as_mut());
+            }
+        }
+        self.is_text_mode = true;
+    }
+
+    pub fn current_graphics_mode(&self) -> Option<&io::graphics::CurrentMode> {
+        (self.is_graphics_mode())
+            .then(|| self.graphics_out.as_ref())
+            .flatten()
+            .map(|v| v.current_mode())
+    }
+
+    pub fn set_graphics_mode(&mut self, mode: io::graphics::ModeIndex) -> Result<(), ()> {
+        let Some(graphics) = self.graphics_out.as_mut() else {
+            return Err(());
+        };
+        graphics.set_mode(mode)?;
+        // TODO: init fbconsole
+
+        unsafe {
+            Self::_set_stdout(&mut *(&raw mut NULL));
+        }
+
+        self.is_text_mode = false;
+        Ok(())
+    }
+
+    pub fn find_graphics_mode(
+        &self,
+        width: u16,
+        height: u16,
+        pixel_format: PixelFormat,
+    ) -> Option<io::graphics::ModeIndex> {
+        let graphics = self.graphics_out.as_ref()?;
+        for (index, item) in graphics.modes().iter().enumerate() {
+            if item.width == width && item.height == height && item.pixel_format == pixel_format {
+                return Some(io::graphics::ModeIndex(index));
+            }
+        }
+        None
+    }
+
+    pub fn set_best_graphics_mode(
+        &mut self,
+        width: u16,
+        height: u16,
+        pixel_format: PixelFormat,
+    ) -> Result<(), ()> {
+        let mode = self
+            .find_graphics_mode(width, height, pixel_format)
+            .ok_or(())?;
+        self.set_graphics_mode(mode)
+    }
 }

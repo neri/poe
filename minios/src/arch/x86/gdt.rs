@@ -17,6 +17,7 @@ pub const USER_DSEL: Selector = Selector::new(5, RPL3);
 
 static mut GDT: UnsafeCell<Gdt> = UnsafeCell::new(Gdt::new());
 
+/// Global Descriptor Table
 #[repr(C, align(16))]
 pub struct Gdt {
     table: [DescriptorEntry; Self::NUM_ITEMS],
@@ -36,14 +37,14 @@ impl Gdt {
         };
 
         unsafe {
-            gdt.set_item_const(KERNEL_CSEL, DescriptorEntry::flat_code_segment(DPL0, USE32))
+            gdt.set_item_opt(KERNEL_CSEL, SegmentDescriptor::flat_code32(DPL0))
                 .unwrap();
-            gdt.set_item_const(KERNEL_DSEL, DescriptorEntry::flat_data_segment(DPL0))
+            gdt.set_item_opt(KERNEL_DSEL, SegmentDescriptor::flat_data(DPL0))
                 .unwrap();
 
-            gdt.set_item_const(USER_CSEL, DescriptorEntry::flat_code_segment(DPL3, USE32))
+            gdt.set_item_opt(USER_CSEL, SegmentDescriptor::flat_code32(DPL3))
                 .unwrap();
-            gdt.set_item_const(USER_DSEL, DescriptorEntry::flat_data_segment(DPL3))
+            gdt.set_item_opt(USER_DSEL, SegmentDescriptor::flat_data(DPL3))
                 .unwrap();
         }
         gdt
@@ -68,7 +69,7 @@ impl Gdt {
             gdt.tss.iopb_base = iopb_base;
             let tss_base = Linear32::new(&gdt.tss as *const _ as u32);
             let tss_limit = Limit16::new(iopb_base + 8191);
-            gdt.set_item_const(SYSTEM_TSS, DescriptorEntry::tss32(tss_base, tss_limit))
+            gdt.set_item_opt(SYSTEM_TSS, SegmentDescriptor::tss32(tss_base, tss_limit))
                 .unwrap();
 
             gdt.reload();
@@ -116,7 +117,7 @@ impl Gdt {
     }
 
     #[inline]
-    pub const unsafe fn set_item_const(
+    pub const unsafe fn set_item_opt(
         &mut self,
         selector: Selector,
         desc: DescriptorEntry,
@@ -145,10 +146,12 @@ impl Gdt {
 
     #[inline]
     pub unsafe fn set_tss_esp0(esp: u32) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             let gdt = Self::shared();
             ptr::addr_of_mut!(gdt.tss.esp0).write_volatile(esp);
         }
+        compiler_fence(Ordering::SeqCst);
     }
 
     #[inline]

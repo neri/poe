@@ -5,11 +5,13 @@ use crate::arch::gdt::{KERNEL_CSEL, KERNEL_DSEL};
 use crate::*;
 use core::arch::{asm, global_asm};
 use core::cell::UnsafeCell;
+use core::sync::atomic::{Ordering, compiler_fence};
 use paste::paste;
 use x86::{gpr::Pointer32, prot::*};
 
 static mut IDT: UnsafeCell<Idt> = UnsafeCell::new(Idt::new());
 
+/// Interrupt Descriptor Table
 #[repr(C, align(16))]
 pub struct Idt {
     table: [DescriptorEntry; Self::MAX],
@@ -143,6 +145,7 @@ impl Idt {
 
     #[inline]
     unsafe fn load(&self) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!(
                 "push {0}",
@@ -155,9 +158,10 @@ impl Idt {
         }
     }
 
-    pub unsafe fn register(vec: InterruptVector, offset: usize, dpl: DPL, is_inter: bool) {
-        let entry = DescriptorEntry::gate32(
-            offset,
+    pub unsafe fn register(int_vec: InterruptVector, offset: usize, dpl: DPL, is_inter: bool) {
+        compiler_fence(Ordering::SeqCst);
+        let entry = GateDescriptor::new(
+            Offset32::new(offset as u32),
             KERNEL_CSEL,
             dpl,
             if is_inter {
@@ -167,18 +171,21 @@ impl Idt {
             },
         );
         unsafe {
-            Self::shared().table[vec.0 as usize] = entry;
+            Self::shared().table[int_vec.0 as usize] = entry;
         }
+        compiler_fence(Ordering::SeqCst);
     }
 
     #[inline]
     pub unsafe fn handle_exception(
-        exc: Exception,
+        ex: Exception,
         handler: unsafe fn(&mut X86StackContext) -> bool,
     ) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
-            Self::shared().exception_chains[exc.as_vec().0 as usize] = Some(handler);
+            Self::shared().exception_chains[ex.as_vec().0 as usize] = Some(handler);
         }
+        compiler_fence(Ordering::SeqCst);
     }
 }
 

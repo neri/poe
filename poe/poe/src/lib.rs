@@ -3,7 +3,8 @@
 #![no_main]
 
 extern crate alloc;
-use minios::{mem::MemoryManager, prelude::*};
+use minios::mem::MemoryManager;
+use minios::prelude::*;
 
 pub use minios::prelude;
 
@@ -15,6 +16,25 @@ pub fn main() {
     let info = System::boot_info();
     let memsize1 = MemoryManager::total_memory_size();
     let memsize2 = MemoryManager::total_extended_memory_size();
+
+    if System::console_controller()
+        .set_best_graphics_mode(640, 480, minios::io::graphics::PixelFormat::Indexed8)
+        .is_ok()
+    {
+        let mode = System::console_controller()
+            .current_graphics_mode()
+            .unwrap();
+
+        unsafe {
+            for y in 0..mode.info.height {
+                let p = (mode.fb.as_usize() as *mut u8)
+                    .add((y as usize) * (mode.info.bytes_per_scanline as usize));
+                for x in 0..mode.info.width {
+                    p.add(x as usize).write_volatile((y + x) as u8);
+                }
+            }
+        }
+    }
 
     let stdout = System::stdout();
     stdout.reset();
@@ -114,7 +134,7 @@ pub fn main() {
         stdout.set_attribute(0);
     }
 
-    println!("POE super-shell v0.0");
+    println!("* SUPER POE SHELL v0.0 *");
     loop {
         print!(">");
         if let Some(line) = System::line_input(64) {

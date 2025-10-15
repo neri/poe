@@ -5,8 +5,19 @@
 //! May not work or may need to be adjusted as it has not been fully verified on actual hardware.
 //!
 
-pub mod bios;
-pub mod pc98_text;
+mod pc98_text;
+mod pegc;
+
+mod bios {
+    use x86::prot::InterruptVector;
+
+    /// Video and keyboard BIOS Services
+    pub const INT18: InterruptVector = InterruptVector(0x18);
+
+    #[allow(unused)]
+    /// Disk BIOS Services
+    pub const INT1B: InterruptVector = InterruptVector(0x1B);
+}
 
 use crate::arch::vm86::{VM86, X86StackContext};
 use crate::mem::{MemoryManager, MemoryType};
@@ -69,6 +80,8 @@ pub(super) unsafe fn init(_info: &BootInfo) {
         let kbd = &mut *(&raw mut STDIN);
         kbd.reset();
         System::set_stdin(kbd);
+
+        pegc::PegcBios::init();
     }
 }
 

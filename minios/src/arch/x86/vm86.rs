@@ -275,6 +275,7 @@ impl VM86 {
                     // F4: HLT
                     Hal::cpu().enable_interrupt();
                     Hal::cpu().wait_for_interrupt();
+                    Hal::cpu().disable_interrupt();
                     skip += 1;
                 }
                 0xFA => {
@@ -309,6 +310,7 @@ pub struct X86StackContext {
     _fs: AlignedSelector32,
     _gs: AlignedSelector32,
 
+    // same layout as `PUSHAD`
     pub edi: Gpr32,
     pub esi: Gpr32,
     pub ebp: Gpr32,
@@ -421,6 +423,7 @@ impl X86StackContext {
         InterruptVector(self._vector as u8)
     }
 
+    /// Returns the value of DS in virtual 8086 mode.
     #[inline]
     pub fn vmds(&self) -> Option<Selector> {
         if self.is_vm() {
@@ -430,6 +433,7 @@ impl X86StackContext {
         }
     }
 
+    /// Returns the value of ES in virtual 8086 mode.
     #[inline]
     pub fn vmes(&self) -> Option<Selector> {
         if self.is_vm() {
@@ -439,6 +443,7 @@ impl X86StackContext {
         }
     }
 
+    /// Returns the value of FS in virtual 8086 mode.
     #[inline]
     pub fn vmfs(&self) -> Option<Selector> {
         if self.is_vm() {
@@ -448,6 +453,7 @@ impl X86StackContext {
         }
     }
 
+    /// Returns the value of GS in virtual 8086 mode.
     #[inline]
     pub fn vmgs(&self) -> Option<Selector> {
         if self.is_vm() {
@@ -457,41 +463,65 @@ impl X86StackContext {
         }
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vmds_unchecked(&self) -> Selector {
         self._vmds.sel()
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vmes_unchecked(&self) -> Selector {
         self._vmes.sel()
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vmfs_unchecked(&self) -> Selector {
         self._vmfs.sel()
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vmgs_unchecked(&self) -> Selector {
         self._vmgs.sel()
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn set_vmds(&mut self, vmds: Selector) {
         self._vmds = AlignedSelector32::from(vmds);
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn set_vmes(&mut self, vmes: Selector) {
         self._vmes = AlignedSelector32::from(vmes);
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn set_vmfs(&mut self, vmfs: Selector) {
         self._vmfs = AlignedSelector32::from(vmfs);
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn set_vmgs(&mut self, vmgs: Selector) {
         self._vmgs = AlignedSelector32::from(vmgs);
@@ -502,16 +532,25 @@ impl X86StackContext {
         self._cs = AlignedSelector32::from(cs);
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
     pub unsafe fn set_esp3(&mut self, esp3: Pointer32) {
         self._esp3 = esp3;
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
     pub unsafe fn esp3_unchecked(&self) -> Pointer32 {
         self._esp3
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
     pub unsafe fn update_esp3<F>(&mut self, f: F)
     where
@@ -520,6 +559,9 @@ impl X86StackContext {
         self._esp3 = f(self._esp3);
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
     pub unsafe fn update_sp3<F>(&mut self, f: F)
     where
@@ -537,6 +579,9 @@ impl X86StackContext {
         }
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
     pub unsafe fn ss3_unchecked(&self) -> Selector {
         self._ss3.sel()
@@ -551,6 +596,9 @@ impl X86StackContext {
         }
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
     pub unsafe fn set_ss3(&mut self, ss3: Selector) {
         self._ss3 = AlignedSelector32::from(ss3);
@@ -565,6 +613,9 @@ impl X86StackContext {
         }
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
     pub unsafe fn ss_esp3_unchecked(&self) -> (Selector, Pointer32) {
         (self._ss3.sel(), self._esp3)
@@ -596,18 +647,27 @@ impl X86StackContext {
         Far16Ptr::new(self.cs(), self.eip.offset16()).as_ptr()
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_sssp_ptr16(&self) -> *mut u16 {
         let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
         Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_sssp_ptr32(&self) -> *mut u32 {
         let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
         Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_push16(&mut self, value: u16) {
         unsafe {
@@ -616,6 +676,9 @@ impl X86StackContext {
         }
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_pop16(&mut self) -> u16 {
         unsafe {
@@ -625,6 +688,9 @@ impl X86StackContext {
         }
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_push32(&mut self, value: u32) {
         unsafe {
@@ -633,6 +699,9 @@ impl X86StackContext {
         }
     }
 
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_pop32(&mut self) -> u32 {
         unsafe {
@@ -643,6 +712,10 @@ impl X86StackContext {
     }
 
     /// Simulates a far call in virtual 8086 mode.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_call_far(&mut self, target: Far16Ptr) {
         unsafe {
@@ -654,6 +727,10 @@ impl X86StackContext {
     }
 
     /// Redirect interrupts by adjusting the stack context in virtual 8086 mode.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     unsafe fn vm_redirect_interrupt(&mut self, int_vec: InterruptVector, is_external: bool) {
         unsafe {

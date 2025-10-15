@@ -5,7 +5,9 @@
 //! May not work or may need to be adjusted as it has not been fully verified on actual hardware.
 //!
 
+mod crtc;
 mod fmt_kbd;
+mod fmt_svga;
 mod fmt_text;
 
 use crate::mem::{MemoryManager, MemoryType};
@@ -45,12 +47,9 @@ pub(super) unsafe fn init(_info: &BootInfo) {
         Hal::cpu().enable_interrupt();
 
         fmt_kbd::FmtKbd::init();
-
         // Irq(11).register(irq11).unwrap();
 
-        // loop {
-        //     Hal::cpu().wait_for_interrupt();
-        // }
+        fmt_svga::FmtSvga::init();
     }
 }
 

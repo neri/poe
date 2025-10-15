@@ -1,5 +1,6 @@
 //! Simple Console I/O
 
+pub mod fbcon;
 pub mod null;
 pub mod vt100;
 
