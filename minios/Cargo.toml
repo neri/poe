@@ -16,6 +16,8 @@ sbi = ["device_tree"]
 paste = { version = "1.0" }
 seq-macro = { version = "0.3" }
 
+embedded-graphics = { version = "0.8" }
+
 # bootprot = {path = "../lib/bootprot/"}
 acpi = { path = "../lib/acpi/", features = ["guid"] }
 fdt = { path = "../lib/fdt/", features = ["guid"] }

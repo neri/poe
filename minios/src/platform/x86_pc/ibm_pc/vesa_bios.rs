@@ -94,16 +94,12 @@ impl VesaBios {
 }
 
 impl GraphicsOutput for VesaBios {
-    fn deactivate(&mut self) {
-        unsafe {
-            let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x0003);
-            VM86::call_bios(INT10, &mut regs);
-        }
-    }
-
     fn modes(&self) -> &[ModeInfo] {
         &self.modes
+    }
+
+    fn current_mode(&self) -> &CurrentMode {
+        &self.current_mode
     }
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {
@@ -152,8 +148,12 @@ impl GraphicsOutput for VesaBios {
         }
     }
 
-    fn current_mode(&self) -> &CurrentMode {
-        &self.current_mode
+    fn detach(&mut self) {
+        unsafe {
+            let mut regs = X86StackContext::default();
+            regs.eax.set_d(0x0003);
+            VM86::call_bios(INT10, &mut regs);
+        }
     }
 }
 

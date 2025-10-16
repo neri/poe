@@ -1,5 +1,7 @@
 //! MiniOS Execution Environment
 
+use crate::fbcon::FbCon;
+use crate::io::graphics::display::BitmapDisplay8;
 use crate::io::graphics::{GraphicsOutput, PixelFormat};
 use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
 use crate::mem::MemoryManager;
@@ -8,10 +10,11 @@ use crate::platform::*;
 use crate::*;
 use core::fmt;
 use core::iter::Iterator;
-use core::mem::MaybeUninit;
+use core::mem::{MaybeUninit, transmute};
 use core::ops::Range;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
+use embedded_graphics::mono_font::ascii::FONT_8X13;
 use guid::Guid;
 
 static mut SYSTEM: MaybeUninit<System> = MaybeUninit::zeroed();
@@ -40,7 +43,7 @@ pub struct ConfigurationTableEntry {
 }
 
 impl System {
-    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x07; //0x1f;
+    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x1f;
 
     /// Initialize with boot information and main function
     #[inline]
@@ -427,6 +430,7 @@ pub struct ConsoleController {
     text_out: NonNull<dyn SimpleTextOutput>,
     graphics_out: Option<Box<dyn GraphicsOutput>>,
     is_text_mode: bool,
+    fbcon: Option<FbCon>,
 }
 
 impl ConsoleController {
@@ -436,6 +440,7 @@ impl ConsoleController {
             text_out: NonNull::new(&raw mut NULL).unwrap(),
             graphics_out: None,
             is_text_mode: true,
+            fbcon: None,
         }
     }
 
@@ -463,13 +468,15 @@ impl ConsoleController {
     }
 
     pub fn set_text_mode(&mut self) {
-        if let Some(graphics) = self.graphics_out.as_mut() {
-            graphics.deactivate();
-            unsafe {
-                Self::_set_stdout(self.text_out.as_mut());
+        if !self.is_text_mode {
+            if let Some(graphics) = self.graphics_out.as_mut() {
+                graphics.detach();
+                unsafe {
+                    Self::_set_stdout(self.text_out.as_mut());
+                }
             }
+            self.is_text_mode = true;
         }
-        self.is_text_mode = true;
     }
 
     pub fn current_graphics_mode(&self) -> Option<&io::graphics::CurrentMode> {
@@ -483,11 +490,24 @@ impl ConsoleController {
         let Some(graphics) = self.graphics_out.as_mut() else {
             return Err(());
         };
+        let mode_info = graphics.modes().get(mode.0).ok_or(())?;
+        if mode_info.pixel_format != PixelFormat::Indexed8 {
+            // TODO: not supported
+            return Err(());
+        }
+
         graphics.set_mode(mode)?;
-        // TODO: init fbconsole
 
         unsafe {
             Self::_set_stdout(&mut *(&raw mut NULL));
+            let fbcon = FbCon::new(
+                BitmapDisplay8::from_graphics(graphics.current_mode()).unwrap(),
+                FONT_8X13,
+            );
+            self.fbcon = Some(fbcon);
+            Self::_set_stdout(transmute(
+                self.fbcon.as_mut().unwrap() as &mut dyn SimpleTextOutput
+            ));
         }
 
         self.is_text_mode = false;

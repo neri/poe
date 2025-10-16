@@ -48,18 +48,12 @@ impl PegcBios {
 }
 
 impl GraphicsOutput for PegcBios {
-    fn deactivate(&mut self) {
-        unsafe {
-            let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x4100);
-            VM86::call_bios(INT18, &mut regs);
-            regs.eax.set_d(0x0c00);
-            VM86::call_bios(INT18, &mut regs);
-        }
-    }
-
     fn modes(&self) -> &[ModeInfo] {
         &self.modes
+    }
+
+    fn current_mode(&self) -> &CurrentMode {
+        &self.current_mode
     }
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {
@@ -74,7 +68,7 @@ impl GraphicsOutput for PegcBios {
             regs.ecx.set_d(0x0100);
             VM86::call_bios(INT18, &mut regs);
 
-            regs.eax.set_d(0x0c00);
+            regs.eax.set_d(0x0d00);
             VM86::call_bios(INT18, &mut regs);
             regs.eax.set_d(0x4000);
             VM86::call_bios(INT18, &mut regs);
@@ -93,7 +87,20 @@ impl GraphicsOutput for PegcBios {
         }
     }
 
-    fn current_mode(&self) -> &CurrentMode {
-        &self.current_mode
+    fn detach(&mut self) {
+        unsafe {
+            let mut regs = X86StackContext::default();
+            regs.eax.set_d(0x4100);
+            VM86::call_bios(INT18, &mut regs);
+            regs.eax.set_d(0x3008);
+            regs.ebx.set_d(0x2200);
+            VM86::call_bios(INT18, &mut regs);
+            regs.eax.set_d(0x4d00);
+            regs.ecx.set_d(0x0000);
+            VM86::call_bios(INT18, &mut regs);
+
+            regs.eax.set_d(0x0c00);
+            VM86::call_bios(INT18, &mut regs);
+        }
     }
 }

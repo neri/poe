@@ -71,6 +71,18 @@ impl SimpleTextOutputMode {
     }
 
     #[inline]
+    pub const fn from_dims(columns: u8, rows: u8) -> Self {
+        Self {
+            columns,
+            rows,
+            cursor_column: 0,
+            cursor_row: 0,
+            attribute: 0,
+            cursor_visible: 1,
+        }
+    }
+
+    #[inline]
     pub const fn is_cursor_visible(&self) -> bool {
         self.cursor_visible != 0
     }

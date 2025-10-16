@@ -1,21 +1,18 @@
 //! Graphics related I/O
 
+pub mod color;
+pub mod display;
+
 use crate::PhysicalAddress;
 
 pub trait GraphicsOutput {
     fn modes(&self) -> &[ModeInfo];
 
-    fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()>;
-
     fn current_mode(&self) -> &CurrentMode;
 
-    fn deactivate(&mut self);
+    fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()>;
 
-    #[inline]
-    fn fb(&self) -> &mut [u8] {
-        let mode = self.current_mode();
-        unsafe { core::slice::from_raw_parts_mut(mode.fb.as_repr() as *mut u8, mode.fb_size) }
-    }
+    fn detach(&mut self);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -54,6 +51,13 @@ impl CurrentMode {
     }
 }
 
+impl ModeInfo {
+    #[inline]
+    pub fn is_uefi_compatible(&self) -> bool {
+        matches!(self.pixel_format, PixelFormat::BGRX8888) && (self.bytes_per_scanline & 3) == 0
+    }
+}
+
 /// Standard 256 color palette (ARGB in little endian)
 pub const COLOR_PALETTE: [u32; 256] = [
     0xFF212121, 0xFF0D47A1, 0xFF1B5E20, 0xFF006064, 0xFFB71C1C, 0xFF4A148C, 0xFF795548, 0xFFBDBDBD,
@@ -88,14 +92,17 @@ pub const COLOR_PALETTE: [u32; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
     /// 8bit Indexed Color
     Indexed8 = 1,
-    /// 32bit Color, ARGB in little endian
-    BGRX8888,
-    /// 32bit Color, RGBA in big endian
-    RGBX8888,
+    /// 32bit Color, ARGB in little endian.
+    /// It is commonly used in UEFI GOP and VESA VBE.
+    BGRX8888 = 2,
+    /// 32bit Color, RGBA in big endian.
+    /// It is commonly used in HTML canvas and general image processing.
+    RGBX8888 = 3,
 }
 
 impl PixelFormat {
@@ -113,5 +120,10 @@ impl PixelFormat {
             PixelFormat::Indexed8 => 8,
             PixelFormat::BGRX8888 | PixelFormat::RGBX8888 => 32,
         }
+    }
+
+    #[inline]
+    pub const fn bytes_per_pixel(&self) -> usize {
+        (self.bits_per_pixel() + 7) / 8
     }
 }

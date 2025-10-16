@@ -49,14 +49,12 @@ impl FmtSvga {
 }
 
 impl GraphicsOutput for FmtSvga {
-    fn deactivate(&mut self) {
-        unsafe {
-            FmtText::hw_set_mode();
-        }
-    }
-
     fn modes(&self) -> &[ModeInfo] {
         &self.modes
+    }
+
+    fn current_mode(&self) -> &CurrentMode {
+        &self.current_mode
     }
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {
@@ -76,7 +74,9 @@ impl GraphicsOutput for FmtSvga {
         }
     }
 
-    fn current_mode(&self) -> &CurrentMode {
-        &self.current_mode
+    fn detach(&mut self) {
+        unsafe {
+            FmtText::hw_set_mode();
+        }
     }
 }

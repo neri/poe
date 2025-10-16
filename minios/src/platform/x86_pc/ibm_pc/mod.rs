@@ -34,7 +34,7 @@ use core::{ffi::c_void, iter::Iterator, ops::Range};
 use smbios::{SMBIOS_GUID, SmBios};
 use x86::gpr::Eflags;
 
-const USE_UART_STDIO: bool = true;
+const USE_UART_STDIO: bool = false;
 
 pub(super) unsafe fn init(_info: &BootInfo) {
     unsafe {
