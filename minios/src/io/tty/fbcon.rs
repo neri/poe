@@ -2,16 +2,16 @@
 
 use super::*;
 use crate::io::graphics::color::IndexedColor;
-use crate::io::graphics::display::BitmapDisplay8;
+use crate::io::graphics::display::FbDisplay8;
 use crate::*;
 use embedded_graphics::mono_font::{MonoFont, MonoTextStyle};
 use embedded_graphics::prelude::*;
+use embedded_graphics::primitives::Rectangle;
 use embedded_graphics::text::Baseline;
 use embedded_graphics::text::renderer::{CharacterStyle, TextRenderer};
 
-#[allow(unused)]
 pub struct FbCon {
-    display: BitmapDisplay8,
+    fb: FbDisplay8,
     font: MonoFont<'static>,
     mode: SimpleTextOutputMode,
     font_width: usize,
@@ -21,10 +21,10 @@ pub struct FbCon {
 }
 
 impl FbCon {
-    pub fn new(display: BitmapDisplay8, font: MonoFont<'static>) -> Self {
+    pub fn new(fb: FbDisplay8, font: MonoFont<'static>) -> Self {
         let char_size = font.character_size;
-        let display_width = display.bounding_box().size.width as usize;
-        let display_height = display.bounding_box().size.height as usize;
+        let display_width = fb.bounding_box().size.width as usize;
+        let display_height = fb.bounding_box().size.height as usize;
         let font_width = char_size.width as usize + font.character_spacing as usize;
         let font_height = char_size.height as usize;
 
@@ -32,7 +32,7 @@ impl FbCon {
         let rows = (display_height / font_height).min(255) as u8;
 
         Self {
-            display,
+            fb,
             font,
             mode: SimpleTextOutputMode::from_dims(cols, rows),
             font_width,
@@ -42,8 +42,24 @@ impl FbCon {
         }
     }
 
-    fn flip_cursor(&mut self, _col: u8, _row: u8) {
-        // TODO:
+    #[inline]
+    pub fn current_fb(&mut self) -> &mut FbDisplay8 {
+        &mut self.fb
+    }
+
+    fn draw_cursor(&mut self, col: u8, row: u8, state: bool) {
+        self.fb
+            .fill_solid(
+                &Rectangle::new(
+                    Point::new(
+                        (col as usize * self.font_width) as i32,
+                        (row as usize * self.font_height + self.font_height - 1) as i32,
+                    ),
+                    Size::new(self.font_width as u32, 1),
+                ),
+                if state { self.fg_color } else { self.bg_color },
+            )
+            .unwrap();
     }
 
     fn adjust_coords(&mut self, col: u8, row: u8, wrap_around: bool) -> Option<(u8, u8)> {
@@ -116,7 +132,7 @@ impl core::fmt::Write for FbCon {
                         (row as usize * self.font_height) as i32,
                     );
                     mono_style
-                        .draw_string(s, position, Baseline::Top, &mut self.display)
+                        .draw_string(s, position, Baseline::Top, &mut self.fb)
                         .unwrap();
 
                     col += 1;
@@ -158,8 +174,17 @@ impl SimpleTextOutput for FbCon {
     fn clear_screen(&mut self) {
         let old_cursor_visible = self.enable_cursor(false);
 
-        self.display
-            .fill_solid(&self.display.bounding_box(), self.bg_color)
+        self.fb
+            .fill_solid(
+                &Rectangle::new(
+                    Point::zero(),
+                    Size::new(
+                        self.mode.columns as u32 * self.font_width as u32,
+                        self.mode.rows as u32 * self.font_height as u32,
+                    ),
+                ),
+                self.bg_color,
+            )
             .unwrap();
 
         self.mode.cursor_column = 0;
@@ -174,14 +199,18 @@ impl SimpleTextOutput for FbCon {
         self.mode.cursor_column = (self.mode.columns as u32).min(col) as u8;
         self.mode.cursor_row = (self.mode.rows as u32).min(row) as u8;
         if old_cursor_visible {
-            self.flip_cursor(self.mode.cursor_column, self.mode.cursor_row);
+            self.draw_cursor(
+                self.mode.cursor_column,
+                self.mode.cursor_row,
+                old_cursor_visible,
+            );
         }
     }
 
     fn enable_cursor(&mut self, visible: bool) -> bool {
         let old_value = self.mode.is_cursor_visible();
         if visible != old_value {
-            self.flip_cursor(self.mode.cursor_column, self.mode.cursor_row);
+            self.draw_cursor(self.mode.cursor_column, self.mode.cursor_row, visible);
         }
         self.mode.set_cursor_visible(visible);
         old_value

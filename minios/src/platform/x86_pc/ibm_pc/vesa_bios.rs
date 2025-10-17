@@ -1,12 +1,15 @@
 //! VESA BIOS Extensions (VBE) support
 
 use super::bios::INT10;
-use crate::arch::{
-    lomem::LoMemoryManager,
-    vm86::{VM86, X86StackContext},
-};
 use crate::io::graphics::*;
 use crate::*;
+use crate::{
+    arch::{
+        lomem::LoMemoryManager,
+        vm86::{VM86, X86StackContext},
+    },
+    io::graphics::color::COLOR_PALETTE,
+};
 use alloc::collections::BinaryHeap;
 use x86::isolated_io::IoPortWB;
 
@@ -88,7 +91,7 @@ impl VesaBios {
             driver.modes = modes.iter().map(|v| v.info).collect::<Vec<_>>();
             driver.bios_modes = modes.iter().map(|v| v.bios_mode).collect::<Vec<_>>();
 
-            System::console_controller().set_graphics(driver as Box<dyn GraphicsOutput>);
+            System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
         }
     }
 }

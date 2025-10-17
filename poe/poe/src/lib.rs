@@ -3,6 +3,7 @@
 #![no_main]
 
 extern crate alloc;
+use minios::io::graphics::PixelFormat;
 use minios::mem::MemoryManager;
 use minios::prelude::*;
 
@@ -13,15 +14,11 @@ static SYSTEM_NAME: &str = "POE";
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
 pub fn main() {
-    let info = System::boot_info();
-    let memsize1 = MemoryManager::total_memory_size();
-    let memsize2 = MemoryManager::total_extended_memory_size();
-
-    let _ = System::console_controller().set_best_graphics_mode(
-        640,
-        480,
-        minios::io::graphics::PixelFormat::Indexed8,
-    );
+    let _ = System::conctl().try_set_graphics_mode(&[
+        (800, 600, PixelFormat::BGRX8888),
+        (800, 600, PixelFormat::Indexed8),
+        (640, 480, PixelFormat::Indexed8),
+    ]);
 
     let stdout = System::stdout();
     stdout.reset();
@@ -41,6 +38,9 @@ pub fn main() {
     println!("{}", logo.next().unwrap());
     println!("");
 
+    let info = System::boot_info();
+    let memsize1 = MemoryManager::total_memory_size();
+    let memsize2 = MemoryManager::total_extended_memory_size();
     println!("{} v{}", SYSTEM_NAME, CURRENT_VERSION,);
     if memsize2 > 0 {
         let memsize1 = (memsize1 + 0xfffff) >> 20;

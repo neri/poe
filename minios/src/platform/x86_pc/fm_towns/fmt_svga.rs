@@ -1,6 +1,8 @@
 //! FM TOWNS Graphics Mode Driver
 
 use super::{crtc::Crtc, fmt_text::FmtText};
+use crate::arch::cpu::Cpu;
+use crate::io::graphics::color::COLOR_PALETTE;
 use crate::io::graphics::*;
 use crate::*;
 use x86::isolated_io::IoPortWB;
@@ -44,7 +46,7 @@ impl FmtSvga {
             fb_size: 512 * 1024,
         };
 
-        System::console_controller().set_graphics(driver as Box<dyn GraphicsOutput>);
+        System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
     }
 }
 
@@ -59,7 +61,7 @@ impl GraphicsOutput for FmtSvga {
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {
         unsafe {
-            let _inner_mode = *self.modes.get(mode.0 as usize).ok_or(())?;
+            let _mode_info = *self.modes.get(mode.0 as usize).ok_or(())?;
 
             Crtc::set_mode(&VIDEO_MODE_SETTINGS, 0b0000_1010, 0b0001_1000, 0b0000_1000);
 
@@ -69,6 +71,12 @@ impl GraphicsOutput for FmtSvga {
                 IoPortWB(0xfd96).write((color >> 8) as u8);
                 IoPortWB(0xfd94).write((color >> 16) as u8);
             }
+
+            Cpu::rep_stosd(
+                self.current_mode.fb.as_usize() as *mut u32,
+                0,
+                self.current_mode.fb_size / 4,
+            );
 
             Ok(())
         }

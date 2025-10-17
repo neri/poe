@@ -1,7 +1,7 @@
 //! MiniOS Execution Environment
 
 use crate::fbcon::FbCon;
-use crate::io::graphics::display::BitmapDisplay8;
+use crate::io::graphics::display::FbDisplay8;
 use crate::io::graphics::{GraphicsOutput, PixelFormat};
 use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
 use crate::mem::MemoryManager;
@@ -10,11 +10,10 @@ use crate::platform::*;
 use crate::*;
 use core::fmt;
 use core::iter::Iterator;
-use core::mem::{MaybeUninit, transmute};
+use core::mem::MaybeUninit;
 use core::ops::Range;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
-use embedded_graphics::mono_font::ascii::FONT_8X13;
 use guid::Guid;
 
 static mut SYSTEM: MaybeUninit<System> = MaybeUninit::zeroed();
@@ -206,7 +205,7 @@ impl System {
     }
 
     #[inline]
-    pub fn console_controller<'a>() -> &'a mut ConsoleController {
+    pub fn conctl<'a>() -> &'a mut ConsoleController {
         unsafe {
             let shared = Self::shared_mut();
             &mut shared.console_controller
@@ -314,6 +313,14 @@ impl System {
             let shared = Self::shared_mut();
             shared.stdout = NonNull::new_unchecked(stdout);
             shared.console_controller.text_out = NonNull::new_unchecked(stdout);
+        }
+    }
+
+    #[inline]
+    unsafe fn _set_stdout(stdout: &'static mut dyn SimpleTextOutput) {
+        unsafe {
+            let shared = Self::shared_mut();
+            shared.stdout = NonNull::new_unchecked(stdout);
         }
     }
 
@@ -446,15 +453,8 @@ impl ConsoleController {
 
     #[inline]
     pub fn set_graphics(&mut self, graphics: Box<dyn GraphicsOutput>) {
+        self.set_text_mode();
         self.graphics_out = Some(graphics);
-    }
-
-    #[inline]
-    unsafe fn _set_stdout(stdout: &'static mut dyn SimpleTextOutput) {
-        unsafe {
-            let shared = System::shared_mut();
-            shared.stdout = NonNull::new_unchecked(stdout);
-        }
     }
 
     #[inline]
@@ -467,18 +467,23 @@ impl ConsoleController {
         !self.is_text_mode()
     }
 
+    /// Sets text mode
     pub fn set_text_mode(&mut self) {
         if !self.is_text_mode {
             if let Some(graphics) = self.graphics_out.as_mut() {
                 graphics.detach();
                 unsafe {
-                    Self::_set_stdout(self.text_out.as_mut());
+                    System::_set_stdout(self.text_out.as_mut());
                 }
+                self.fbcon = None;
             }
             self.is_text_mode = true;
+
+            System::stdout().reset();
         }
     }
 
+    /// Returns current graphics mode if in graphics mode
     pub fn current_graphics_mode(&self) -> Option<&io::graphics::CurrentMode> {
         (self.is_graphics_mode())
             .then(|| self.graphics_out.as_ref())
@@ -486,31 +491,67 @@ impl ConsoleController {
             .map(|v| v.current_mode())
     }
 
+    /// Returns current draw target if in graphics mode
+    pub fn current_draw_target(&mut self) -> Option<&mut FbDisplay8> {
+        (self.is_graphics_mode())
+            .then(|| self.fbcon.as_mut())
+            .flatten()
+            .map(|v| v.current_fb())
+    }
+
+    /// Sets graphics mode
     pub fn set_graphics_mode(&mut self, mode: io::graphics::ModeIndex) -> Result<(), ()> {
         let Some(graphics) = self.graphics_out.as_mut() else {
             return Err(());
         };
-        let mode_info = graphics.modes().get(mode.0).ok_or(())?;
-        if mode_info.pixel_format != PixelFormat::Indexed8 {
-            // TODO: not supported
+        let prev_is_text_mode = self.is_text_mode;
+        let prev_graphics_mode = graphics.current_mode().current;
+
+        let mode_info = graphics.modes().get(mode.0).ok_or(())?.clone();
+        if !FbDisplay8::is_supported_pixel_format(mode_info.pixel_format) {
             return Err(());
         }
 
         graphics.set_mode(mode)?;
 
         unsafe {
-            Self::_set_stdout(&mut *(&raw mut NULL));
-            let fbcon = FbCon::new(
-                BitmapDisplay8::from_graphics(graphics.current_mode()).unwrap(),
-                FONT_8X13,
-            );
-            self.fbcon = Some(fbcon);
-            Self::_set_stdout(transmute(
+            let display = match FbDisplay8::from_graphics(graphics.current_mode()) {
+                Some(d) => d,
+                None => {
+                    // fallback
+                    if prev_is_text_mode {
+                        System::_set_stdout(self.text_out.as_mut());
+                    } else {
+                        graphics
+                            .set_mode(prev_graphics_mode)
+                            .expect("Failed to restore previous graphics mode");
+                    }
+                    return Err(());
+                }
+            };
+
+            System::_set_stdout(&mut *(&raw mut NULL));
+
+            let font = if mode_info.width >= 800 && mode_info.height >= 600 {
+                embedded_graphics::mono_font::ascii::FONT_10X20
+            } else if mode_info.width >= 640 && mode_info.height >= 400 {
+                embedded_graphics::mono_font::ascii::FONT_8X13
+            } else {
+                embedded_graphics::mono_font::ascii::FONT_6X9
+            };
+
+            self.fbcon = FbCon::new(display, font).into();
+
+            // SAFETY: to avoid lifetime
+            System::_set_stdout(core::mem::transmute(
                 self.fbcon.as_mut().unwrap() as &mut dyn SimpleTextOutput
             ));
         }
 
         self.is_text_mode = false;
+
+        System::stdout().reset();
+
         Ok(())
     }
 
@@ -539,5 +580,20 @@ impl ConsoleController {
             .find_graphics_mode(width, height, pixel_format)
             .ok_or(())?;
         self.set_graphics_mode(mode)
+    }
+
+    pub fn try_set_graphics_mode(
+        &mut self,
+        candidates: &[(u16, u16, PixelFormat)],
+    ) -> Result<usize, ()> {
+        for (i, (w, h, pf)) in candidates.iter().enumerate() {
+            if let Some(mode) = self.find_graphics_mode(*w, *h, *pf) {
+                match self.set_graphics_mode(mode) {
+                    Ok(()) => return Ok(i),
+                    Err(()) => continue,
+                }
+            }
+        }
+        Err(())
     }
 }

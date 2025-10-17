@@ -1,14 +1,69 @@
 use super::mbox::{Mbox, PixelOrder, Tag};
+use crate::io::graphics::*;
 use crate::*;
 use core::mem::transmute;
 use edid::Edid;
 
-#[allow(dead_code)]
-pub struct Fb;
+pub struct Fb {
+    modes: Vec<ModeInfo>,
+    current_mode: CurrentMode,
+}
 
-#[allow(dead_code)]
+#[allow(unused)]
 impl Fb {
-    pub fn init(width: u32, height: u32) -> Result<(*mut u32, u32, u32, usize), ()> {
+    pub(super) unsafe fn init() {
+        let mut driver = Box::new(Self {
+            modes: Vec::new(),
+            current_mode: CurrentMode::empty(),
+        });
+
+        let _ = Self::set_overscan(0, 0, 0, 0);
+        let width;
+        let height;
+        let mut edid = [0; 128];
+        if let Ok((x, y)) = Self::get_edid_size(Some(&mut edid)) {
+            width = x;
+            height = y;
+
+            println!("EDID: ");
+            for (i, &v) in edid.iter().enumerate() {
+                print!(" {:02x}", v);
+                if (i & 15) == 15 {
+                    println!("");
+                }
+            }
+        } else {
+            (width, height) = Self::get_default_size();
+        }
+
+        driver.modes.push(ModeInfo {
+            width: width as u16,
+            height: height as u16,
+            bytes_per_scanline: (width * 4) as u16,
+            pixel_format: PixelFormat::BGRX8888,
+        });
+        for template in &[
+            (800, 600),
+            (640, 480),
+            (320, 200),
+            (1024, 768),
+            (1280, 720),
+            (1920, 1080),
+        ] {
+            if template.0 != width && template.1 != height {
+                driver.modes.push(ModeInfo {
+                    width: template.0 as u16,
+                    height: template.1 as u16,
+                    bytes_per_scanline: (template.0 * 4) as u16,
+                    pixel_format: PixelFormat::BGRX8888,
+                });
+            }
+        }
+
+        System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
+    }
+
+    pub fn set_resolution(width: u32, height: u32) -> Result<(*mut u32, u32, u32, usize), ()> {
         let mut mbox = Mbox::PROP.new::<35>();
         mbox.append(Tag::SetPhysicalWH(width, height))?;
         mbox.append(Tag::SetVirtualWH(width, height))?;
@@ -89,5 +144,35 @@ impl Fb {
             }
             Err(_) => Err(()),
         }
+    }
+}
+
+impl GraphicsOutput for Fb {
+    fn modes(&self) -> &[ModeInfo] {
+        &self.modes
+    }
+
+    fn current_mode(&self) -> &CurrentMode {
+        &self.current_mode
+    }
+
+    fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {
+        let info = *self.modes.get(mode.0 as usize).ok_or(())?;
+        if let Ok((ptr, _w, h, stride)) = Fb::set_resolution(info.width as u32, info.height as u32)
+        {
+            self.current_mode = CurrentMode {
+                current: mode,
+                info,
+                fb: PhysicalAddress::from_usize(ptr as usize),
+                fb_size: (stride * h as usize * 4),
+            };
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn detach(&mut self) {
+        // todo: nothing to do
     }
 }

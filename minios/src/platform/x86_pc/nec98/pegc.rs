@@ -2,6 +2,7 @@
 
 use super::bios::INT18;
 use crate::arch::vm86::{VM86, X86StackContext};
+use crate::io::graphics::color::COLOR_PALETTE;
 use crate::io::graphics::*;
 use crate::*;
 use x86::isolated_io::LoIoPortWB;
@@ -42,7 +43,7 @@ impl PegcBios {
                 fb_size: 640 * 480,
             };
 
-            System::console_controller().set_graphics(driver as Box<dyn GraphicsOutput>);
+            System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
         }
     }
 }
@@ -92,12 +93,13 @@ impl GraphicsOutput for PegcBios {
             let mut regs = X86StackContext::default();
             regs.eax.set_d(0x4100);
             VM86::call_bios(INT18, &mut regs);
-            regs.eax.set_d(0x3008);
-            regs.ebx.set_d(0x2200);
-            VM86::call_bios(INT18, &mut regs);
-            regs.eax.set_d(0x4d00);
-            regs.ecx.set_d(0x0000);
-            VM86::call_bios(INT18, &mut regs);
+
+            // regs.eax.set_d(0x3008);
+            // regs.ebx.set_d(0x2200);
+            // VM86::call_bios(INT18, &mut regs);
+            // regs.eax.set_d(0x4d00);
+            // regs.ecx.set_d(0x0000);
+            // VM86::call_bios(INT18, &mut regs);
 
             regs.eax.set_d(0x0c00);
             VM86::call_bios(INT18, &mut regs);

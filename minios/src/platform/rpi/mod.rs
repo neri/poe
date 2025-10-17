@@ -8,8 +8,6 @@ use core::{
     mem::MaybeUninit,
     sync::atomic::{Ordering, compiler_fence},
 };
-use fb::Fb;
-use minilib::rand::*;
 
 pub mod fb;
 pub mod gpio;
@@ -85,47 +83,16 @@ impl PlatformTrait for Platform {
                     println!("compatible: {}", item);
                 }
             }
-
-            let _ = Fb::set_overscan(0, 0, 0, 0);
-            let width;
-            let height;
-            let mut edid = [0; 128];
-            if let Ok((x, y)) = Fb::get_edid_size(Some(&mut edid)) {
-                width = x;
-                height = y;
-
-                println!("EDID: ");
-                for (i, &v) in edid.iter().enumerate() {
-                    print!(" {:02x}", v);
-                    if (i & 15) == 15 {
-                        println!("");
-                    }
-                }
-            } else {
-                (width, height) = Fb::get_default_size();
-            }
-            if let Ok((ptr, w, h, stride)) = Fb::init(width, height) {
-                println!("Framebuffer: {:p} {}x{} {}", ptr, w, h, stride);
-
-                let mut rng = XorShift32::default();
-                for y in 0..h {
-                    for x in 0..w {
-                        ptr.add(y as usize * stride + x as usize)
-                            .write_volatile(rng.next() as u32 & 0x00ff_ffff);
-                    }
-                }
-
-                //     STD_SCR_PTR.store(ptr as usize, Ordering::Relaxed);
-                //     STD_SCR_W.store(w, Ordering::Relaxed);
-                //     STD_SCR_H.store(h, Ordering::Relaxed);
-                //     STD_SCR_S.store(stride, Ordering::Relaxed);
-            }
         }
     }
 
     unsafe fn init(_arg: usize) {
         // TODO:
         println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
+
+        unsafe {
+            fb::Fb::init();
+        }
     }
 
     unsafe fn exit() {
