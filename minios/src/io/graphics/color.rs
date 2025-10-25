@@ -1,6 +1,7 @@
 //! Color types and palette
 
-use embedded_graphics::{pixelcolor::raw::RawU8, prelude::PixelColor};
+use embedded_graphics::pixelcolor::raw::RawU8;
+use embedded_graphics::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndexedColor(pub u8);

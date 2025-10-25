@@ -11,6 +11,7 @@ members = [
     "mar",
     "minilib",
     "sbi",
+    "simple_font",
     "smbios",
     "x86",
 ]

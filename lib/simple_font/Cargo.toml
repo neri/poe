@@ -1,0 +1,7 @@
+[package]
+name = "simple_font"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+font_macro = { path = "font_macro" }

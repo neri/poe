@@ -3,9 +3,13 @@
 #![no_main]
 
 extern crate alloc;
-use minios::io::graphics::PixelFormat;
+use alloc::format;
+use minios::io::tui::Tui;
 use minios::mem::MemoryManager;
 use minios::prelude::*;
+
+#[allow(unused_imports)]
+use minios::io::graphics::PixelFormat;
 
 pub use minios::prelude;
 
@@ -16,12 +20,15 @@ static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 pub fn main() {
     let _ = System::conctl().try_set_graphics_mode(&[
         (800, 600, PixelFormat::BGRX8888),
-        (800, 600, PixelFormat::Indexed8),
+        // (800, 600, PixelFormat::Indexed8),
         (640, 480, PixelFormat::Indexed8),
+        (320, 200, PixelFormat::Indexed8),
     ]);
 
     let stdout = System::stdout();
     stdout.reset();
+    stdout.set_attribute(0x1f);
+    Tui::draw_title(&format!("{} v{}", SYSTEM_NAME, CURRENT_VERSION));
 
     #[rustfmt::skip]
     let logo = [
@@ -32,10 +39,11 @@ pub fn main() {
     ];
     let mut logo = logo.iter();
 
-    println!("{}", logo.next().unwrap());
-    println!("{} poe poe poe~", logo.next().unwrap());
-    println!("{}", logo.next().unwrap());
-    println!("{}", logo.next().unwrap());
+    println!("");
+    println!("  {}", logo.next().unwrap());
+    println!("  {} poe poe poe~", logo.next().unwrap());
+    println!("  {}", logo.next().unwrap());
+    println!("  {}", logo.next().unwrap());
     println!("");
 
     let info = System::boot_info();

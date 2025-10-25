@@ -1,18 +1,15 @@
 //! Framebuffer console implementation
 
-use super::*;
-use crate::io::graphics::color::IndexedColor;
-use crate::io::graphics::display::FbDisplay8;
+use super::color::IndexedColor;
+use super::display::FbDisplay8;
 use crate::*;
-use embedded_graphics::mono_font::{MonoFont, MonoTextStyle};
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::Rectangle;
-use embedded_graphics::text::Baseline;
-use embedded_graphics::text::renderer::{CharacterStyle, TextRenderer};
+use simple_font::SimpleFont;
 
 pub struct FbCon {
     fb: FbDisplay8,
-    font: MonoFont<'static>,
+    font: SimpleFont<'static>,
     mode: SimpleTextOutputMode,
     font_width: usize,
     font_height: usize,
@@ -21,12 +18,11 @@ pub struct FbCon {
 }
 
 impl FbCon {
-    pub fn new(fb: FbDisplay8, font: MonoFont<'static>) -> Self {
-        let char_size = font.character_size;
+    pub fn new(fb: FbDisplay8, font: SimpleFont<'static>) -> Self {
         let display_width = fb.bounding_box().size.width as usize;
         let display_height = fb.bounding_box().size.height as usize;
-        let font_width = char_size.width as usize + font.character_spacing as usize;
-        let font_height = char_size.height as usize;
+        let font_width = font.font_width() as usize;
+        let font_height = font.font_height() as usize;
 
         let cols = (display_width / font_width).min(255) as u8;
         let rows = (display_height / font_height).min(255) as u8;
@@ -111,29 +107,22 @@ impl core::fmt::Write for FbCon {
                     }
                 }
                 _ => {
-                    let ch = if ch >= ' ' && ch < '\x7F' {
-                        ch as u8
-                    } else {
-                        b'?' as u8
-                    };
-
                     if let Some((new_col, new_row)) = self.adjust_coords(col, row, true) {
                         col = new_col;
                         row = new_row;
                     }
 
-                    let mut mono_style = MonoTextStyle::new(&self.font, self.fg_color);
-                    mono_style.set_background_color(self.bg_color.into());
-
-                    let s = [ch];
-                    let s = unsafe { core::str::from_utf8_unchecked(&s) };
-                    let position = Point::new(
-                        (col as usize * self.font_width) as i32,
-                        (row as usize * self.font_height) as i32,
-                    );
-                    mono_style
-                        .draw_string(s, position, Baseline::Top, &mut self.fb)
-                        .unwrap();
+                    if let Some(glyph) = self.font.glyph_for_char(ch) {
+                        self.fb.draw_glyph(
+                            Point::new(
+                                (col as usize * self.font_width) as i32,
+                                (row as usize * self.font_height) as i32,
+                            ),
+                            glyph,
+                            self.fg_color,
+                            self.bg_color,
+                        );
+                    }
 
                     col += 1;
                 }

@@ -1,7 +1,8 @@
 //! MiniOS Execution Environment
 
-use crate::fbcon::FbCon;
+use crate::io::fonts;
 use crate::io::graphics::display::FbDisplay8;
+use crate::io::graphics::fbcon::FbCon;
 use crate::io::graphics::{GraphicsOutput, PixelFormat};
 use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
 use crate::mem::MemoryManager;
@@ -42,7 +43,7 @@ pub struct ConfigurationTableEntry {
 }
 
 impl System {
-    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x1f;
+    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 7; //0x1f;
 
     /// Initialize with boot information and main function
     #[inline]
@@ -434,9 +435,9 @@ impl fmt::Display for Version<'_> {
 
 /// Console Controller
 pub struct ConsoleController {
+    is_text_mode: bool,
     text_out: NonNull<dyn SimpleTextOutput>,
     graphics_out: Option<Box<dyn GraphicsOutput>>,
-    is_text_mode: bool,
     fbcon: Option<FbCon>,
 }
 
@@ -444,9 +445,9 @@ impl ConsoleController {
     #[inline]
     const fn new() -> Self {
         Self {
+            is_text_mode: true,
             text_out: NonNull::new(&raw mut NULL).unwrap(),
             graphics_out: None,
-            is_text_mode: true,
             fbcon: None,
         }
     }
@@ -532,14 +533,7 @@ impl ConsoleController {
 
             System::_set_stdout(&mut *(&raw mut NULL));
 
-            let font = if mode_info.width >= 800 && mode_info.height >= 600 {
-                embedded_graphics::mono_font::ascii::FONT_10X20
-            } else if mode_info.width >= 640 && mode_info.height >= 400 {
-                embedded_graphics::mono_font::ascii::FONT_8X13
-            } else {
-                embedded_graphics::mono_font::ascii::FONT_6X9
-            };
-
+            let font = fonts::FONT_SYSTEM;
             self.fbcon = FbCon::new(display, font).into();
 
             // SAFETY: to avoid lifetime
