@@ -2,7 +2,7 @@
 
 use super::bios::INT18;
 use crate::arch::vm86::{VM86, X86StackContext};
-use crate::io::graphics::color::COLOR_PALETTE;
+use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
 use x86::isolated_io::LoIoPortWB;
@@ -43,12 +43,12 @@ impl PegcBios {
                 fb_size: 640 * 480,
             };
 
-            System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
+            System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
         }
     }
 }
 
-impl GraphicsOutput for PegcBios {
+impl GraphicsOutputDevice for PegcBios {
     fn modes(&self) -> &[ModeInfo] {
         &self.modes
     }
@@ -77,7 +77,7 @@ impl GraphicsOutput for PegcBios {
             (0x000e_0100 as *mut u8).write_volatile(0);
             (0x000e_0102 as *mut u8).write_volatile(1);
 
-            for (i, &color) in COLOR_PALETTE.iter().enumerate() {
+            for (i, &color) in IndexedColor::COLOR_PALETTE.iter().enumerate() {
                 LoIoPortWB::<0xa8>::new().write(i as u8);
                 LoIoPortWB::<0xae>::new().write(color as u8);
                 LoIoPortWB::<0xaa>::new().write((color >> 8) as u8);

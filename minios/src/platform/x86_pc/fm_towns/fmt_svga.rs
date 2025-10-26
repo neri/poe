@@ -2,7 +2,7 @@
 
 use super::{crtc::Crtc, fmt_text::FmtText};
 use crate::arch::cpu::Cpu;
-use crate::io::graphics::color::COLOR_PALETTE;
+use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
 use x86::isolated_io::IoPortWB;
@@ -46,11 +46,11 @@ impl FmtSvga {
             fb_size: 512 * 1024,
         };
 
-        System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
+        System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
     }
 }
 
-impl GraphicsOutput for FmtSvga {
+impl GraphicsOutputDevice for FmtSvga {
     fn modes(&self) -> &[ModeInfo] {
         &self.modes
     }
@@ -65,7 +65,7 @@ impl GraphicsOutput for FmtSvga {
 
             Crtc::set_mode(&VIDEO_MODE_SETTINGS, 0b0000_1010, 0b0001_1000, 0b0000_1000);
 
-            for (i, &color) in COLOR_PALETTE.iter().enumerate() {
+            for (i, &color) in IndexedColor::COLOR_PALETTE.iter().enumerate() {
                 IoPortWB(0xfd90).write(i as u8);
                 IoPortWB(0xfd92).write(color as u8);
                 IoPortWB(0xfd96).write((color >> 8) as u8);

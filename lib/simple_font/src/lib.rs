@@ -34,6 +34,7 @@ impl<'a> SimpleFont<'a> {
         }
     }
 
+    #[inline]
     pub fn glyph_for_char(&self, ch: char) -> Option<SimpleGlyph<'a>> {
         let glyph_index = self.glyph_mapping.map_char(ch)?;
         let base = glyph_index * self.char_stride;

@@ -44,32 +44,19 @@ impl FbDisplay8 {
         let w8 = glyph.dims.0 / 8;
         let w7 = glyph.dims.0 & 7;
         for y in 0..glyph.dims.1 {
-            let mut sx = 0;
+            let mut origin = Point::new(origin.x, origin.y + y as i32);
             for _ in 0..w8 {
-                let Some(byte) = iter.next() else {
+                let Some(pattern) = iter.next() else {
                     return;
                 };
-                let mut acc = 0x80;
-                for _ in 0..8 {
-                    let color = if (byte & acc) != 0 { fg } else { bg };
-                    self.0
-                        .draw_pixel(Point::new(origin.x + sx, origin.y + y as i32), color);
-                    acc >>= 1;
-                    sx += 1;
-                }
+                self.0.put_8pixels(origin, pattern, 8, bg, fg);
+                origin.x += 8;
             }
             if w7 > 0 {
-                let Some(byte) = iter.next() else {
+                let Some(pattern) = iter.next() else {
                     return;
                 };
-                let mut acc = 0x80;
-                for _ in 0..w7 {
-                    let color = if (byte & acc) != 0 { fg } else { bg };
-                    self.0
-                        .draw_pixel(Point::new(origin.x + sx, origin.y + y as i32), color);
-                    acc >>= 1;
-                    sx += 1;
-                }
+                self.0.put_8pixels(origin, pattern, w7, bg, fg);
             }
         }
     }
@@ -131,9 +118,19 @@ impl DrawTarget for FbDisplay8 {
         };
         let bottom_right = bottom_right.clamp(Point::zero(), limit);
         let length = (bottom_right.x - origin.x + 1) as u32;
-        for y in origin.y..=bottom_right.y {
+        if self.bounding_box().size.width == length {
             unsafe {
-                self.0.fill_fast(Point::new(origin.x, y), length, color);
+                self.0.fill_fast(
+                    origin,
+                    length * (bottom_right.y - origin.y + 1) as u32,
+                    color,
+                );
+            }
+        } else {
+            for y in origin.y..=bottom_right.y {
+                unsafe {
+                    self.0.fill_fast(Point::new(origin.x, y), length, color);
+                }
             }
         }
         Ok(())
@@ -148,6 +145,27 @@ pub trait FrameBuffer {
     fn draw_iter(&mut self, points: &mut dyn Iterator<Item = Pixel<IndexedColor>>) {
         for pixel in points.into_iter() {
             self.draw_pixel(pixel.0, pixel.1);
+        }
+    }
+
+    /// Draw 8 pixels from a pattern.
+    fn put_8pixels(
+        &mut self,
+        origin: Point,
+        pattern: u8,
+        length: u32,
+        bg_color: IndexedColor,
+        fg_color: IndexedColor,
+    ) {
+        let mut acc = 0x80;
+        for i in 0..length {
+            let color = if (pattern & acc) != 0 {
+                fg_color
+            } else {
+                bg_color
+            };
+            self.draw_pixel(Point::new(origin.x + i as i32, origin.y), color);
+            acc >>= 1;
         }
     }
 
@@ -223,6 +241,37 @@ impl FrameBuffer for Fb8 {
         let pos = y * self.stride + x;
         unsafe {
             self.fb.add(pos).write_volatile(color.0);
+        }
+    }
+
+    fn put_8pixels(
+        &mut self,
+        origin: Point,
+        pattern: u8,
+        length: u32,
+        bg_color: IndexedColor,
+        fg_color: IndexedColor,
+    ) {
+        let x = origin.x as usize;
+        let y = origin.y as usize;
+        if x >= self.dims.width as usize || y >= self.dims.height as usize {
+            return;
+        }
+        let width = length.min((self.dims.width - x as u32) as u32);
+        let mut pos = unsafe { self.fb.add(y * self.stride + x) };
+
+        let mut acc = 0x80;
+        for _ in 0..width {
+            let color = if (pattern & acc) != 0 {
+                fg_color
+            } else {
+                bg_color
+            };
+            unsafe {
+                pos.write_volatile(color.0);
+            }
+            acc >>= 1;
+            pos = unsafe { pos.add(1) };
         }
     }
 
@@ -325,14 +374,47 @@ impl FrameBuffer for Fb32 {
             return;
         }
         let pos = y * self.stride + x;
-        let color = super::color::COLOR_PALETTE[color.0 as usize];
+        let color = IndexedColor::COLOR_PALETTE[color.0 as usize];
         unsafe {
             self.fb.add(pos).write_volatile(color);
         }
     }
 
+    fn put_8pixels(
+        &mut self,
+        origin: Point,
+        pattern: u8,
+        length: u32,
+        bg_color: IndexedColor,
+        fg_color: IndexedColor,
+    ) {
+        let x = origin.x as usize;
+        let y = origin.y as usize;
+        if x >= self.dims.width as usize || y >= self.dims.height as usize {
+            return;
+        }
+        let mut pos = y * self.stride + x;
+        let length = length.min((self.dims.width - x as u32) as u32);
+        let bg_color = IndexedColor::COLOR_PALETTE[bg_color.0 as usize];
+        let fg_color = IndexedColor::COLOR_PALETTE[fg_color.0 as usize];
+
+        let mut acc = 0x80;
+        for _ in 0..length {
+            let color = if (pattern & acc) != 0 {
+                fg_color
+            } else {
+                bg_color
+            };
+            unsafe {
+                self.fb.add(pos).write_volatile(color);
+            }
+            acc >>= 1;
+            pos += 1;
+        }
+    }
+
     unsafe fn fill_fast(&mut self, origin: Point, length: u32, color: IndexedColor) {
-        let color = super::color::COLOR_PALETTE[color.0 as usize];
+        let color = IndexedColor::COLOR_PALETTE[color.0 as usize];
         unsafe {
             let slice = core::slice::from_raw_parts_mut(
                 self.fb

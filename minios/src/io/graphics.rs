@@ -6,7 +6,7 @@ pub mod fbcon;
 
 use crate::PhysicalAddress;
 
-pub trait GraphicsOutput {
+pub trait GraphicsOutputDevice {
     /// Returns the list of supported video modes.
     fn modes(&self) -> &[ModeInfo];
 

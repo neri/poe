@@ -60,7 +60,7 @@ impl Fb {
             }
         }
 
-        System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
+        System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
     }
 
     pub fn set_resolution(width: u32, height: u32) -> Result<(*mut u32, u32, u32, usize), ()> {
@@ -147,7 +147,7 @@ impl Fb {
     }
 }
 
-impl GraphicsOutput for Fb {
+impl GraphicsOutputDevice for Fb {
     fn modes(&self) -> &[ModeInfo] {
         &self.modes
     }

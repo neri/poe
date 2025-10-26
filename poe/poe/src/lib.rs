@@ -18,7 +18,7 @@ static SYSTEM_NAME: &str = "POE";
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
 pub fn main() {
-    let _ = System::conctl().try_set_graphics_mode(&[
+    let _ = System::conctl().set_graphics_mode_from_list(&[
         (800, 600, PixelFormat::BGRX8888),
         // (800, 600, PixelFormat::Indexed8),
         (640, 480, PixelFormat::Indexed8),
@@ -30,21 +30,21 @@ pub fn main() {
     stdout.set_attribute(0x1f);
     Tui::draw_title(&format!("{} v{}", SYSTEM_NAME, CURRENT_VERSION));
 
-    #[rustfmt::skip]
-    let logo = [
-        "()=() |", 
-        "('Y') <", 
-        "q . p |", 
-        "()_()  "
-    ];
-    let mut logo = logo.iter();
+    // #[rustfmt::skip]
+    // let logo = [
+    //     "()=() |",
+    //     "('Y') <",
+    //     "q . p |",
+    //     "()_()  "
+    // ];
+    // let mut logo = logo.iter();
 
-    println!("");
-    println!("  {}", logo.next().unwrap());
-    println!("  {} poe poe poe~", logo.next().unwrap());
-    println!("  {}", logo.next().unwrap());
-    println!("  {}", logo.next().unwrap());
-    println!("");
+    // println!("");
+    // println!("  {}", logo.next().unwrap());
+    // println!("  {} poe poe poe~", logo.next().unwrap());
+    // println!("  {}", logo.next().unwrap());
+    // println!("  {}", logo.next().unwrap());
+    // println!("");
 
     let info = System::boot_info();
     let memsize1 = MemoryManager::total_memory_size();

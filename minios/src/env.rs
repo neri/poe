@@ -3,7 +3,7 @@
 use crate::io::fonts;
 use crate::io::graphics::display::FbDisplay8;
 use crate::io::graphics::fbcon::FbCon;
-use crate::io::graphics::{GraphicsOutput, PixelFormat};
+use crate::io::graphics::{GraphicsOutputDevice, PixelFormat};
 use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
 use crate::mem::MemoryManager;
 use crate::null::NullTty;
@@ -43,7 +43,7 @@ pub struct ConfigurationTableEntry {
 }
 
 impl System {
-    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 7; //0x1f;
+    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x1f;
 
     /// Initialize with boot information and main function
     #[inline]
@@ -437,7 +437,7 @@ impl fmt::Display for Version<'_> {
 pub struct ConsoleController {
     is_text_mode: bool,
     text_out: NonNull<dyn SimpleTextOutput>,
-    graphics_out: Option<Box<dyn GraphicsOutput>>,
+    graphics_out: Option<Box<dyn GraphicsOutputDevice>>,
     fbcon: Option<FbCon>,
 }
 
@@ -453,9 +453,9 @@ impl ConsoleController {
     }
 
     #[inline]
-    pub fn set_graphics(&mut self, graphics: Box<dyn GraphicsOutput>) {
+    pub fn set_graphics(&mut self, graphics_out: Box<dyn GraphicsOutputDevice>) {
         self.set_text_mode();
-        self.graphics_out = Some(graphics);
+        self.graphics_out = Some(graphics_out);
     }
 
     #[inline]
@@ -576,12 +576,12 @@ impl ConsoleController {
         self.set_graphics_mode(mode)
     }
 
-    pub fn try_set_graphics_mode(
+    pub fn set_graphics_mode_from_list(
         &mut self,
         candidates: &[(u16, u16, PixelFormat)],
     ) -> Result<usize, ()> {
-        for (i, (w, h, pf)) in candidates.iter().enumerate() {
-            if let Some(mode) = self.find_graphics_mode(*w, *h, *pf) {
+        for (i, (w, h, pf)) in candidates.iter().copied().enumerate() {
+            if let Some(mode) = self.find_graphics_mode(w, h, pf) {
                 match self.set_graphics_mode(mode) {
                     Ok(()) => return Ok(i),
                     Err(()) => continue,

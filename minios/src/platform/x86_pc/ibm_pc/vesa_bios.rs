@@ -1,15 +1,13 @@
 //! VESA BIOS Extensions (VBE) support
 
 use super::bios::INT10;
+use crate::arch::{
+    lomem::LoMemoryManager,
+    vm86::{VM86, X86StackContext},
+};
+use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
-use crate::{
-    arch::{
-        lomem::LoMemoryManager,
-        vm86::{VM86, X86StackContext},
-    },
-    io::graphics::color::COLOR_PALETTE,
-};
 use alloc::collections::BinaryHeap;
 use x86::isolated_io::IoPortWB;
 
@@ -91,12 +89,12 @@ impl VesaBios {
             driver.modes = modes.iter().map(|v| v.info).collect::<Vec<_>>();
             driver.bios_modes = modes.iter().map(|v| v.bios_mode).collect::<Vec<_>>();
 
-            System::conctl().set_graphics(driver as Box<dyn GraphicsOutput>);
+            System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
         }
     }
 }
 
-impl GraphicsOutput for VesaBios {
+impl GraphicsOutputDevice for VesaBios {
     fn modes(&self) -> &[ModeInfo] {
         &self.modes
     }
@@ -132,7 +130,7 @@ impl GraphicsOutput for VesaBios {
             }
 
             if info.pixel_format.is_indexed_color() {
-                for (i, &color) in COLOR_PALETTE.iter().enumerate() {
+                for (i, &color) in IndexedColor::COLOR_PALETTE.iter().enumerate() {
                     IoPortWB(0x3c8).write(i as u8);
                     IoPortWB(0x3c9).write((color >> 18) as u8 & 0x3f);
                     IoPortWB(0x3c9).write((color >> 10) as u8 & 0x3f);
