@@ -116,7 +116,7 @@ impl Idt {
                     paste! {
                         Self::register(
                             Exception::$mnemonic.as_vec(),
-                            [<exc_ $mnemonic>] as usize,
+                            [<exc_ $mnemonic>] as *const () as usize,
                             DPL0,
                             true,
                         );

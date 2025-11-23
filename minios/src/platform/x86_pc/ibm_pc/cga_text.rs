@@ -2,15 +2,21 @@
 
 use crate::{
     System,
-    arch::cpu::Cpu,
+    arch::{
+        cpu::Cpu,
+        vm86::{VM86, X86StackContext},
+    },
     io::tty::{SimpleTextOutput, SimpleTextOutputMode},
+    platform::x86_pc::ibm_pc::bios::INT10,
 };
 use core::cell::UnsafeCell;
-use x86::isolated_io::{IoPortRWB, IoPortWB, IoPortWW};
+use x86::isolated_io::*;
 
 pub struct CgaText {
     mode: SimpleTextOutputMode,
     max_scan_line: u8,
+    attr_mask: u8,
+    is_vga: bool,
 }
 
 static mut CGA_TEXT: UnsafeCell<CgaText> = UnsafeCell::new(CgaText {
@@ -23,19 +29,47 @@ static mut CGA_TEXT: UnsafeCell<CgaText> = UnsafeCell::new(CgaText {
         cursor_visible: 0,
     },
     max_scan_line: 0,
+    attr_mask: 0x7f,
+    is_vga: false,
 });
 
 impl CgaText {
     pub(super) unsafe fn init() {
         unsafe {
             let stdout = (&mut *(&raw mut CGA_TEXT)).get_mut();
+
+            let cols = (0x44a as *const u8).read_volatile();
+            stdout.mode.columns = cols;
+            let rows = (0x484 as *const u8).read_volatile();
+            if rows > 0 {
+                stdout.mode.rows = rows + 1;
+            }
             stdout.max_scan_line = CRTC::MaxScanLine.read() & 0x1f;
+
             stdout.reset();
             System::set_stdout(stdout);
 
             // UNSAFE: aliasing mutable static
             let stderr = (&mut *(&raw mut CGA_TEXT)).get_mut();
             System::set_stderr(stderr);
+        }
+    }
+
+    pub(super) unsafe fn init_late() {
+        unsafe {
+            let stdout = (&mut *(&raw mut CGA_TEXT)).get_mut();
+
+            let mut regs = X86StackContext::default();
+            regs.eax.set_d(0x1a00);
+            VM86::call_bios(INT10, &mut regs);
+            if regs.eax.b() == 0x1a {
+                // vga or later
+                stdout.is_vga = true;
+
+                // turn off blinking
+                AttributeController::Mode.write(0x00);
+                stdout.attr_mask = 0xff;
+            }
         }
     }
 
@@ -169,6 +203,12 @@ impl core::fmt::Write for CgaText {
 
 impl SimpleTextOutput for CgaText {
     fn reset(&mut self) {
+        if self.is_vga {
+            // turn off blinking
+            unsafe {
+                AttributeController::Mode.write(0x00);
+            }
+        }
         self.set_attribute(0);
         self.mode.set_cursor_visible(true);
         self.clear_screen();
@@ -176,9 +216,9 @@ impl SimpleTextOutput for CgaText {
 
     fn set_attribute(&mut self, attribute: u8) {
         self.mode.attribute = if attribute == 0 {
-            System::DEFAULT_STDOUT_ATTRIBUTE
+            System::DEFAULT_STDOUT_ATTRIBUTE & self.attr_mask
         } else {
-            attribute
+            attribute & self.attr_mask
         };
     }
 
@@ -247,6 +287,7 @@ pub enum CRTC {
     CursorLocationLow = 0x0f,
 }
 
+#[allow(dead_code)]
 impl CRTC {
     const VGA_CRTC_IDX_DAT: IoPortWW = IoPortWW(0x3d4);
     const VGA_CRTC_INDEX: IoPortWB = IoPortWB(0x3d4);
@@ -264,6 +305,40 @@ impl CRTC {
         unsafe {
             Self::VGA_CRTC_INDEX.write(*self as u8);
             Self::VGA_CRTC_DATA.read()
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttributeController {
+    Mode = 0x10,
+}
+
+#[allow(dead_code)]
+impl AttributeController {
+    const VGA_AC_IDX_DAT: IoPortRWB = IoPortRWB(0x3c0);
+    const VGA_AC_READ: IoPortRB = IoPortRB(0x3c1);
+
+    #[inline]
+    unsafe fn write(&self, data: u8) {
+        unsafe {
+            let _ = IoPortRB(0x3da).read();
+            let old = Self::VGA_AC_IDX_DAT.read();
+            Self::VGA_AC_IDX_DAT.write(*self as u8);
+            Self::VGA_AC_IDX_DAT.write(data);
+            Self::VGA_AC_IDX_DAT.write(old);
+            let _ = IoPortRB(0x3da).read();
+        }
+    }
+
+    #[inline]
+    unsafe fn read(&self) -> u8 {
+        unsafe {
+            let _ = IoPortRB(0x3da).read();
+            Self::VGA_AC_IDX_DAT.write(*self as u8);
+            Self::VGA_AC_READ.read()
         }
     }
 }

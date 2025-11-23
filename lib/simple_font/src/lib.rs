@@ -6,6 +6,7 @@ pub use font_macro::*;
 pub mod mapping;
 use crate::mapping::GlyphMapping;
 
+/// A simple font data structure
 pub struct SimpleFont<'a> {
     data: &'a [u8],
     dims: (u32, u32),

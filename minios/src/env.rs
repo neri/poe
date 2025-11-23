@@ -23,7 +23,7 @@ static mut NULL: NullTty = NullTty {};
 
 /// MiniOS Execution Environment
 pub struct System {
-    info: BootInfo,
+    info: SsblInfo,
     config_table: Vec<ConfigurationTableEntry>,
 
     stdin: NonNull<dyn SimpleTextInput>,
@@ -43,11 +43,11 @@ pub struct ConfigurationTableEntry {
 }
 
 impl System {
-    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x1f;
+    pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x07;
 
     /// Initialize with boot information and main function
     #[inline]
-    pub unsafe fn init(info: &BootInfo, arg: usize, main: fn() -> ()) -> ! {
+    pub unsafe fn init(info: &SsblInfo, arg: usize, main: fn() -> ()) -> ! {
         unsafe {
             let env = System {
                 info: info.clone(),
@@ -75,7 +75,7 @@ impl System {
     pub unsafe fn init_dt(dtb: usize, arg: usize, main: fn() -> ()) -> ! {
         unsafe {
             let mut shared = System {
-                info: BootInfo {
+                info: SsblInfo {
                     platform: Platform::DeviceTree,
                     bios_boot_drive: BiosDriveSpec(0),
                     x86_real_memory_size: 0,
@@ -138,13 +138,13 @@ impl System {
     }
 
     #[inline]
-    pub fn boot_info<'a>() -> &'a BootInfo {
+    pub fn boot_info<'a>() -> &'a SsblInfo {
         let shared = Self::shared();
         &shared.info
     }
 
     #[inline]
-    pub unsafe fn boot_info_mut<'a>() -> &'a mut BootInfo {
+    pub unsafe fn boot_info_mut<'a>() -> &'a mut SsblInfo {
         unsafe {
             let shared = Self::shared_mut();
             &mut shared.info
@@ -347,7 +347,7 @@ fn panic(info: &PanicInfo) -> ! {
 /// Boot information from Second Stage Boot Loader
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct BootInfo {
+pub struct SsblInfo {
     pub platform: Platform,
     pub bios_boot_drive: BiosDriveSpec,
     pub x86_real_memory_size: u16,
@@ -356,7 +356,7 @@ pub struct BootInfo {
     pub conventional_memory_size: u32,
 }
 
-impl BootInfo {
+impl SsblInfo {
     #[inline]
     pub fn conventional_memory_range(&self) -> Range<u64> {
         self.start_conventional_memory as u64
@@ -516,7 +516,8 @@ impl ConsoleController {
         graphics.set_mode(mode)?;
 
         unsafe {
-            let display = match FbDisplay8::from_graphics(graphics.current_mode()) {
+            let current_mode = graphics.current_mode();
+            let display = match FbDisplay8::from_graphics(current_mode) {
                 Some(d) => d,
                 None => {
                     // fallback
@@ -533,7 +534,10 @@ impl ConsoleController {
 
             System::_set_stdout(&mut *(&raw mut NULL));
 
-            let font = fonts::FONT_SYSTEM;
+            let font = fonts::preferred_font_for(
+                current_mode.info.width as u32,
+                current_mode.info.height as u32,
+            );
             self.fbcon = FbCon::new(display, font).into();
 
             // SAFETY: to avoid lifetime

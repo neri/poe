@@ -15,7 +15,7 @@ sbi = ["device_tree"]
 [dependencies]
 paste = { version = "1.0" }
 seq-macro = { version = "0.3" }
-
+num = { version = "0.4", default-features = false }
 embedded-graphics = { version = "0.8" }
 
 # bootprot = {path = "../lib/bootprot/"}
@@ -27,6 +27,7 @@ smbios = { path = "../lib/smbios/", features = ["guid"] }
 guid = { path = "../lib/guid/" }
 edid = { path = "../lib/edid/" }
 simple_font = { path = "../lib/simple_font/" }
+tui = { path = "../lib/tui/" }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 x86 = { path = "../lib/x86/" }

@@ -48,7 +48,7 @@ impl PlatformTrait for Platform {
                 println!("compatible: {}", item);
             }
 
-            CSR::STVEC.write(_arch_stvec as usize);
+            CSR::STVEC.write(_arch_stvec as *const () as usize);
             CSR::SIE.set(1 << 5);
             sbi::legacy::set_timer(1);
         }

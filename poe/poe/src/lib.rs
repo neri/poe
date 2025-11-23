@@ -3,8 +3,8 @@
 #![no_main]
 
 extern crate alloc;
-use alloc::format;
-use minios::io::tui::Tui;
+use minios::io::tui;
+#[allow(unused_imports)]
 use minios::mem::MemoryManager;
 use minios::prelude::*;
 
@@ -13,13 +13,15 @@ use minios::io::graphics::PixelFormat;
 
 pub use minios::prelude;
 
+#[allow(unused)]
 static SYSTEM_NAME: &str = "POE";
 
+#[allow(unused)]
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
 pub fn main() {
     let _ = System::conctl().set_graphics_mode_from_list(&[
-        (800, 600, PixelFormat::BGRX8888),
+        // (800, 600, PixelFormat::BGRX8888),
         // (800, 600, PixelFormat::Indexed8),
         (640, 480, PixelFormat::Indexed8),
         (320, 200, PixelFormat::Indexed8),
@@ -27,8 +29,25 @@ pub fn main() {
 
     let stdout = System::stdout();
     stdout.reset();
-    stdout.set_attribute(0x1f);
-    Tui::draw_title(&format!("{} v{}", SYSTEM_NAME, CURRENT_VERSION));
+    stdout.enable_cursor(false);
+    stdout.set_attribute(0xb7);
+    stdout.clear_screen();
+
+    {
+        use tui::{TuiAttribute, buffer::*, coord::*};
+
+        let mut window = TuiWindowBufferAscii::new(
+            Rect::new(Point::new(2, 2), Size::new(20, 10)),
+            Inset::new(2, 2, 2, 2),
+            TuiAttribute(0xf0),
+        );
+
+        window.draw_simple_title("Hello", TuiAttribute(0x9f), TuiAttribute(0x0f));
+        window.put_string_at(Point::new(2, 2), "Hello, world!", window.default_attr);
+        window.put_text(Point::new(2, 4), "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.", TuiAttribute(0x07), 0);
+
+        window.draw_to(stdout);
+    }
 
     // #[rustfmt::skip]
     // let logo = [
@@ -46,90 +65,46 @@ pub fn main() {
     // println!("  {}", logo.next().unwrap());
     // println!("");
 
-    let info = System::boot_info();
-    let memsize1 = MemoryManager::total_memory_size();
-    let memsize2 = MemoryManager::total_extended_memory_size();
-    println!("{} v{}", SYSTEM_NAME, CURRENT_VERSION,);
-    if memsize2 > 0 {
-        let memsize1 = (memsize1 + 0xfffff) >> 20;
-        let memsize = memsize1 + memsize2;
-        print!(
-            "MEMORY {} GB ({} MB + {} MB)",
-            (memsize + 0x3ff) >> 10,
-            memsize1,
-            memsize2,
-        );
-    } else {
-        let memsize1 = (memsize1 + 0x3ff) >> 10;
-        print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
-    }
-    println!(", PLATFORM {}", info.platform);
+    // #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    // if false {
+    //     if let Some(fdt) = System::device_tree() {
+    //         println!("DEVICE TREE:");
+    //         println!("  Model: {}", fdt.root().model());
+    //         // println!("  Compatible: {}", fdt.root().compatible());
+    //         println!("");
+
+    //         if true {
+    //             dump_fdt_node(fdt.root(), 0);
+    //             println!("");
+    //         }
+    //     }
+    // }
+
+    stdout.set_attribute(0xb0);
+    println!("");
     println!("");
 
-    if true {
-        if let Some(smbios) = System::smbios() {
-            println!(
-                "SMBIOS Version {}.{}",
-                smbios.major_version(),
-                smbios.minor_version()
-            );
-            println!(
-                "  Manufacturer: {}",
-                smbios.manufacturer().unwrap_or("Unknown")
-            );
-            println!(
-                "  Product Name: {}",
-                smbios.product_name().unwrap_or("Unknown")
-            );
-            if let Some(serial_number) = smbios.serial_number() {
-                println!("  Serial Number: {}", serial_number);
-            }
-            if let Some(uuid) = smbios.system_uuid() {
-                println!("  System UUID: {}", uuid);
-            }
-            println!("");
-        }
-    }
+    // let info = System::boot_info();
+    // let memsize1 = MemoryManager::total_memory_size();
+    // let memsize2 = MemoryManager::total_extended_memory_size();
+    // println!("{} v{}", SYSTEM_NAME, CURRENT_VERSION,);
+    // if memsize2 > 0 {
+    //     let memsize1 = (memsize1 + 0xfffff) >> 20;
+    //     let memsize = memsize1 + memsize2;
+    //     print!(
+    //         "MEMORY {} GB ({} MB + {} MB)",
+    //         (memsize + 0x3ff) >> 10,
+    //         memsize1,
+    //         memsize2,
+    //     );
+    // } else {
+    //     let memsize1 = (memsize1 + 0x3ff) >> 10;
+    //     print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
+    // }
+    // println!(", PLATFORM {}", info.platform);
+    // println!("");
 
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    if true {
-        if let Some(fdt) = System::device_tree() {
-            println!("DEVICE TREE:");
-            println!("  Model: {}", fdt.root().model());
-            // println!("  Compatible: {}", fdt.root().compatible());
-            println!("");
-
-            if false {
-                dump_fdt_node(fdt.root(), 0);
-                println!("");
-            }
-        }
-    }
-
-    let mode = stdout.current_mode();
-    println!(
-        "TTY MODE: {} x {} cursor at {}, {}",
-        mode.columns, mode.rows, mode.cursor_column, mode.cursor_row
-    );
-    println!("");
-
-    if false {
-        println!("Memory Map:");
-        stdout.set_attribute(0x78);
-        for item in MemoryManager::memory_list() {
-            let range = item.range();
-            println!(
-                "  {:08x} - {:08x}: {:?}",
-                range.start,
-                range.end - 1,
-                item.mem_type
-            )
-        }
-        println!("");
-        stdout.set_attribute(0);
-    }
-
-    println!("* SUPER POE SHELL v0.0 *");
+    // println!("* SUPER POE SHELL v0.0 *");
     loop {
         print!(">");
         if let Some(line) = System::line_input(64) {

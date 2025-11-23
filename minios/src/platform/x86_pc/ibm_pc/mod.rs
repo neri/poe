@@ -36,7 +36,7 @@ use x86::gpr::Eflags;
 
 const USE_UART_STDIO: bool = false;
 
-pub(super) unsafe fn init(_info: &BootInfo) {
+pub(super) unsafe fn init(_info: &SsblInfo) {
     unsafe {
         if USE_UART_STDIO {
             uart::Uart16550::init((0x400 as *const u16).read_volatile());
@@ -136,6 +136,8 @@ pub(super) unsafe fn init(_info: &BootInfo) {
             super::pit::Pit::advance_tick,
         );
         Hal::cpu().enable_interrupt();
+
+        cga_text::CgaText::init_late();
 
         let mut smap_supported = false;
         let buf = LoMemoryManager::alloc_page();

@@ -13,5 +13,6 @@ members = [
     "sbi",
     "simple_font",
     "smbios",
+    "tui",
     "x86",
 ]

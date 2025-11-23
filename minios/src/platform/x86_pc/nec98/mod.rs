@@ -27,7 +27,7 @@ use x86::isolated_io::LoIoPortDummyB;
 
 pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
 
-pub(super) unsafe fn init(_info: &BootInfo) {
+pub(super) unsafe fn init(_info: &SsblInfo) {
     unsafe {
         pc98_text::Pc98Text::init();
 

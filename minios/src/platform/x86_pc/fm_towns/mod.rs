@@ -15,7 +15,7 @@ use crate::platform::x86_pc::pic::Irq;
 use crate::*;
 use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
-pub(super) unsafe fn init(_info: &BootInfo) {
+pub(super) unsafe fn init(_info: &SsblInfo) {
     unsafe {
         fmt_text::FmtText::init();
 

@@ -221,7 +221,7 @@ impl Pic {
             seq!(N in 0..8 {
                 Idt::register(
                     Irq(N).as_vec(),
-                    irq_m~N as usize,
+                    irq_m~N as *const () as usize,
                     DPL0,
                     true,
                 );
@@ -229,7 +229,7 @@ impl Pic {
             seq!(N in 0..8 {
                 Idt::register(
                     Irq(N + 8).as_vec(),
-                    irq_s~N as usize,
+                    irq_s~N as *const () as usize,
                     DPL0,
                     true,
                 );

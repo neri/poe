@@ -45,6 +45,14 @@ pub trait SimpleTextOutput: core::fmt::Write {
     fn current_mode(&mut self) -> SimpleTextOutputMode;
 }
 
+impl tui::DrawTarget for dyn SimpleTextOutput {
+    fn draw(&mut self, origin: tui::coord::Point, text: &str, attr: tui::TuiAttribute) {
+        self.set_cursor_position(origin.x as u32, origin.y as u32);
+        self.set_attribute(attr.0);
+        let _ = self.write_str(text);
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct SimpleTextOutputMode {

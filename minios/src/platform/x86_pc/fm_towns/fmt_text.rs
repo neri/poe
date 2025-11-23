@@ -3,7 +3,10 @@
 use crate::{
     System,
     arch::cpu::Cpu,
-    io::tty::{SimpleTextOutput, SimpleTextOutputMode},
+    io::{
+        graphics::color::IndexedColor,
+        tty::{SimpleTextOutput, SimpleTextOutputMode},
+    },
     platform::x86_pc::fm_towns::crtc::Crtc,
 };
 use core::{cell::UnsafeCell, mem::transmute};
@@ -101,8 +104,15 @@ impl FmtText {
 
     pub unsafe fn hw_set_mode() {
         unsafe {
-            Crtc::set_mode(&TEXT_MODE_SETTINGS, 0b0001_0101, 0b0000_1001, 0b0000_1111);
+            Crtc::set_mode(&TEXT_MODE_SETTINGS, 0b0001_0101, 0b0010_1001, 0b0000_1111);
             IoPortWB(0xff99).write(0x01);
+
+            for (i, &color) in IndexedColor::COLOR_PALETTE.iter().enumerate().take(16) {
+                IoPortWB(0xfd90).write(i as u8);
+                IoPortWB(0xfd92).write(color as u8);
+                IoPortWB(0xfd96).write((color >> 8) as u8);
+                IoPortWB(0xfd94).write((color >> 16) as u8);
+            }
         }
     }
 

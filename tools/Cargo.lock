@@ -11,7 +11,7 @@ checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 [[package]]
 name = "compress"
 version = "0.1.0"
-source = "git+https://github.com/neri/compress.git#413d79594080b0724e9b933ed82161120fc96db2"
+source = "git+https://github.com/neri/compress.git#c08efe8b2caed4caa523900ca0ebe40369768315"
 dependencies = [
  "libm",
 ]
