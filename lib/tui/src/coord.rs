@@ -1,25 +1,30 @@
+//! TUI coordinate types.
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 type ScalarType = i32;
 
+/// A Point type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Point {
     pub x: ScalarType,
     pub y: ScalarType,
 }
 
+/// A Size type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Size {
     pub width: ScalarType,
     pub height: ScalarType,
 }
 
+/// A Rectangle type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Rect {
     pub top_left: Point,
     pub size: Size,
 }
 
+/// Insets for a rectangle
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Inset {
     pub left: ScalarType,
@@ -28,6 +33,7 @@ pub struct Inset {
     pub bottom: ScalarType,
 }
 
+/// A Diagonal defined by two points
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Diagonal {
     pub top_left: Point,

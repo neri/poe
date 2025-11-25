@@ -7,7 +7,7 @@ pub struct FixedStrBuf<const N: usize> {
 }
 
 impl<const N: usize> FixedStrBuf<N> {
-    /// Creates a new, empty `FixedStrBuf`.
+    /// Creates a new empty buffer.
     #[inline]
     pub const fn new() -> Self {
         Self {
@@ -16,6 +16,7 @@ impl<const N: usize> FixedStrBuf<N> {
         }
     }
 
+    /// Returns the capacity of the string.
     #[inline]
     pub const fn capacity(&self) -> usize {
         N
@@ -51,7 +52,7 @@ impl<const N: usize> FixedStrBuf<N> {
         let mut buf = [0u8; 4];
         let encoded = c.encode_utf8(&mut buf);
         let encoded_len = encoded.len();
-        if self.len + encoded_len > N {
+        if self.len + encoded_len > self.capacity() {
             return Err(());
         }
         for &b in &buf[..encoded_len] {

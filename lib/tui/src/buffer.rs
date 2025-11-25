@@ -1,15 +1,18 @@
 //! TUI text buffer implementation.
 
-use super::coord::*;
-use crate::{fixed_str::FixedStrBuf, *};
+use crate::fixed_str::FixedStrBuf;
+use crate::prelude::*;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::cell::UnsafeCell;
 use core::num::NonZero;
 
 /// Window Buffer for Text User Interface.
 pub struct TuiWindowBuffer<TCHAR: TChar> {
-    buffer: TextBuffer<TCHAR>,
+    buffer: UnsafeCell<TextBuffer<TCHAR>>,
     origin: Point,
     pub insets: Inset,
-    redraw_area: Diagonal,
+    redraw_region: Diagonal,
     pub default_attr: TuiAttribute,
 }
 
@@ -22,16 +25,17 @@ pub type TuiWindowBufferUcs = TuiWindowBuffer<char>;
 /// Text Buffer for Text User Interface.
 pub struct TextBuffer<TCHAR: TChar> {
     pub size: Size,
-    pub text_buffer: Vec<TCHAR>,
-    pub attr_buffer: Vec<TuiAttribute>,
+    pub text_buffer: UnsafeCell<Box<[TCHAR]>>,
+    pub attr_buffer: UnsafeCell<Box<[TuiAttribute]>>,
 }
 
 /// A view of Text Buffer.
 pub struct TextBufferView<'a, TCHAR: TChar> {
-    pub buffer: &'a mut TextBuffer<TCHAR>,
+    pub buffer: &'a TextBuffer<TCHAR>,
     pub frame: Rect,
 }
 
+/// Trait for drawing operations on a text buffer.
 pub trait TextBufferDrawing<TCHAR: TChar> {
     /// Put a character at the specified position.
     fn put_char_at(&mut self, pos: Point, ch: TCHAR, attr: TuiAttribute) -> Option<()>;
@@ -108,40 +112,51 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
         // title: Option<&str>,
     ) -> Self {
         Self {
-            buffer: TextBuffer::new(frame.size(), default_attr),
+            buffer: UnsafeCell::new(TextBuffer::new(frame.size(), default_attr)),
             origin: frame.top_left(),
             insets,
             default_attr,
-            redraw_area: Diagonal::INVALID,
+            redraw_region: Diagonal::INVALID,
             // title: title.map(|s| s.to_string()),
         }
     }
 
     #[inline]
     pub fn frame(&self) -> Rect {
-        Rect::new(self.origin, self.buffer.size)
+        Rect::new(self.origin, self.buffer().size)
+    }
+
+    #[inline]
+    pub fn bounds(&self) -> Rect {
+        Rect::new(Point::zero(), self.buffer().size)
     }
 
     #[inline]
     pub fn client_rect(&self) -> Option<Rect> {
-        self.frame().rect_at_origin().insets(&self.insets)
+        self.bounds().insets(&self.insets)
     }
 
-    pub fn invalidate_rect(&mut self, region: &Rect) {
-        let mut region = *region;
-        region.clip(&self.frame().rect_at_origin());
-        self.redraw_area.expand_rect(&region);
+    pub fn invalidate_rect(&mut self, region: Option<&Rect>) {
+        if let Some(region) = region {
+            let mut region = *region;
+            region.clip(&self.bounds());
+            self.redraw_region.expand_rect(&region);
+        } else {
+            self.redraw_region.expand_rect(&self.bounds());
+        }
     }
 
+    /// Draw a simple title bar at the top of the buffer.
     pub fn draw_simple_title(&mut self, s: &str, back_attr: TuiAttribute, text_attr: TuiAttribute) {
         self.draw_hline(
             Point::zero(),
-            self.buffer.size.width,
+            self.buffer().size.width,
             TCHAR::from_char(' '),
             back_attr,
         );
-        let left = ((self.buffer.size.width as i32 - s.len() as i32) / 2).max(1);
-        self.buffer.put_string_at(Point::new(left, 0), s, text_attr);
+        let left = ((self.buffer().size.width as i32 - s.len() as i32) / 2).max(1);
+        self.buffer_mut()
+            .put_string_at(Point::new(left, 0), s, text_attr);
     }
 
     /// Put a string at the specified origin.
@@ -203,15 +218,42 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
         Some(pos)
     }
 
+    #[inline]
+    fn buffer<'a>(&'a self) -> &'a TextBuffer<TCHAR> {
+        // SAFETY: I believe that each element of the array is safe to access simultaneously.
+        unsafe { &*self.buffer.get() }
+    }
+
+    #[inline]
+    fn buffer_mut<'a>(&'a mut self) -> &'a mut TextBuffer<TCHAR> {
+        self.buffer.get_mut()
+    }
+
+    #[inline]
+    pub fn view<'a>(&'a self) -> TextBufferView<'a, TCHAR> {
+        self.buffer().view()
+    }
+
+    #[inline]
+    pub fn sub_view<'a>(&'a self, region: Rect) -> Option<TextBufferView<'a, TCHAR>> {
+        self.buffer().sub_view(region)
+    }
+
+    #[inline]
+    pub fn client_area_view<'a>(&'a self) -> Option<TextBufferView<'a, TCHAR>> {
+        let client_rect = self.client_rect()?;
+        self.sub_view(client_rect)
+    }
+
     /// Perform redraw if needed.
     ///
     /// # Returns
     ///
     /// Returns `Some(())` if redraw was performed, `None` otherwise.
-    pub fn redraw_if_needed<T: DrawTarget + ?Sized>(&mut self, target: &mut T) -> Option<()> {
-        if let Some(redraw_region) = self.redraw_area.to_rect() {
+    pub fn redraw_if_needed<T: TuiDrawTarget + ?Sized>(&mut self, target: &mut T) -> Option<()> {
+        if let Some(redraw_region) = self.redraw_region.to_rect() {
             self.draw_subregion_to(target, redraw_region);
-            self.redraw_area = Diagonal::INVALID;
+            self.redraw_region = Diagonal::INVALID;
             Some(())
         } else {
             None
@@ -219,14 +261,14 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
     }
 
     /// Draw the entire buffer to the specified draw target.
-    pub fn draw_to<T: DrawTarget + ?Sized>(&self, target: &mut T) {
-        self.draw_subregion_to(target, Rect::new(Point::new(0, 0), self.buffer.size));
+    pub fn draw_to<T: TuiDrawTarget + ?Sized>(&self, target: &mut T) {
+        self.draw_subregion_to(target, Rect::new(Point::new(0, 0), self.buffer().size));
     }
 
     /// Draw a subregion of the buffer to the specified draw target.
-    pub fn draw_subregion_to<T: DrawTarget + ?Sized>(&self, target: &mut T, region: Rect) {
+    pub fn draw_subregion_to<T: TuiDrawTarget + ?Sized>(&self, target: &mut T, region: Rect) {
         let mut region = region;
-        if region.clip(&self.frame().rect_at_origin()).is_none() {
+        if region.clip(&self.bounds()).is_none() {
             return;
         };
         let top_left = region.top_left();
@@ -268,36 +310,36 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
 impl<TCHAR: TChar> TextBufferDrawing<TCHAR> for TuiWindowBuffer<TCHAR> {
     #[inline]
     fn put_char_at(&mut self, pos: Point, ch: TCHAR, attr: TuiAttribute) -> Option<()> {
-        self.buffer.put_char_at(pos, ch, attr).map(|_| {
-            self.redraw_area.expand_point(pos);
+        self.buffer_mut().put_char_at(pos, ch, attr).map(|_| {
+            self.redraw_region.expand_point(pos);
         })
     }
 
     #[inline]
     fn get_char_at(&self, pos: Point) -> Option<(TCHAR, TuiAttribute)> {
-        self.buffer.get_char_at(pos)
+        self.buffer().get_char_at(pos)
     }
 
     fn draw_hline(&mut self, origin: Point, length: i32, ch: TCHAR, attr: TuiAttribute) {
-        self.redraw_area
+        self.redraw_region
             .expand_rect(&Rect::new(origin, Size::new(length as i32, 1)));
-        self.buffer.draw_hline(origin, length, ch, attr);
+        self.buffer_mut().draw_hline(origin, length, ch, attr);
     }
 
     fn draw_vline(&mut self, origin: Point, length: i32, ch: TCHAR, attr: TuiAttribute) {
-        self.redraw_area
+        self.redraw_region
             .expand_rect(&Rect::new(origin, Size::new(1, length as i32)));
-        self.buffer.draw_vline(origin, length, ch, attr);
+        self.buffer_mut().draw_vline(origin, length, ch, attr);
     }
 
     fn draw_rect(&mut self, rect: Rect, ch: TCHAR, attr: TuiAttribute) {
-        self.redraw_area.expand_rect(&rect);
-        self.buffer.draw_rect(rect, ch, attr);
+        self.redraw_region.expand_rect(&rect);
+        self.buffer_mut().draw_rect(rect, ch, attr);
     }
 
     fn fill_rect(&mut self, rect: Rect, ch: TCHAR, attr: TuiAttribute) {
-        self.redraw_area.expand_rect(&rect);
-        self.buffer.fill_rect(rect, ch, attr);
+        self.redraw_region.expand_rect(&rect);
+        self.buffer_mut().fill_rect(rect, ch, attr);
     }
 }
 
@@ -312,35 +354,29 @@ impl<TCHAR: TChar> TextBuffer<TCHAR> {
 
         Self {
             size,
-            text_buffer,
-            attr_buffer,
+            text_buffer: UnsafeCell::new(text_buffer.into_boxed_slice()),
+            attr_buffer: UnsafeCell::new(attr_buffer.into_boxed_slice()),
         }
     }
 
     #[inline]
-    pub fn view<'a, 'b>(&'b mut self) -> TextBufferView<'a, TCHAR>
+    pub fn view<'a, 'b>(&'b self) -> TextBufferView<'a, TCHAR>
     where
         'b: 'a,
     {
-        let size = self.size;
         TextBufferView {
             buffer: self,
-            frame: Rect::new(Point::new(0, 0), size),
+            frame: Rect::new(Point::new(0, 0), self.size),
         }
     }
 
     #[inline]
-    pub fn sub_view<'a, 'b>(&'b mut self, region: Rect) -> Option<TextBufferView<'a, TCHAR>>
+    pub fn sub_view<'a, 'b>(&'b self, region: Rect) -> Option<TextBufferView<'a, TCHAR>>
     where
         'b: 'a,
     {
-        let mut view = self.view();
-        let sub_view = view.sub_view(region)?;
-        let frame = sub_view.frame;
-        Some(TextBufferView {
-            buffer: self,
-            frame,
-        })
+        let view = self.view();
+        view.sub_view(region)
     }
 
     #[inline]
@@ -350,21 +386,52 @@ impl<TCHAR: TChar> TextBuffer<TCHAR> {
         }
         Some((pos.y as usize * self.size.width as usize) + (pos.x as usize))
     }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<(TCHAR, TuiAttribute)> {
+        unsafe {
+            // SAFETY: I believe that each element of the array is safe to access simultaneously.
+            let text_buffer = &*self.text_buffer.get();
+            let attr_buffer = &*self.attr_buffer.get();
+
+            let ch = text_buffer.get(index)?;
+            let attr = attr_buffer.get(index)?;
+
+            Some((
+                (ch as *const TCHAR).read_volatile(),
+                (attr as *const TuiAttribute).read_volatile(),
+            ))
+        }
+    }
+
+    #[inline]
+    pub fn set(&self, index: usize, ch: TCHAR, attr: TuiAttribute) -> Option<()> {
+        unsafe {
+            // SAFETY: I believe that each element of the array is safe to access simultaneously.
+            let text_buffer = &mut *self.text_buffer.get();
+            let attr_buffer = &mut *self.attr_buffer.get();
+
+            let text_cell = text_buffer.get_mut(index)?;
+            let attr_cell = attr_buffer.get_mut(index)?;
+
+            (text_cell as *mut TCHAR).write_volatile(ch);
+            (attr_cell as *mut TuiAttribute).write_volatile(attr);
+            Some(())
+        }
+    }
 }
 
 impl<TCHAR: TChar> TextBufferDrawing<TCHAR> for TextBuffer<TCHAR> {
     #[inline]
     fn put_char_at(&mut self, pos: Point, ch: TCHAR, attr: TuiAttribute) -> Option<()> {
         let idx = self.point_to_index(pos)?;
-        self.text_buffer[idx] = ch;
-        self.attr_buffer[idx] = attr;
-        Some(())
+        self.set(idx, ch, attr)
     }
 
     #[inline]
     fn get_char_at(&self, pos: Point) -> Option<(TCHAR, TuiAttribute)> {
         let idx = self.point_to_index(pos)?;
-        Some((self.text_buffer[idx], self.attr_buffer[idx]))
+        self.get(idx)
     }
 
     fn draw_hline(&mut self, origin: Point, length: i32, ch: TCHAR, attr: TuiAttribute) {
@@ -379,15 +446,14 @@ impl<TCHAR: TChar> TextBufferDrawing<TCHAR> for TextBuffer<TCHAR> {
             None => return,
         };
         for idx in origin_idx..=right_idx {
-            self.text_buffer[idx] = ch;
-            self.attr_buffer[idx] = attr;
+            self.set(idx, ch, attr);
         }
     }
 }
 
-impl<TCHAR: TChar> TextBufferView<'_, TCHAR> {
+impl<'a, TCHAR: TChar> TextBufferView<'a, TCHAR> {
     #[inline]
-    pub fn sub_view<'a>(&'a mut self, region: Rect) -> Option<TextBufferView<'a, TCHAR>> {
+    pub fn sub_view(&self, region: Rect) -> Option<TextBufferView<'a, TCHAR>> {
         let new_frame = region + self.frame.top_left();
 
         let outer_bottom_right = self.frame.bottom_right()?;
@@ -405,7 +471,9 @@ impl<TCHAR: TChar> TextBufferView<'_, TCHAR> {
             frame: new_frame,
         })
     }
+}
 
+impl<TCHAR: TChar> TextBufferView<'_, TCHAR> {
     #[inline]
     pub fn point_to_index(&self, pos: Point) -> Option<usize> {
         let origin = self.frame.top_left();
@@ -424,14 +492,12 @@ impl<TCHAR: TChar> TextBufferDrawing<TCHAR> for TextBufferView<'_, TCHAR> {
     #[inline]
     fn put_char_at(&mut self, pos: Point, ch: TCHAR, attr: TuiAttribute) -> Option<()> {
         let idx = self.point_to_index(pos)?;
-        self.buffer.text_buffer[idx] = ch;
-        self.buffer.attr_buffer[idx] = attr;
-        Some(())
+        self.buffer.set(idx, ch, attr)
     }
 
     #[inline]
     fn get_char_at(&self, pos: Point) -> Option<(TCHAR, TuiAttribute)> {
         let idx = self.point_to_index(pos)?;
-        Some((self.buffer.text_buffer[idx], self.buffer.attr_buffer[idx]))
+        self.buffer.get(idx)
     }
 }

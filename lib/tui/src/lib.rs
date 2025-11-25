@@ -3,19 +3,24 @@
 #![cfg_attr(not(test), no_std)]
 
 pub mod buffer;
+pub mod color;
 pub mod coord;
 pub mod fixed_str;
 
-extern crate alloc;
-use alloc::vec::Vec;
-
-pub trait DrawTarget {
-    fn draw(&mut self, origin: coord::Point, text: &str, attr: TuiAttribute);
+#[allow(unused)]
+pub mod prelude {
+    pub use crate::TChar;
+    pub use crate::TuiDrawTarget;
+    pub use crate::buffer::*;
+    pub use crate::color::*;
+    pub use crate::coord::*;
 }
 
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
-pub struct TuiAttribute(pub u8);
+extern crate alloc;
+
+pub trait TuiDrawTarget {
+    fn draw(&mut self, origin: coord::Point, text: &str, attr: color::TuiAttribute);
+}
 
 pub trait TChar: Sized + Clone + Copy + PartialEq + Eq {
     fn from_char(c: char) -> Self;

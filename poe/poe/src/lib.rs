@@ -34,7 +34,7 @@ pub fn main() {
     stdout.clear_screen();
 
     {
-        use tui::{TuiAttribute, buffer::*, coord::*};
+        use tui::prelude::*;
 
         let mut window = TuiWindowBufferAscii::new(
             Rect::new(Point::new(2, 2), Size::new(20, 10)),
