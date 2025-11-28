@@ -41,12 +41,10 @@ pub trait HalCpu {
 
     #[inline]
     unsafe fn set_interrupt_enabled(&self, enabled: bool) {
-        if enabled {
-            unsafe {
+        unsafe {
+            if enabled {
                 self.enable_interrupt();
-            }
-        } else {
-            unsafe {
+            } else {
                 self.disable_interrupt();
             }
         }
@@ -70,7 +68,7 @@ pub trait HalCpu {
 #[macro_export]
 macro_rules! without_interrupts {
     ( $f:expr ) => {{
-        let flags = unsafe { Hal::cpu().interrupt_guard() };
+        let flags = Hal::cpu().interrupt_guard();
         let result = { $f };
         drop(flags);
         result

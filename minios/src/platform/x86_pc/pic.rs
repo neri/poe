@@ -319,43 +319,49 @@ impl Pic {
 
     /// Register a new IRQ handler
     pub unsafe fn register(irq: Irq, f: IrqHandler) -> Result<(), ()> {
-        without_interrupts!(unsafe {
-            let shared = Self::shared();
-            let irq_index = irq.0 as usize;
-            if shared.idt[irq_index] != 0 {
-                return Err(());
-            }
-            shared.redirect_bitmap &= !(1 << irq_index);
-            shared.idt[irq_index] = f as usize;
-            Self::set_irq_enabled(irq, true);
-            Ok(())
-        })
+        unsafe {
+            without_interrupts!({
+                let shared = Self::shared();
+                let irq_index = irq.0 as usize;
+                if shared.idt[irq_index] != 0 {
+                    return Err(());
+                }
+                shared.redirect_bitmap &= !(1 << irq_index);
+                shared.idt[irq_index] = f as usize;
+                Self::set_irq_enabled(irq, true);
+                Ok(())
+            })
+        }
     }
 
     /// Set the redirect flag for a specific IRQ
     #[allow(unused)]
     pub unsafe fn set_redirect(irq: Irq) -> Result<(), ()> {
-        without_interrupts!(unsafe {
-            let shared = Self::shared();
-            let irq_index = irq.0 as usize;
-            shared.redirect_bitmap |= 1 << irq_index;
-            Self::set_irq_enabled(irq, true);
-            Ok(())
-        })
+        unsafe {
+            without_interrupts!({
+                let shared = Self::shared();
+                let irq_index = irq.0 as usize;
+                shared.redirect_bitmap |= 1 << irq_index;
+                Self::set_irq_enabled(irq, true);
+                Ok(())
+            })
+        }
     }
 
     /// Set the IRQ enabled state
     pub unsafe fn set_irq_enabled(irq: Irq, enabled: bool) {
-        without_interrupts!(unsafe {
-            let shared = Self::shared();
-            if irq.is_slave() {
-                let local_irq = irq.local_number();
-                shared.slave.set_enabled(local_irq, enabled);
-            } else {
-                let local_irq = irq.local_number();
-                shared.master.set_enabled(local_irq, enabled);
-            }
-        })
+        unsafe {
+            without_interrupts!({
+                let shared = Self::shared();
+                if irq.is_slave() {
+                    let local_irq = irq.local_number();
+                    shared.slave.set_enabled(local_irq, enabled);
+                } else {
+                    let local_irq = irq.local_number();
+                    shared.master.set_enabled(local_irq, enabled);
+                }
+            })
+        }
     }
 }
 

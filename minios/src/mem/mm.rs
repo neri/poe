@@ -354,14 +354,16 @@ impl MemoryManager {
         }
 
         let shared = unsafe { Self::shared_mut() };
-        without_interrupts!(unsafe {
-            shared._zalloc(
-                layout,
-                desired_addr,
-                mem_type,
-                strategy.unwrap_or(shared.allocation_strategy),
-            )
-        })
+        unsafe {
+            without_interrupts!({
+                shared._zalloc(
+                    layout,
+                    desired_addr,
+                    mem_type,
+                    strategy.unwrap_or(shared.allocation_strategy),
+                )
+            })
+        }
     }
 
     pub unsafe fn zfree(ptr: *mut u8, layout: Layout) -> Result<(), MemoryFreeError> {
@@ -371,7 +373,7 @@ impl MemoryManager {
         }
 
         let shared = unsafe { Self::shared_mut() };
-        without_interrupts!(unsafe { shared._zfree(ptr, layout) })
+        unsafe { without_interrupts!(shared._zfree(ptr, layout)) }
     }
 
     #[inline]

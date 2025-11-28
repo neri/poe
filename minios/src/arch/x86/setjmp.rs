@@ -4,7 +4,7 @@ use core::arch::naked_asm;
 use core::num::NonZeroUsize;
 use core::sync::atomic::{Ordering, compiler_fence};
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 #[allow(unused)]
 pub struct JmpBuf([usize; 8]);
 
@@ -16,6 +16,11 @@ impl JmpBuf {
     #[inline]
     pub const fn new() -> Self {
         Self([0; 8])
+    }
+
+    #[inline]
+    pub unsafe fn clone(&self) -> Self {
+        Self(self.0.clone())
     }
 
     #[inline]
@@ -38,8 +43,8 @@ impl JmpBuf {
             "mov [ecx + 8], ebx",
             "mov [ecx + 12], esi",
             "mov [ecx + 16], edi",
-            "mov eax, [esp]",
-            "mov [ecx + 20], eax",
+            "mov edx, [esp]",
+            "mov [ecx + 20], edx",
             "xor eax, eax",
             "ret",
         )

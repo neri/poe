@@ -96,41 +96,43 @@ impl VM86 {
     where
         F: FnOnce(&mut X86StackContext),
     {
-        without_interrupts!(unsafe {
-            let shared = Self::shared_mut();
-            let old_vm_stack = shared.vm_stack.take();
-            let old_jmp_buf = shared.jmp_buf.clone();
-            let old_context = shared.context;
-            let old_tss_esp0 = Gdt::get_tss_esp0();
+        unsafe {
+            without_interrupts!({
+                let shared = Self::shared_mut();
+                let old_vm_stack = shared.vm_stack.take();
+                let old_jmp_buf = shared.jmp_buf.clone();
+                let old_context = shared.context;
+                let old_tss_esp0 = Gdt::get_tss_esp0();
 
-            let mut temp_stack = None;
-            let vm_stack = match old_vm_stack.as_ref() {
-                Some(v) => v,
-                None => {
-                    temp_stack = LoMemoryManager::alloc_page().into();
-                    temp_stack.as_ref().unwrap()
+                let mut temp_stack = None;
+                let vm_stack = match old_vm_stack.as_ref() {
+                    Some(v) => v,
+                    None => {
+                        temp_stack = LoMemoryManager::alloc_page().into();
+                        temp_stack.as_ref().unwrap()
+                    }
+                };
+
+                ctx.adjust_vm_eflags();
+                ctx.set_ss3(vm_stack.sel());
+                ctx.set_esp3(Pointer32::from_u16(vm_stack.limit().as_u16() & 0xfffe));
+                let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
+                ctx.set_cs(vmbp_csip.sel());
+                ctx.eip = Pointer32::from(vmbp_csip.off());
+                modifier(ctx);
+
+                shared.context = ctx;
+                if shared.jmp_buf.set_jmp().is_returned() {
+                    Cpu::enter_to_user_mode(ctx);
                 }
-            };
+                drop(temp_stack);
 
-            ctx.adjust_vm_eflags();
-            ctx.set_ss3(vm_stack.sel());
-            ctx.set_esp3(Pointer32::from_u16(vm_stack.limit().as_u16() & 0xfffe));
-            let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
-            ctx.set_cs(vmbp_csip.sel());
-            ctx.eip = Pointer32::from(vmbp_csip.off());
-            modifier(ctx);
-
-            shared.context = ctx;
-            if shared.jmp_buf.set_jmp().is_returned() {
-                Cpu::enter_to_user_mode(ctx);
-            }
-            drop(temp_stack);
-
-            Gdt::set_tss_esp0(old_tss_esp0);
-            shared.jmp_buf = old_jmp_buf;
-            shared.context = old_context;
-            shared.vm_stack = old_vm_stack;
-        });
+                Gdt::set_tss_esp0(old_tss_esp0);
+                shared.jmp_buf = old_jmp_buf;
+                shared.context = old_context;
+                shared.vm_stack = old_vm_stack;
+            });
+        }
     }
 
     #[inline(always)]
