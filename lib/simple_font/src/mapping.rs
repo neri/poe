@@ -1,3 +1,5 @@
+use box_drawing::BoxDrawingChar;
+
 pub trait GlyphMapping {
     fn map_char(&self, ch: char) -> Option<usize>;
 }
@@ -11,8 +13,32 @@ impl GlyphMapping for AsciiMapping {
     fn map_char(&self, ch: char) -> Option<usize> {
         let code = ch as usize;
         match code {
-            32..=126 => Some(code - 32),
-            _ => None,
+            32..=126 => return Some(code - 32),
+            _ => (),
+        }
+        return None;
+    }
+}
+
+pub static EXTENDED_ASCII: ExtendedAsciiMapping = ExtendedAsciiMapping;
+
+pub struct ExtendedAsciiMapping;
+
+impl GlyphMapping for ExtendedAsciiMapping {
+    #[inline]
+    fn map_char(&self, ch: char) -> Option<usize> {
+        let code = ch as usize;
+        if code < 32 {
+            None
+        } else if code <= 126 {
+            Some(code - 32)
+        } else {
+            for box_char in BoxDrawingChar::all_variants().iter().copied() {
+                if box_char.to_char() == ch {
+                    return Some(95 + box_char as usize);
+                }
+            }
+            None
         }
     }
 }

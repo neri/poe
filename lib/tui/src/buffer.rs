@@ -4,6 +4,7 @@ use crate::fixed_str::FixedStrBuf;
 use crate::prelude::*;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use box_drawing::BoxAscii;
 use core::cell::UnsafeCell;
 use core::num::NonZero;
 
@@ -17,7 +18,7 @@ pub struct TuiWindowBuffer<TCHAR: TChar> {
 }
 
 /// Type alias for a TUI window buffer with Ascii characters.
-pub type TuiWindowBufferAscii = TuiWindowBuffer<u8>;
+pub type TuiWindowBufferAscii = TuiWindowBuffer<BoxAscii>;
 
 /// Type alias for a TUI window buffer with Unicode characters.
 pub type TuiWindowBufferUcs = TuiWindowBuffer<char>;
@@ -101,6 +102,60 @@ pub trait TextBufferDrawing<TCHAR: TChar> {
             self.draw_hline(Point::new(top_left.x, y), rect.size().width, ch, attr);
         }
     }
+
+    fn draw_box(&mut self, rect: Rect, attr: TuiAttribute) {
+        let top_left = rect.top_left();
+        let bottom_right = rect.bottom_right().unwrap_or(top_left);
+        let top_right = Point::new(bottom_right.x, top_left.y);
+        let bottom_left = Point::new(top_left.x, bottom_right.y);
+        let width = rect.size().width;
+        let height = rect.size().height;
+
+        self.put_char_at(top_left, TCHAR::from_char(box_drawing::TOP_LEFT), attr);
+        self.put_char_at(top_right, TCHAR::from_char(box_drawing::TOP_RIGHT), attr);
+        self.put_char_at(
+            bottom_left,
+            TCHAR::from_char(box_drawing::BOTTOM_LEFT),
+            attr,
+        );
+        self.put_char_at(
+            bottom_right,
+            TCHAR::from_char(box_drawing::BOTTOM_RIGHT),
+            attr,
+        );
+
+        if width > 2 {
+            self.draw_hline(
+                Point::new(top_left.x + 1, top_left.y),
+                rect.size().width - 2,
+                TCHAR::from_char(box_drawing::HORIZONTAL),
+                attr,
+            );
+
+            self.draw_hline(
+                Point::new(bottom_left.x + 1, bottom_left.y),
+                rect.size().width - 2,
+                TCHAR::from_char(box_drawing::HORIZONTAL),
+                attr,
+            );
+        }
+
+        if height > 2 {
+            self.draw_vline(
+                Point::new(top_left.x, top_left.y + 1),
+                rect.size().height - 2,
+                TCHAR::from_char(box_drawing::VERTICAL),
+                attr,
+            );
+
+            self.draw_vline(
+                Point::new(top_right.x, top_right.y + 1),
+                rect.size().height - 2,
+                TCHAR::from_char(box_drawing::VERTICAL),
+                attr,
+            );
+        }
+    }
 }
 
 impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
@@ -148,15 +203,16 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
 
     /// Draw a simple title bar at the top of the buffer.
     pub fn draw_simple_title(&mut self, s: &str, back_attr: TuiAttribute, text_attr: TuiAttribute) {
-        self.draw_hline(
-            Point::zero(),
-            self.buffer().size.width,
-            TCHAR::from_char(' '),
-            back_attr,
-        );
+        if back_attr != TuiAttribute::default() {
+            self.draw_hline(
+                Point::zero(),
+                self.buffer().size.width,
+                TCHAR::from_char(' '),
+                back_attr,
+            );
+        }
         let left = ((self.buffer().size.width as i32 - s.len() as i32) / 2).max(1);
-        self.buffer_mut()
-            .put_string_at(Point::new(left, 0), s, text_attr);
+        self.put_string_at(Point::new(left, 0), s, text_attr);
     }
 
     /// Put a string at the specified origin.
@@ -340,6 +396,11 @@ impl<TCHAR: TChar> TextBufferDrawing<TCHAR> for TuiWindowBuffer<TCHAR> {
     fn fill_rect(&mut self, rect: Rect, ch: TCHAR, attr: TuiAttribute) {
         self.redraw_region.expand_rect(&rect);
         self.buffer_mut().fill_rect(rect, ch, attr);
+    }
+
+    fn draw_box(&mut self, rect: Rect, attr: TuiAttribute) {
+        self.redraw_region.expand_rect(&rect);
+        self.buffer_mut().draw_box(rect, attr);
     }
 }
 

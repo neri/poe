@@ -880,7 +880,7 @@ impl TaskStateSegment64 {
 
     #[inline]
     pub fn as_descriptor_pair(&self) -> DescriptorPair {
-        DescriptorEntry::tss64(
+        SegmentDescriptor::tss64(
             Linear64(self as *const _ as usize as u64),
             Limit16(Self::LIMIT),
         )

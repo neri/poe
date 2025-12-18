@@ -1,8 +1,9 @@
 extern crate proc_macro;
 
+use box_drawing::{BoxDrawingChar, dir::LineDir};
 use image::{GenericImage, GenericImageView, Pixel, Rgba};
 use proc_macro::{Span, TokenStream};
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, vec};
 
 /// A macro to include specified font at compile time.
 ///
@@ -84,8 +85,12 @@ pub fn include_font(item: TokenStream) -> TokenStream {
     let mut output_data = String::new();
     let font_w8 = font_width / 8;
     let font_w7 = font_width & 7;
+    let mut index = 0;
     for row in 0..rows {
         for col in 0..cols {
+            if index >= 95 {
+                break;
+            }
             let x = col * font_width;
             let y = row * font_height;
             let mut glyph_data = String::new();
@@ -117,11 +122,22 @@ pub fn include_font(item: TokenStream) -> TokenStream {
             }
             output_data.push_str(&glyph_data);
             output_data.push_str("\n");
+            index += 1;
         }
     }
 
+    for ch in BoxDrawingChar::all_variants().iter().copied() {
+        let raw_data = render_box_drawing_char(font_width, font_height, ch);
+        let mut glyph_data = String::new();
+        for byte in raw_data {
+            glyph_data.push_str(&format!("{:#02x}, ", byte));
+        }
+        output_data.push_str(&glyph_data);
+        output_data.push_str("\n");
+    }
+
     format!(
-        "SimpleFont::ascii(&[{}], ({}, {}))",
+        "SimpleFont::extended_ascii(&[{}], ({}, {}))",
         &output_data, font_width, font_height
     )
     .parse()
@@ -173,4 +189,58 @@ fn pixel_to_mono(pixel: &Rgba<u8>, ref_pixel: &Rgba<u8>) -> bool {
         let db = pixel[2].abs_diff(ref_pixel[2]) as usize;
         dr + dg + db > 128
     }
+}
+
+fn render_box_drawing_char(width: u32, height: u32, ch: BoxDrawingChar) -> Vec<u8> {
+    let mut output = Vec::new();
+    let line_dirs = ch.line_dirs();
+
+    let line_blank = vec![0u8; ((width + 7) / 8) as usize];
+    let mut pattern_v = line_blank.clone();
+    pset(&mut pattern_v, (width - 1) / 2);
+
+    {
+        let pattern_v1 = if line_dirs.contains(LineDir::SingleUp) {
+            &pattern_v
+        } else {
+            &line_blank
+        };
+        for _y in 0..((height - 1) / 2) {
+            output.extend_from_slice(&pattern_v1);
+        }
+    }
+
+    {
+        let mut pettern_h = pattern_v.clone();
+        if line_dirs.contains(LineDir::SingleLeft) {
+            for x in 0..((width - 1) / 2) {
+                pset(&mut pettern_h, x);
+            }
+        }
+        if line_dirs.contains(LineDir::SingleRight) {
+            for x in (width / 2)..width {
+                pset(&mut pettern_h, x);
+            }
+        }
+        output.extend_from_slice(&pettern_h);
+    }
+
+    {
+        let pattern_v2 = if line_dirs.contains(LineDir::SingleDown) {
+            &pattern_v
+        } else {
+            &line_blank
+        };
+        for _y in 0..((height) / 2) {
+            output.extend_from_slice(&pattern_v2);
+        }
+    }
+
+    output
+}
+
+fn pset(data: &mut [u8], x: u32) {
+    let byte_index = (x / 8) as usize;
+    let bit_index = 7 - (x % 8);
+    data[byte_index] |= 1 << bit_index;
 }

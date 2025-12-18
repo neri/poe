@@ -8,3 +8,4 @@ proc-macro = true
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
+box_drawing = { path = "../../box_drawing" }

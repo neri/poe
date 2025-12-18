@@ -21,6 +21,11 @@ impl<'a> SimpleFont<'a> {
     }
 
     #[inline]
+    pub const fn extended_ascii(data: &'a [u8], dims: (u32, u32)) -> Self {
+        Self::new(data, dims, &mapping::EXTENDED_ASCII)
+    }
+
+    #[inline]
     pub const fn new(
         data: &'a [u8],
         dims: (u32, u32),

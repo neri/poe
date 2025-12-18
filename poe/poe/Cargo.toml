@@ -5,9 +5,16 @@ version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+device_tree = ["fdt"]
+pc = []
+rpi = ["device_tree"]
+sbi = ["device_tree"]
+
 [dependencies]
 minios = { path = "../../minios/" }
-fdt = { path = "../../lib/fdt/", features = ["guid"] }
+fdt = { path = "../../lib/fdt/", features = ["guid"], optional = true }
 
 [profile.release]
 lto = true

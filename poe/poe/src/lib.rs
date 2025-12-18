@@ -42,7 +42,9 @@ pub fn main() {
             TuiAttribute(0xf0),
         );
 
-        window.draw_simple_title("Hello", TuiAttribute(0x9f), TuiAttribute(0x0f));
+        window.draw_box(window.bounds(), TuiAttribute(0xf0));
+        // window.draw_simple_title("Hello", TuiAttribute(0x9f), TuiAttribute(0x0f));
+        window.draw_simple_title("Hello", TuiAttribute::default(), TuiAttribute(0x0f));
         window.put_string_at(Point::new(2, 2), "Hello, world!", window.default_attr);
         window.put_text(Point::new(2, 4), "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.", TuiAttribute(0x07), 0);
 
@@ -65,7 +67,7 @@ pub fn main() {
     // println!("  {}", logo.next().unwrap());
     // println!("");
 
-    // #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    // #[cfg(feature = "device_tree")]
     // if false {
     //     if let Some(fdt) = System::device_tree() {
     //         println!("DEVICE TREE:");
@@ -119,7 +121,11 @@ pub fn main() {
     }
 }
 
+#[cfg(feature = "device_tree")]
+use fdt;
+
 #[allow(dead_code)]
+#[cfg(feature = "device_tree")]
 fn dump_fdt_node(node: &fdt::Node, level: usize) {
     use fdt::*;
 

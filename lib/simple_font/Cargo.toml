@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 font_macro = { path = "font_macro" }
+box_drawing = { path = "../box_drawing" }

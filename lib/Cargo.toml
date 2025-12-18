@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "acpi",
     "bootprot",
+    "box_drawing",
     "edid",
     "elf",
     "fdt",

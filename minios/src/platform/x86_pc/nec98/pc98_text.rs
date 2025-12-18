@@ -7,6 +7,7 @@ use crate::{
     *,
 };
 use core::cell::UnsafeCell;
+use tui::prelude::box_drawing;
 use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
 const COLOR_TABLE: [u8; 8] = [0, 1, 4, 5, 2, 3, 6, 7];
@@ -167,12 +168,21 @@ impl core::fmt::Write for Pc98Text {
                     }
                 }
                 _ => {
-                    let ch = if ch == '\\' {
-                        0xfc
-                    } else if ch >= ' ' && ch < '\x7f' {
-                        ch as u8
-                    } else {
-                        b'?'
+                    let ch = match ch {
+                        '\\' => 0xfc,
+                        ' '..='\x7E' => ch as u8,
+                        box_drawing::HORIZONTAL => 0x95,
+                        box_drawing::VERTICAL => 0x96,
+                        box_drawing::TOP_LEFT => 0x98,
+                        box_drawing::TOP_RIGHT => 0x99,
+                        box_drawing::BOTTOM_LEFT => 0x9a,
+                        box_drawing::BOTTOM_RIGHT => 0x9b,
+                        box_drawing::T_UP => 0x90,
+                        box_drawing::T_DOWN => 0x91,
+                        box_drawing::T_LEFT => 0x92,
+                        box_drawing::T_RIGHT => 0x93,
+                        box_drawing::CROSS => 0x8f,
+                        _ => b'?',
                     };
 
                     if let Some((new_col, new_row)) = self.adjust_coords(col, row, true) {

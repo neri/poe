@@ -14,9 +14,12 @@ pub mod prelude {
     pub use crate::buffer::*;
     pub use crate::color::*;
     pub use crate::coord::*;
+    pub use box_drawing;
 }
 
 extern crate alloc;
+
+use box_drawing::BoxAscii;
 
 pub trait TuiDrawTarget {
     fn draw(&mut self, origin: coord::Point, text: &str, attr: color::TuiAttribute);
@@ -28,15 +31,15 @@ pub trait TChar: Sized + Clone + Copy + PartialEq + Eq {
     fn into_char(self) -> char;
 }
 
-impl TChar for u8 {
+impl TChar for BoxAscii {
     #[inline]
     fn from_char(c: char) -> Self {
-        if c.is_ascii() { c as u8 } else { b'?' }
+        Self::from_char(c).unwrap_or(Self(b'?'))
     }
 
     #[inline]
     fn into_char(self) -> char {
-        self as char
+        self.to_char().unwrap_or('?')
     }
 }
 

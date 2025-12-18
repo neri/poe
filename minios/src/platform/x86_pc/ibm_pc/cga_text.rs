@@ -10,6 +10,7 @@ use crate::{
     platform::x86_pc::ibm_pc::bios::INT10,
 };
 use core::cell::UnsafeCell;
+use tui::prelude::box_drawing;
 use x86::isolated_io::*;
 
 pub struct CgaText {
@@ -166,7 +167,21 @@ impl core::fmt::Write for CgaText {
                     }
                 }
                 _ => {
-                    let ch = if ch >= ' ' && ch < '\x7F' { ch } else { '?' };
+                    let ch = match ch {
+                        ' '..='\x7E' => ch as u8,
+                        box_drawing::HORIZONTAL => 0xc4,
+                        box_drawing::VERTICAL => 0xb3,
+                        box_drawing::TOP_LEFT => 0xda,
+                        box_drawing::TOP_RIGHT => 0xbf,
+                        box_drawing::BOTTOM_LEFT => 0xc0,
+                        box_drawing::BOTTOM_RIGHT => 0xd9,
+                        box_drawing::T_UP => 0xc1,
+                        box_drawing::T_DOWN => 0xc2,
+                        box_drawing::T_LEFT => 0xc3,
+                        box_drawing::T_RIGHT => 0xc5,
+                        box_drawing::CROSS => 0xc6,
+                        _ => b'?',
+                    };
 
                     if let Some((new_col, new_row)) = self.adjust_coords(col, row, true) {
                         col = new_col;
@@ -177,7 +192,7 @@ impl core::fmt::Write for CgaText {
                     unsafe {
                         let offset = pos as isize * 2;
                         let vram = self.get_vram().offset(offset);
-                        vram.write_volatile(ch as u8);
+                        vram.write_volatile(ch);
                         vram.offset(1).write_volatile(self.mode.attribute);
                     }
 
