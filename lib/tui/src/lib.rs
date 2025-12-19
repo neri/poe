@@ -19,7 +19,7 @@ pub mod prelude {
 
 extern crate alloc;
 
-use box_drawing::BoxAscii;
+use box_drawing::AsciiExt;
 
 pub trait TuiDrawTarget {
     fn draw(&mut self, origin: coord::Point, text: &str, attr: color::TuiAttribute);
@@ -31,31 +31,30 @@ pub trait TChar: Sized + Clone + Copy + PartialEq + Eq {
     fn into_char(self) -> char;
 }
 
-impl TChar for BoxAscii {
+impl TChar for AsciiExt {
     #[inline]
     fn from_char(c: char) -> Self {
-        Self::from_char(c).unwrap_or(Self(b'?'))
+        Self::from_char(c).unwrap_or(Self::REPLACEMENT_CHARACTER)
     }
 
     #[inline]
     fn into_char(self) -> char {
-        self.to_char().unwrap_or('?')
+        self.to_char()
     }
 }
 
 impl TChar for u16 {
     #[inline]
     fn from_char(c: char) -> Self {
-        match c as u32 {
-            0..=0xd7ff | 0xe000..=0xffff => c as u16,
-            // 0xd800..=0xdfff => /* surrogate halves */
-            _ => 0xfffd,
+        match c {
+            '\0'..='\u{d7ff}' | '\u{e000}'..='\u{ffff}' => c as u16,
+            _ => char::REPLACEMENT_CHARACTER as u16,
         }
     }
 
     #[inline]
     fn into_char(self) -> char {
-        char::from_u32(self as u32).unwrap_or('?')
+        char::from_u32(self as u32).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 }
 
@@ -67,7 +66,7 @@ impl TChar for u32 {
 
     #[inline]
     fn into_char(self) -> char {
-        char::from_u32(self as u32).unwrap_or('?')
+        char::from_u32(self as u32).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 }
 

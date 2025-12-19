@@ -4,7 +4,7 @@ use crate::fixed_str::FixedStrBuf;
 use crate::prelude::*;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use box_drawing::BoxAscii;
+use box_drawing::AsciiExt;
 use core::cell::UnsafeCell;
 use core::num::NonZero;
 
@@ -18,7 +18,7 @@ pub struct TuiWindowBuffer<TCHAR: TChar> {
 }
 
 /// Type alias for a TUI window buffer with Ascii characters.
-pub type TuiWindowBufferAscii = TuiWindowBuffer<BoxAscii>;
+pub type TuiWindowBufferAscii = TuiWindowBuffer<AsciiExt>;
 
 /// Type alias for a TUI window buffer with Unicode characters.
 pub type TuiWindowBufferUcs = TuiWindowBuffer<char>;
@@ -45,6 +45,10 @@ pub trait TextBufferDrawing<TCHAR: TChar> {
     fn get_char_at(&self, pos: Point) -> Option<(TCHAR, TuiAttribute)>;
 
     /// Put a string at the specified origin.
+    ///
+    /// # Notes
+    ///
+    /// Control characters (U+0000 to U+001F) are ignored.
     fn put_string_at(&mut self, origin: Point, s: &str, attr: TuiAttribute) {
         let mut pos = origin;
         for ch in s.chars() {
@@ -202,13 +206,18 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
     }
 
     /// Draw a simple title bar at the top of the buffer.
-    pub fn draw_simple_title(&mut self, s: &str, back_attr: TuiAttribute, text_attr: TuiAttribute) {
-        if back_attr != TuiAttribute::default() {
+    pub fn draw_simple_title(
+        &mut self,
+        s: &str,
+        back_attr: Option<NonZeroTuiAttribute>,
+        text_attr: TuiAttribute,
+    ) {
+        if let Some(back_attr) = back_attr {
             self.draw_hline(
                 Point::zero(),
                 self.buffer().size.width,
                 TCHAR::from_char(' '),
-                back_attr,
+                back_attr.get(),
             );
         }
         let left = ((self.buffer().size.width as i32 - s.len() as i32) / 2).max(1);

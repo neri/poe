@@ -153,12 +153,12 @@ impl BoxDrawingChar {
     }
 }
 
-/// ASCII characters and DEC Special Graphics box drawing characters
+/// An Extended Ascii Character Set supporting some box drawing characters.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct BoxAscii(pub u8);
+pub struct AsciiExt(pub(crate) u8);
 
-impl BoxAscii {
+impl AsciiExt {
     /// Convert from a `char` if possible.
     pub const fn from_char(ch: char) -> Option<Self> {
         match ch as u32 {
@@ -178,41 +178,39 @@ impl BoxAscii {
         }
     }
 
-    /// Convert to a `char` if possible.
-    pub const fn to_char(self) -> Option<char> {
+    /// Convert to a unicode character.
+    pub const fn to_char(self) -> char {
         match self.0 {
-            0..127 => Some(self.0 as char),
-            0xea => Some(BOTTOM_RIGHT),
-            0xeb => Some(TOP_RIGHT),
-            0xec => Some(TOP_LEFT),
-            0xed => Some(BOTTOM_LEFT),
-            0xee => Some(CROSS),
-            0xf1 => Some(HORIZONTAL),
-            0xf4 => Some(T_RIGHT),
-            0xf5 => Some(T_LEFT),
-            0xf6 => Some(T_UP),
-            0xf7 => Some(T_DOWN),
-            0xf8 => Some(VERTICAL),
-            _ => None,
+            0xea => BOTTOM_RIGHT,
+            0xeb => TOP_RIGHT,
+            0xec => TOP_LEFT,
+            0xed => BOTTOM_LEFT,
+            0xee => CROSS,
+            0xf1 => HORIZONTAL,
+            0xf4 => T_RIGHT,
+            0xf5 => T_LEFT,
+            0xf6 => T_UP,
+            0xf7 => T_DOWN,
+            0xf8 => VERTICAL,
+            _ => (self.0 & 0x7f) as char,
         }
     }
 
-    /// Convert to a fallback ASCII `char` if possible.
-    pub const fn to_fallback_ascii(self) -> Option<char> {
+    /// Convert to a fallback ascii character.
+    pub const fn to_ascii_fallback(self) -> u8 {
         match self.0 {
-            0..127 => Some(self.0 as char),
-            0xea => Some('+'),
-            0xeb => Some('+'),
-            0xec => Some('+'),
-            0xed => Some('+'),
-            0xee => Some('+'),
-            0xf1 => Some('-'),
-            0xf4 => Some('+'),
-            0xf5 => Some('+'),
-            0xf6 => Some('+'),
-            0xf7 => Some('+'),
-            0xf8 => Some('|'),
-            _ => None,
+            0xea => b'+',
+            0xeb => b'+',
+            0xec => b'+',
+            0xed => b'+',
+            0xee => b'+',
+            0xf1 => b'-',
+            0xf4 => b'+',
+            0xf5 => b'+',
+            0xf6 => b'+',
+            0xf7 => b'+',
+            0xf8 => b'|',
+            _ => (self.0 & 0x7f) as u8,
         }
     }
 }

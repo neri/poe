@@ -42,7 +42,7 @@ fn make_box_drawing(os: &mut File, lines: &[String]) {
         let unicode = u32::from_str_radix(fields[1], 16).unwrap();
         let ascii_alt = u8::from_str_radix(fields[2], 16).unwrap();
         let ascii_fallback = fields[3].chars().next().unwrap() as u8;
-        let udlr = parse_udlr(fields[4]);
+        let udlr = Udlr::parse(fields[4]);
         let description = trim_quotes(fields[5]).to_string();
 
         if identifiers.contains(&identifier) {
@@ -226,12 +226,12 @@ impl BoxDrawingChar {{
     }}
 }}
 
-/// ASCII characters and DEC Special Graphics box drawing characters
+/// An Extended Ascii Character Set supporting some box drawing characters.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct BoxAscii(pub u8);
+pub struct AsciiExt(pub(crate) u8);
 
-impl BoxAscii {{
+impl AsciiExt {{
     /// Convert from a `char` if possible.
     pub const fn from_char(ch: char) -> Option<Self> {{
         match ch as u32 {{
@@ -258,10 +258,9 @@ impl BoxAscii {{
         }}
     }}
 
-    /// Convert to a `char` if possible.
-    pub const fn to_char(self) -> Option<char> {{
+    /// Convert to a unicode character.
+    pub const fn to_char(self) -> char {{
         match self.0 {{
-            0..127 => Some(self.0 as char),
 "
     )
     .unwrap();
@@ -271,7 +270,7 @@ impl BoxAscii {{
         items.insert(
             item.ascii_alt,
             format!(
-                "            {:#02x} => Some({}),\n",
+                "            {:#02x} => {},\n",
                 item.ascii_alt, item.identifier
             ),
         );
@@ -280,14 +279,13 @@ impl BoxAscii {{
 
     write!(
         os,
-        "            _ => None,
+        "            _ => (self.0 & 0x7f) as char,
         }}
     }}
 
-    /// Convert to a fallback ASCII `char` if possible.
-    pub const fn to_fallback_ascii(self) -> Option<char> {{
+    /// Convert to a fallback ascii character.
+    pub const fn to_ascii_fallback(self) -> u8 {{
         match self.0 {{
-            0..127 => Some(self.0 as char),
 "
     )
     .unwrap();
@@ -297,7 +295,7 @@ impl BoxAscii {{
         items.insert(
             item.ascii_alt,
             format!(
-                "            {:#02x} => Some({:?}),\n",
+                "            {:#02x} => b{:?},\n",
                 item.ascii_alt,
                 item.ascii_fallback()
             ),
@@ -307,7 +305,7 @@ impl BoxAscii {{
 
     write!(
         os,
-        "            _ => None,
+        "            _ => (self.0 & 0x7f) as u8,
         }}
     }}
 }}
@@ -334,20 +332,6 @@ fn trim_quotes(s: &str) -> &str {
     }
 }
 
-fn parse_udlr(udlr: &str) -> u8 {
-    let mut bits = 0;
-    for c in udlr.chars() {
-        match c {
-            'u' => bits |= Udlr::SingleUp as u8,
-            'd' => bits |= Udlr::SingleDown as u8,
-            'l' => bits |= Udlr::SingleLeft as u8,
-            'r' => bits |= Udlr::SingleRight as u8,
-            _ => {}
-        }
-    }
-    bits
-}
-
 #[allow(unused)]
 struct BoxDrawingChar {
     identifier: String,
@@ -370,4 +354,40 @@ enum Udlr {
     SingleRight = 0b0000_0010,
     SingleDown = 0b0000_0100,
     SingleLeft = 0b0000_1000,
+}
+
+impl Udlr {
+    fn parse(udlr: &str) -> u8 {
+        let mut bits = 0;
+        for c in udlr.chars() {
+            match c {
+                'u' => bits |= Udlr::SingleUp as u8,
+                'd' => bits |= Udlr::SingleDown as u8,
+                'l' => bits |= Udlr::SingleLeft as u8,
+                'r' => bits |= Udlr::SingleRight as u8,
+                'h' => bits |= Udlr::SingleLeft as u8 | Udlr::SingleRight as u8,
+                'v' => bits |= Udlr::SingleUp as u8 | Udlr::SingleDown as u8,
+                _ => {}
+            }
+        }
+        bits
+    }
+
+    #[allow(unused)]
+    fn parse_array(bitmap: u8) -> Vec<Self> {
+        let mut dirs = Vec::new();
+        if bitmap & (Udlr::SingleUp as u8) != 0 {
+            dirs.push(Udlr::SingleUp);
+        }
+        if bitmap & (Udlr::SingleRight as u8) != 0 {
+            dirs.push(Udlr::SingleRight);
+        }
+        if bitmap & (Udlr::SingleDown as u8) != 0 {
+            dirs.push(Udlr::SingleDown);
+        }
+        if bitmap & (Udlr::SingleLeft as u8) != 0 {
+            dirs.push(Udlr::SingleLeft);
+        }
+        dirs
+    }
 }

@@ -1,9 +1,16 @@
 //! Color and attribute definitions
 
+use core::num::NonZero;
+
 /// Text attribute (foreground and background color)
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct TuiAttribute(pub u8);
+
+/// Text attribute that is guaranteed to be non-zero
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct NonZeroTuiAttribute(pub NonZero<u8>);
 
 /// Common console colors
 #[repr(u8)]
@@ -67,5 +74,34 @@ impl TuiAttribute {
     pub const fn bg_color(self) -> TuiColor {
         // SAFETY: All values are within the valid range
         unsafe { core::mem::transmute((self.0 >> 4) & 0x0F) }
+    }
+}
+
+impl NonZeroTuiAttribute {
+    #[inline]
+    pub const fn new(value: TuiAttribute) -> Option<Self> {
+        match NonZero::new(value.0) {
+            Some(v) => Some(Self(v)),
+            None => None,
+        }
+    }
+
+    #[inline]
+    pub const fn get(&self) -> TuiAttribute {
+        TuiAttribute(self.0.get())
+    }
+}
+
+impl From<NonZeroTuiAttribute> for TuiAttribute {
+    #[inline]
+    fn from(attr: NonZeroTuiAttribute) -> Self {
+        Self(attr.0.get())
+    }
+}
+
+impl From<TuiAttribute> for Option<NonZeroTuiAttribute> {
+    #[inline]
+    fn from(attr: TuiAttribute) -> Self {
+        NonZeroTuiAttribute::new(attr)
     }
 }

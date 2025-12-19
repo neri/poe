@@ -11,7 +11,10 @@ pub mod dir;
 #[cfg(test)]
 mod tests;
 
-impl BoxAscii {
+impl AsciiExt {
+    /// The replacement character for unsupported characters.
+    pub const REPLACEMENT_CHARACTER: Self = Self(b'?');
+
     /// Convert to shift outed state and ASCII byte.
     ///
     /// # Returns

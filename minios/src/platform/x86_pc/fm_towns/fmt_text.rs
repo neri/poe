@@ -10,6 +10,7 @@ use crate::{
     platform::x86_pc::fm_towns::crtc::Crtc,
 };
 use core::{cell::UnsafeCell, mem::transmute};
+use tui::prelude::box_drawing;
 use x86::isolated_io::*;
 
 const TVRAM_OFFSET_MASK: usize = 0x0003_ffff / 4;
@@ -225,17 +226,17 @@ impl core::fmt::Write for FmtText {
                 _ => {
                     let ch = match ch {
                         ' '..='\x7E' => ch as u8,
-                        // box_drawing::HORIZONTAL => 0x95,
-                        // box_drawing::VERTICAL => 0x96,
-                        // box_drawing::TOP_LEFT => 0x98,
-                        // box_drawing::TOP_RIGHT => 0x99,
-                        // box_drawing::BOTTOM_LEFT => 0x9a,
-                        // box_drawing::BOTTOM_RIGHT => 0x9b,
-                        // box_drawing::T_UP => 0x90,
-                        // box_drawing::T_DOWN => 0x91,
-                        // box_drawing::T_LEFT => 0x92,
-                        // box_drawing::T_RIGHT => 0x93,
-                        // box_drawing::CROSS => 0x8f,
+                        box_drawing::HORIZONTAL => 0x95,
+                        box_drawing::VERTICAL => 0x96,
+                        box_drawing::TOP_LEFT => 0x98,
+                        box_drawing::TOP_RIGHT => 0x99,
+                        box_drawing::BOTTOM_LEFT => 0x9a,
+                        box_drawing::BOTTOM_RIGHT => 0x9b,
+                        box_drawing::T_UP => 0x90,
+                        box_drawing::T_DOWN => 0x91,
+                        box_drawing::T_LEFT => 0x92,
+                        box_drawing::T_RIGHT => 0x93,
+                        box_drawing::CROSS => 0x8f,
                         _ => b'?',
                     };
 
