@@ -3,23 +3,54 @@
 use super::*;
 use crate::System;
 use core::fmt::Write;
+use tui::prelude::box_drawing::AsciiExt;
 
 const COLOR_TABLE: [u8; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 
-pub struct VT100<'a> {
+pub struct VT100Err<'a> {
     inner: VT100Inner<'a>,
     mode: SimpleTextOutputMode,
+    is_shifted_out: bool,
+    charset: CharsetMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum CharsetMode {
+    /// Terminal supports box drawing characters via VT100 charset switching
+    AsciiBoxChar,
+    /// Terminal supports pure ASCII characters only
+    AsciiFallback,
+    /// Terminal supports UTF-8
+    UTF8,
 }
 
 struct VT100Inner<'a>(&'a mut dyn SerialIo);
 
-impl<'a> VT100<'a> {
+impl<'a> VT100Err<'a> {
     #[inline]
     pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
         Self {
             inner: VT100Inner(inner),
             mode: SimpleTextOutputMode::default(),
+            is_shifted_out: false,
+            charset: CharsetMode::AsciiBoxChar,
         }
+    }
+
+    #[inline]
+    pub const fn with_charset(inner: &'a mut dyn SerialIo, charset: CharsetMode) -> Self {
+        Self {
+            inner: VT100Inner(inner),
+            mode: SimpleTextOutputMode::default(),
+            is_shifted_out: false,
+            charset,
+        }
+    }
+
+    #[inline]
+    pub fn reset_with_charset(&mut self, charset: CharsetMode) {
+        self.charset = charset;
+        (self as &mut dyn SimpleTextOutput).reset();
     }
 
     #[inline]
@@ -81,10 +112,42 @@ impl<'a> VT100<'a> {
     }
 }
 
-impl Write for VT100<'_> {
+impl Write for VT100Err<'_> {
     #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.inner.write_str(s)
+        match self.charset {
+            CharsetMode::AsciiBoxChar => {
+                for ch in s.chars() {
+                    if let Some(ch) = AsciiExt::from_char(ch) {
+                        let (is_so, ch) = ch.to_shift_out_and_ascii();
+                        if is_so != self.is_shifted_out {
+                            if is_so {
+                                self.inner.0.write_byte(b'\x0e');
+                            } else {
+                                self.inner.0.write_byte(b'\x0f');
+                            }
+                            self.is_shifted_out = is_so;
+                        }
+                        self.inner.0.write_byte(ch);
+                    } else {
+                        self.inner.0.write_byte(b'?');
+                    }
+                }
+                Ok(())
+            }
+            CharsetMode::AsciiFallback => {
+                for ch in s.chars() {
+                    if let Some(ch) = AsciiExt::from_char(ch) {
+                        let ch = ch.to_ascii_fallback();
+                        self.inner.0.write_byte(ch);
+                    } else {
+                        self.inner.0.write_byte(b'?');
+                    }
+                }
+                Ok(())
+            }
+            CharsetMode::UTF8 => self.inner.write_str(s),
+        }
     }
 }
 
@@ -96,13 +159,16 @@ impl Write for VT100Inner<'_> {
     }
 }
 
-impl SimpleTextOutput for VT100<'_> {
+impl SimpleTextOutput for VT100Err<'_> {
     fn reset(&mut self) {
+        // reset and get terminal size
         let _ = self.inner.write_str("\x1bc\x1b[255;255H");
         if let Some((col, row)) = self.get_cursor_position() {
             self.mode.columns = col.saturating_add(1);
             self.mode.rows = row.saturating_add(1);
         }
+
+        // clear screen
         self.set_attribute(0);
         let _ = self.inner.write_str("\x1b[H");
         for row in 0..self.mode.rows {
@@ -113,9 +179,17 @@ impl SimpleTextOutput for VT100<'_> {
                 let _ = self.inner.write_char(' ');
             }
         }
-        let _ = self.inner.write_str("\x1b[H");
-        self.mode.cursor_column = 0;
-        self.mode.cursor_row = 0;
+
+        // enable box drawing charset
+        // if matches!(self.charset, CharsetMode::AsciiBoxChar) {
+        let _ = self.inner.write_str("\x1b(B\x1b)0\x0f");
+        self.is_shifted_out = false;
+        // }
+
+        // set cursor to home
+        self.set_cursor_position(0, 0);
+
+        // reset inner tty
         self.inner.0.reset();
     }
 
@@ -128,14 +202,17 @@ impl SimpleTextOutput for VT100<'_> {
 
         let fg = COLOR_TABLE[attribute as usize & 0x07];
         let bg = COLOR_TABLE[(attribute >> 4) as usize & 0x07];
-        let bright = (attribute >> 7) & 0x01;
-        let _ = if bright != 0 {
-            self.inner
-                .write_fmt(format_args!("\x1b[1;{};{}m", 30 + fg, 40 + bg))
+        let fg = if (attribute & 0x08) != 0 {
+            90 + fg
         } else {
-            self.inner
-                .write_fmt(format_args!("\x1b[0;{};{}m", 30 + fg, 40 + bg))
+            30 + fg
         };
+        let bg = if (attribute & 0x80) != 0 {
+            100 + bg
+        } else {
+            40 + bg
+        };
+        let _ = self.inner.write_fmt(format_args!("\x1b[{};{}m", fg, bg));
         self.mode.attribute = attribute;
     }
 
@@ -170,13 +247,65 @@ impl SimpleTextOutput for VT100<'_> {
     }
 }
 
+pub struct VT100<'a> {
+    inner: VT100Err<'a>,
+}
+
+impl<'a> VT100<'a> {
+    #[inline]
+    pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
+        Self {
+            inner: VT100Err::new(inner),
+        }
+    }
+}
+
+impl Write for VT100<'_> {
+    #[inline]
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.inner.write_str(s)
+    }
+}
+
+impl SimpleTextOutput for VT100<'_> {
+    #[inline]
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+
+    #[inline]
+    fn set_attribute(&mut self, attribute: u8) {
+        self.inner.set_attribute(attribute);
+    }
+
+    #[inline]
+    fn clear_screen(&mut self) {
+        self.inner.clear_screen();
+    }
+
+    #[inline]
+    fn set_cursor_position(&mut self, col: u32, row: u32) {
+        self.inner.set_cursor_position(col, row);
+    }
+
+    #[inline]
+    fn enable_cursor(&mut self, visible: bool) -> bool {
+        self.inner.enable_cursor(visible)
+    }
+
+    #[inline]
+    fn current_mode(&mut self) -> SimpleTextOutputMode {
+        self.inner.current_mode()
+    }
+}
+
 impl SimpleTextInput for VT100<'_> {
     fn reset(&mut self) {
-        self.inner.0.reset();
+        self.inner.inner.0.reset();
     }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        match self.inner.0.read_byte() {
+        match self.inner.inner.0.read_byte() {
             Some(ch) => NonZeroInputKey::new(0xffff, ch as u16),
             None => None,
         }

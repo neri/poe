@@ -5,6 +5,7 @@ use core::cell::UnsafeCell;
 use x86::isolated_io::{IoPortRB, IoPortRWB, IoPortWB};
 
 static mut RAW: UnsafeCell<Uart16550> = UnsafeCell::new(Uart16550::new());
+
 static mut SHARED: UnsafeCell<VT100> = UnsafeCell::new(VT100::new(Uart16550::shared_raw()));
 
 pub struct Uart16550 {

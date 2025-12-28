@@ -1,21 +1,19 @@
 //! Spinlock for x86-64
-use core::{
-    arch::asm,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use core::arch::asm;
+use core::sync::atomic::{AtomicU32, Ordering};
 
 pub struct Spinlock {
-    value: AtomicBool,
+    value: AtomicU32,
 }
 
 impl Spinlock {
-    const LOCKED_VALUE: bool = true;
-    const UNLOCKED_VALUE: bool = false;
+    const LOCKED_VALUE: u32 = 1;
+    const UNLOCKED_VALUE: u32 = 0;
 
     #[inline]
     pub const fn new() -> Self {
         Self {
-            value: AtomicBool::new(Self::UNLOCKED_VALUE),
+            value: AtomicU32::new(Self::UNLOCKED_VALUE),
         }
     }
 
@@ -44,7 +42,7 @@ impl Spinlock {
             .is_err()
         {
             let mut spin_loop = SpinLoopWait::new();
-            while self.value.load(Ordering::Acquire) {
+            while self.value.load(Ordering::Acquire) == Self::LOCKED_VALUE {
                 spin_loop.wait();
             }
         }

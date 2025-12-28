@@ -1,18 +1,18 @@
 //! Spinlock
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 pub struct Spinlock {
-    value: AtomicUsize,
+    value: AtomicU32,
 }
 
 impl Spinlock {
-    const LOCKED_VALUE: usize = 1;
-    const UNLOCKED_VALUE: usize = 0;
+    const LOCKED_VALUE: u32 = 1;
+    const UNLOCKED_VALUE: u32 = 0;
 
     #[inline]
     pub const fn new() -> Self {
         Self {
-            value: AtomicUsize::new(Self::UNLOCKED_VALUE),
+            value: AtomicU32::new(Self::UNLOCKED_VALUE),
         }
     }
 

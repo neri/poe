@@ -31,7 +31,6 @@ pub struct System {
     stderr: NonNull<dyn SimpleTextOutput>,
     console_controller: ConsoleController,
 
-    smbios: Option<smbios::SmBios>,
     device_tree: Option<fdt::DeviceTree<'static>>,
 }
 
@@ -45,7 +44,7 @@ pub struct ConfigurationTableEntry {
 impl System {
     pub const DEFAULT_STDOUT_ATTRIBUTE: u8 = 0x07;
 
-    /// Initialize with boot information and main function
+    /// Initialize with SSBL info
     #[inline]
     pub unsafe fn init(info: &SsblInfo, arg: usize, main: fn() -> ()) -> ! {
         unsafe {
@@ -56,7 +55,6 @@ impl System {
                 stdout: NonNull::new(&raw mut NULL).unwrap(),
                 stderr: NonNull::new(&raw mut NULL).unwrap(),
                 console_controller: ConsoleController::new(),
-                smbios: None,
                 device_tree: None,
             };
 
@@ -88,7 +86,6 @@ impl System {
                 stdout: NonNull::new(&raw mut NULL).unwrap(),
                 stderr: NonNull::new(&raw mut NULL).unwrap(),
                 console_controller: ConsoleController::new(),
-                smbios: None,
                 device_tree: None,
             };
             shared.device_tree = fdt::DeviceTree::parse(dtb as *const u8).ok();
@@ -111,17 +108,6 @@ impl System {
 
     #[inline(always)]
     fn _init(main: fn() -> ()) -> ! {
-        unsafe {
-            let shared = Self::shared_mut();
-
-            if let Some(item) = Self::find_config_table_entry(&smbios::SMBIOS_GUID) {
-                let smbios = smbios::SmBios::parse(
-                    item.address.get().as_usize() as *const core::ffi::c_void
-                );
-                shared.smbios = smbios;
-            }
-        }
-
         main();
 
         panic!("The system has halted");
@@ -154,12 +140,6 @@ impl System {
     #[inline]
     pub fn platform() -> Platform {
         Self::boot_info().platform
-    }
-
-    #[inline]
-    pub fn smbios<'a>() -> Option<&'a smbios::SmBios> {
-        let shared = Self::shared();
-        shared.smbios.as_ref()
     }
 
     #[inline]

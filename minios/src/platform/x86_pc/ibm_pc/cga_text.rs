@@ -66,10 +66,12 @@ impl CgaText {
             if regs.eax.b() == 0x1a {
                 // vga or later
                 stdout.is_vga = true;
-
-                // turn off blinking
-                AttributeController::Mode.write(0x00);
                 stdout.attr_mask = 0xff;
+
+                // line graphics enable, blinking disable
+                AttributeController::Mode.write(0b0000_0101);
+                // Select 9-dot font
+                Sequencer::ClockingMode.write(0b0000_0001);
             }
         }
     }
@@ -329,6 +331,10 @@ impl CRTC {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttributeController {
     Mode = 0x10,
+    OverscanColor = 0x11,
+    ColorPlaneEnable = 0x12,
+    HorizontalPanning = 0x13,
+    ColorSelect = 0x14,
 }
 
 #[allow(dead_code)]
@@ -354,6 +360,41 @@ impl AttributeController {
             let _ = IoPortRB(0x3da).read();
             Self::VGA_AC_IDX_DAT.write(*self as u8);
             Self::VGA_AC_READ.read()
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sequencer {
+    Reset = 0x00,
+    ClockingMode = 0x01,
+    MapMask = 0x02,
+    CharacterMapSelect = 0x03,
+    MemoryMode = 0x04,
+}
+
+#[allow(dead_code)]
+impl Sequencer {
+    const VGA_SEQ_IDX_DAT: IoPortWW = IoPortWW(0x3c4);
+    const VGA_SEQ_INDEX: IoPortRWB = IoPortRWB(0x3c4);
+    const VGA_SEQ_DATA: IoPortRWB = IoPortRWB(0x3c5);
+
+    #[inline]
+    unsafe fn write(&self, data: u8) {
+        unsafe {
+            let _ = Self::VGA_SEQ_INDEX.read();
+            Self::VGA_SEQ_IDX_DAT.write(u16::from_le_bytes([*self as u8, data]));
+        }
+    }
+
+    #[inline]
+    unsafe fn read(&self) -> u8 {
+        unsafe {
+            let _ = Self::VGA_SEQ_INDEX.read();
+            Self::VGA_SEQ_INDEX.write(*self as u8);
+            Self::VGA_SEQ_DATA.read()
         }
     }
 }

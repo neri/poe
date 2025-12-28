@@ -62,3 +62,7 @@ pub trait PlatformTrait {
 
     fn reset_system() -> !;
 }
+
+pub trait PlatformTimer {
+    // todo
+}

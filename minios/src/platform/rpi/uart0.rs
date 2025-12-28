@@ -1,5 +1,9 @@
-use super::{gpio::*, mbox::*, *};
-use crate::{Hal, HalCpu, HalTrait, mem::mmio::Mmio32, vt100::VT100};
+use super::gpio::*;
+use super::mbox::*;
+use super::*;
+use crate::mem::mmio::Mmio32;
+use crate::vt100::VT100;
+use crate::{Hal, HalCpu, HalTrait};
 
 #[allow(dead_code)]
 static mut UART0: Uart0 = Uart0::CR;

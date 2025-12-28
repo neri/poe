@@ -4,7 +4,7 @@ pub use core::arch::x86::{__cpuid as cpuid, __cpuid_count as cpuid_count};
 pub use core::arch::x86_64::{__cpuid as cpuid, __cpuid_count as cpuid_count};
 
 pub fn is_intel_processor() -> bool {
-    let cpuid = unsafe { cpuid(0) };
+    let cpuid = cpuid(0);
     // GenuineIntel
     cpuid.ebx == 0x756e6547 && cpuid.edx == 0x49656e69 && cpuid.ecx == 0x6c65746e
 }
@@ -225,16 +225,14 @@ short_feature_impl! {
 
 impl Feature {
     pub fn exists(&self) -> bool {
-        unsafe {
-            match *self {
-                Self::F01D(bit) => (cpuid(0x0000_0001).edx & (1 << bit as usize)) != 0,
-                Self::F01C(bit) => (cpuid(0x0000_0001).ecx & (1 << bit as usize)) != 0,
-                Self::F07B(bit) => (cpuid_count(0x0000_0007, 0).ebx & (1 << bit as usize)) != 0,
-                Self::F07C(bit) => (cpuid_count(0x0000_0007, 0).ecx & (1 << bit as usize)) != 0,
-                Self::F07D(bit) => (cpuid_count(0x0000_0007, 0).edx & (1 << bit as usize)) != 0,
-                Self::F81D(bit) => (cpuid(0x8000_0001).edx & (1 << bit as usize)) != 0,
-                Self::F81C(bit) => (cpuid(0x8000_0001).ecx & (1 << bit as usize)) != 0,
-            }
+        match *self {
+            Self::F01D(bit) => (cpuid(0x0000_0001).edx & (1 << bit as usize)) != 0,
+            Self::F01C(bit) => (cpuid(0x0000_0001).ecx & (1 << bit as usize)) != 0,
+            Self::F07B(bit) => (cpuid_count(0x0000_0007, 0).ebx & (1 << bit as usize)) != 0,
+            Self::F07C(bit) => (cpuid_count(0x0000_0007, 0).ecx & (1 << bit as usize)) != 0,
+            Self::F07D(bit) => (cpuid_count(0x0000_0007, 0).edx & (1 << bit as usize)) != 0,
+            Self::F81D(bit) => (cpuid(0x8000_0001).edx & (1 << bit as usize)) != 0,
+            Self::F81C(bit) => (cpuid(0x8000_0001).ecx & (1 << bit as usize)) != 0,
         }
     }
 }

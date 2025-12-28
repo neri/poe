@@ -92,7 +92,7 @@ impl VM86 {
 
     /// Invokes virtual 8086 mode.
     #[inline(always)]
-    pub unsafe fn invoke<F>(ctx: &mut X86StackContext, modifier: F)
+    pub unsafe fn invoke<F>(ctx: &mut X86StackContext, context_modifier: F)
     where
         F: FnOnce(&mut X86StackContext),
     {
@@ -119,7 +119,7 @@ impl VM86 {
                 let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
                 ctx.set_cs(vmbp_csip.sel());
                 ctx.eip = Pointer32::from(vmbp_csip.off());
-                modifier(ctx);
+                context_modifier(ctx);
 
                 shared.context = ctx;
                 if shared.jmp_buf.set_jmp().is_returned() {
@@ -196,8 +196,10 @@ impl VM86 {
 
     /// In virtual 86 mode, some instructions need to be simulated.
     ///
-    /// - parameter ctx: Stack context
-    /// - returns: `true` if the instruction was successfully processed
+    /// - parameter `ctx`: Stack context
+    /// - returns: `true` if the instruction was successfully processed.
+    ///
+    /// # Note
     ///
     /// More accurate emulation is needed to create an OS, but POE is not an OS, so we cut corners.
     #[must_use]
@@ -219,7 +221,7 @@ impl VM86 {
 
             match vm_csip.add(skip).read_volatile() {
                 0x9C => {
-                    // 9C: PUSHF
+                    // 9C: PUSHF/PUSHFD
                     let eflags = ctx.vm_eflags();
                     if prefix_66 {
                         ctx.vm_push32(eflags.bits() as u32);
@@ -229,7 +231,7 @@ impl VM86 {
                     skip += 1;
                 }
                 0x9D => {
-                    // 9D: POPF
+                    // 9D: POPF/POPFD
                     let new_fl: Eflags;
                     if prefix_66 {
                         new_fl = Eflags::from_bits(ctx.vm_pop32() as usize);
@@ -253,7 +255,7 @@ impl VM86 {
                     return true;
                 }
                 0xCF => {
-                    // CF: IRET
+                    // CF: IRET/IRETD
                     let new_cs: Selector;
                     let new_fl: Eflags;
                     let new_eip: Pointer32;
@@ -736,7 +738,7 @@ impl X86StackContext {
     #[inline]
     unsafe fn vm_redirect_interrupt(&mut self, int_vec: InterruptVector, is_external: bool) {
         unsafe {
-            if is_external || self.selector_error_code().is_external() {
+            if is_external {
                 self.vm_push16(self.eflags.bits() as u16);
                 self.vm_push16(self.cs().as_u16());
                 self.vm_push16(self.eip.as_u16());

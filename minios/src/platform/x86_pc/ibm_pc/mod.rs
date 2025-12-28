@@ -139,6 +139,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
 
         cga_text::CgaText::init_late();
 
+        let _1mb = 0x0010_0000;
         let mut smap_supported = false;
         let buf = LoMemoryManager::alloc_page();
         let mut regs = X86StackContext::default();
@@ -156,20 +157,17 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
 
             let entry = &*(buf.as_slice().as_ptr() as *const SmapEntry);
             let range = entry.range();
-            if let Some(mem_type) = entry.mem_type() {
-                if range.start < 0x10_0000 && range.end <= 0x10_0000 {
-                    if mem_type != MemoryType::Available {
-                        LoMemoryManager::reserve(
-                            range.start as usize..range.end as usize,
-                            mem_type,
-                        )
+            let mem_type = entry.mem_type();
+            if range.start < _1mb && range.end <= _1mb {
+                // low memory
+                if mem_type != MemoryType::Available {
+                    LoMemoryManager::reserve(range.start as usize..range.end as usize, mem_type)
                         .unwrap();
-                    }
-                } else if range.start == 0x10_0000 {
-                    // already reported from SSBL
-                } else {
-                    MemoryManager::register_memmap(range, mem_type).unwrap();
                 }
+            } else if range.start == _1mb {
+                // already reported from SSBL
+            } else {
+                MemoryManager::register_memmap(range, mem_type).unwrap();
             }
 
             if regs.ebx.d() == 0 {
@@ -209,13 +207,13 @@ impl SmapEntry {
         self.base..(self.base + self.size)
     }
 
-    pub fn mem_type(&self) -> Option<MemoryType> {
+    pub fn mem_type(&self) -> MemoryType {
         match self.attr {
-            1 => Some(MemoryType::Available),
-            2 => Some(MemoryType::Reserved),
-            3 => Some(MemoryType::AcpiReclaim),
-            4 => Some(MemoryType::AcpiNvs),
-            _ => None,
+            1 => MemoryType::Available,
+            3 => MemoryType::AcpiReclaim,
+            4 => MemoryType::AcpiNvs,
+            // 2 => MemoryType::Reserved,
+            _ => MemoryType::Reserved,
         }
     }
 }

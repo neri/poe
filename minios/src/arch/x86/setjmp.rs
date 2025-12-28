@@ -26,7 +26,9 @@ impl JmpBuf {
     #[inline]
     pub unsafe fn set_jmp(&mut self) -> SetJmpResult {
         compiler_fence(Ordering::SeqCst);
-        unsafe { Self::_set_jmp(self) }
+        let result = unsafe { Self::_set_jmp(self) };
+        compiler_fence(Ordering::SeqCst);
+        result
     }
 
     #[inline]

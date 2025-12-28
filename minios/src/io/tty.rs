@@ -9,19 +9,6 @@ pub trait SimpleTextInput {
     fn reset(&mut self);
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey>;
-
-    fn wait_for_key(&mut self, timeout: usize) -> Option<NonZeroInputKey> {
-        loop {
-            if let Some(key) = self.read_key_stroke() {
-                return Some(key);
-            }
-            if timeout == 0 {
-                return None;
-            } else {
-                // TODO:
-            }
-        }
-    }
 }
 
 #[repr(C)]

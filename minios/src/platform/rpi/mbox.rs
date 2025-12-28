@@ -40,6 +40,7 @@ impl<CONTEXT: MboxContextType, const N: usize> MboxContext<CONTEXT, N> {
     const FULL: u32 = 0x8000_0000;
     const EMPTY: u32 = 0x4000_0000;
 
+    #[inline]
     pub fn mbox_addr(&self) -> u32 {
         let p = self.payload.0.as_ptr() as usize as u32;
         p | (self.chan as u32)

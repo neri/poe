@@ -1,5 +1,7 @@
-//! Spinlock for x86
-use core::{arch::asm, mem::transmute, sync::atomic::AtomicU8};
+//! Spinlock for i386
+use core::arch::asm;
+use core::mem::transmute;
+use core::sync::atomic::AtomicU8;
 
 pub struct Spinlock {
     value: AtomicU8,
@@ -20,7 +22,7 @@ impl Spinlock {
     #[inline]
     #[must_use]
     pub fn try_lock(&self) -> bool {
-        // Do not use cmpxchg instruction to run on i386
+        // To avoid CMPXCHG instruction on i386
         unsafe {
             let result: u8;
             asm!(
@@ -28,7 +30,7 @@ impl Spinlock {
                 in(reg) &self.value,
                 inout(reg_byte) Self::LOCKED_VALUE => result,
             );
-            transmute(result)
+            transmute::<u8, bool>(result)
         }
     }
 
@@ -50,7 +52,7 @@ impl Spinlock {
                 in(reg) &self.value,
                 inout(reg_byte) Self::UNLOCKED_VALUE => result,
             );
-            (transmute::<_, bool>(result)).then(|| ())
+            (transmute::<u8, bool>(result)).then(|| ())
         }
     }
 }
