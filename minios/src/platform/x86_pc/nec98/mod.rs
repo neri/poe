@@ -98,6 +98,15 @@ impl SimpleTextInput for BiosTextInput {
         while self.read_key_stroke().is_some() {}
     }
 
+    fn is_ready(&mut self) -> bool {
+        unsafe {
+            let mut regs = X86StackContext::default();
+            regs.eax.set_d(0x0100);
+            VM86::call_bios(bios::INT18, &mut regs);
+            regs.ebx.h() != 0
+        }
+    }
+
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
             let mut regs = X86StackContext::default();

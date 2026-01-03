@@ -27,7 +27,9 @@ impl HalCpu for CpuImpl {
     #[inline]
     fn wait_for_interrupt(&self) {
         unsafe {
-            asm!("wfi", options(nomem, nostack));
+            // TODO: currentry wfi is not working
+            asm!("sevl", "wfe", options(nomem, nostack));
+            // asm!("wfi", options(nomem, nostack));
         }
     }
 

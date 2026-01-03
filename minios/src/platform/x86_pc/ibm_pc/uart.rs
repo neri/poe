@@ -86,6 +86,10 @@ impl Uart16550 {
     pub fn shared() -> &'static mut VT100<'static> {
         unsafe { (&mut *(&raw mut SHARED)).get_mut() }
     }
+
+    fn is_ready_to_write(&mut self) -> bool {
+        unsafe { (IoPortRB(self.base_port + 5).read() & 0x20) != 0 }
+    }
 }
 
 impl SerialIo for Uart16550 {
@@ -96,20 +100,25 @@ impl SerialIo for Uart16550 {
 
     #[inline]
     fn write_byte(&mut self, byte: u8) {
+        while !self.is_ready_to_write() {
+            Hal::cpu().no_op();
+        }
         unsafe {
-            while (IoPortRB(self.base_port + 5).read() & 0x20) == 0 {}
             IoPortWB(self.base_port).write(byte);
         }
     }
 
     #[inline]
+    fn is_ready_to_read(&mut self) -> bool {
+        unsafe { (IoPortRB(self.base_port + 5).read() & 0x01) != 0 }
+    }
+
+    #[inline]
     fn read_byte(&mut self) -> Option<u8> {
-        unsafe {
-            if (IoPortRB(self.base_port + 5).read() & 0x01) != 0 {
-                Some(IoPortRB(self.base_port).read())
-            } else {
-                None
-            }
+        if self.is_ready_to_read() {
+            Some(unsafe { IoPortRB(self.base_port).read() })
+        } else {
+            None
         }
     }
 }

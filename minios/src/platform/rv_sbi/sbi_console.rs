@@ -3,13 +3,20 @@
 use crate::{vt100::VT100, *};
 use core::cell::UnsafeCell;
 
-pub struct SbiConsole;
+pub struct SbiConsole {
+    last_input: Option<u8>,
+}
 
-static mut RAW: UnsafeCell<SbiConsole> = UnsafeCell::new(SbiConsole {});
+static mut RAW: UnsafeCell<SbiConsole> = UnsafeCell::new(SbiConsole::new());
 
 static mut SHARED: UnsafeCell<VT100> = UnsafeCell::new(VT100::new(SbiConsole::shared_raw()));
 
 impl SbiConsole {
+    #[inline]
+    const fn new() -> Self {
+        Self { last_input: None }
+    }
+
     #[inline]
     pub unsafe fn init() {
         Self::shared_raw().reset();
@@ -23,6 +30,13 @@ impl SbiConsole {
     #[inline]
     pub fn shared() -> &'static mut VT100<'static> {
         unsafe { (&mut *(&raw mut SHARED)).get_mut() }
+    }
+
+    #[inline]
+    fn refill(&mut self) {
+        if self.last_input.is_none() {
+            self.last_input = sbi::legacy::getchar();
+        }
     }
 }
 
@@ -39,6 +53,14 @@ impl SerialIo for SbiConsole {
 
     #[inline]
     fn read_byte(&mut self) -> Option<u8> {
-        sbi::legacy::getchar()
+        self.is_ready_to_read()
+            .then(|| self.last_input.take())
+            .flatten()
+    }
+
+    #[inline]
+    fn is_ready_to_read(&mut self) -> bool {
+        self.refill();
+        self.last_input.is_some()
     }
 }

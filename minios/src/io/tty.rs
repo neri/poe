@@ -3,12 +3,35 @@
 pub mod null;
 pub mod vt100;
 
+use crate::task::event::{Event, PollResult, PollingEvent};
+use crate::*;
 use core::num::NonZero;
 
 pub trait SimpleTextInput {
     fn reset(&mut self);
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey>;
+
+    fn is_ready(&mut self) -> bool;
+}
+
+impl<'a> dyn SimpleTextInput + 'a {
+    pub fn wait_for_key_event<'b>(&'b mut self) -> Event<'b> {
+        Event::with_polling(SimpleTextInputPoller(self))
+    }
+}
+
+#[repr(transparent)]
+struct SimpleTextInputPoller<'a>(&'a mut dyn SimpleTextInput);
+
+impl PollingEvent for SimpleTextInputPoller<'_> {
+    fn poll(&mut self) -> PollResult {
+        if self.0.is_ready() {
+            PollResult::Ready
+        } else {
+            PollResult::Pending
+        }
+    }
 }
 
 #[repr(C)]
@@ -53,15 +76,8 @@ pub struct SimpleTextOutputMode {
 
 impl SimpleTextOutputMode {
     #[inline]
-    pub const fn default() -> Self {
-        Self {
-            columns: 80,
-            rows: 24,
-            cursor_column: 0,
-            cursor_row: 0,
-            attribute: 0,
-            cursor_visible: 1,
-        }
+    pub const fn new() -> Self {
+        Self::from_dims(80, 24)
     }
 
     #[inline]
@@ -125,6 +141,8 @@ pub trait SerialIo {
 
     fn read_byte(&mut self) -> Option<u8>;
 
+    fn is_ready_to_read(&mut self) -> bool;
+
     fn write_bytes(&mut self, bytes: &[u8]) {
         for &b in bytes {
             self.write_byte(b);
@@ -133,5 +151,24 @@ pub trait SerialIo {
 
     fn flush_input(&mut self) {
         while self.read_byte().is_some() {}
+    }
+}
+
+impl<'a> dyn SerialIo + 'a {
+    pub fn wait_for_read_event<'b>(&'b mut self) -> Event<'b> {
+        Event::with_polling(SerialPoller(self))
+    }
+}
+
+#[repr(transparent)]
+struct SerialPoller<'a>(&'a mut dyn SerialIo);
+
+impl PollingEvent for SerialPoller<'_> {
+    fn poll(&mut self) -> PollResult {
+        if self.0.is_ready_to_read() {
+            PollResult::Ready
+        } else {
+            PollResult::Pending
+        }
     }
 }

@@ -7,6 +7,7 @@ use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::Rectangle;
 use simple_font::SimpleFont;
 
+/// Framebuffer Console Output Driver
 pub struct FbCon {
     fb: FbDisplay8,
     font: SimpleFont<'static>,
@@ -74,7 +75,7 @@ impl FbCon {
         }
 
         while row >= self.mode.rows {
-            // TODO: scroll
+            // TODO: No plans to implement scrolling functionality at this time.
             row -= 1;
         }
 

@@ -18,27 +18,38 @@ pub use rv_sbi as current;
 use core::fmt;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum Platform {
-    Unknown = 0,
+    #[default]
+    Unspecified = 0,
+    /// IA32-Legacy NEC PC-98 Series Computer
     Nec98 = 1,
+    /// IA32-Legacy IBM PC Compatible
     PcBios = 2,
+    /// IA32-Legacy Fujitsu FM TOWNS
     FmTowns = 3,
-    Uefi = 4,
-    DeviceTree = 5,
-    RaspberryPi = 6,
-    OpenSbi = 7,
+    /// Native UEFI based platform
+    UefiNative = 4,
+    /// Non native UEFI based platform
+    UefiBridged = 5,
+    /// Device Tree based platforms
+    DeviceTree = 6,
+    /// Raspberry Pi
+    RaspberryPi = 7,
+    /// RISC-V with OpenSBI
+    OpenSbi = 8,
 }
 
 impl Platform {
     #[inline]
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Unknown => "Unknown",
+            Self::Unspecified => "Unspecified",
             Self::PcBios => "PC (BIOS)",
             Self::Nec98 => "PC-98",
             Self::FmTowns => "FM TOWNS",
-            Self::Uefi => "UEFI",
+            Self::UefiNative => "UEFI",
+            Self::UefiBridged => "UEFI (Bridged)",
             Self::DeviceTree => "Device Tree",
             Self::RaspberryPi => "Raspberry Pi",
             Self::OpenSbi => "OpenSBI",

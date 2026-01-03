@@ -71,11 +71,11 @@ impl CurrentMode {
 impl ModeInfo {
     /// Checks if the mode is compatible with UEFI GOP.
     #[inline]
-    pub const fn is_uefi_compatible(&self) -> bool {
+    pub const fn is_uefi_gop_compatible(&self) -> bool {
         matches!(self.pixel_format, PixelFormat::BGRX8888) && self.pixels_per_scanline().is_some()
     }
 
-    /// Checks if the mode is compatible with HRB
+    /// Checks if the mode is compatible with HRB boot protocol.
     #[inline]
     pub const fn is_hrb_compatible(&self) -> bool {
         match self.pixels_per_scanline() {
@@ -108,10 +108,10 @@ impl ModeInfo {
 pub enum PixelFormat {
     /// 8bit Indexed Color
     Indexed8 = 1,
-    /// 32bit Color, ARGB in little endian.
+    /// 32bit Color, ARGB or xRGB in little endian.
     /// It is commonly used in UEFI GOP and VESA VBE.
     BGRX8888 = 2,
-    /// 32bit Color, RGBA in big endian.
+    /// 32bit Color, RGBA or RGBx in big endian.
     /// It is commonly used in HTML canvas and general image processing.
     RGBX8888 = 3,
 }

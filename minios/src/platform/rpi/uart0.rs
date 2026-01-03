@@ -89,13 +89,8 @@ impl Uart0 {
     }
 
     #[inline]
-    fn is_output_ready(&mut self) -> bool {
+    fn is_ready_to_write(&mut self) -> bool {
         unsafe { (Uart0::FR.read() & 0x20) == 0 }
-    }
-
-    #[inline]
-    fn is_input_ready(&mut self) -> bool {
-        unsafe { (Uart0::FR.read() & 0x10) == 0 }
     }
 }
 
@@ -107,7 +102,7 @@ impl SerialIo for Uart0 {
 
     #[inline]
     fn write_byte(&mut self, byte: u8) {
-        while !self.is_output_ready() {
+        while !self.is_ready_to_write() {
             Hal::cpu().no_op();
         }
         unsafe {
@@ -117,10 +112,15 @@ impl SerialIo for Uart0 {
 
     #[inline]
     fn read_byte(&mut self) -> Option<u8> {
-        if self.is_input_ready() {
+        if self.is_ready_to_read() {
             Some(unsafe { Uart0::DR.read() as u8 })
         } else {
             None
         }
+    }
+
+    #[inline]
+    fn is_ready_to_read(&mut self) -> bool {
+        unsafe { (Uart0::FR.read() & 0x10) == 0 }
     }
 }

@@ -17,6 +17,7 @@ paste = { version = "1.0" }
 seq-macro = { version = "0.3" }
 num = { version = "0.4", default-features = false }
 embedded-graphics = { version = "0.8" }
+heapless = { version = "0.9", default-features = false }
 
 # bootprot = {path = "../lib/bootprot/"}
 acpi = { path = "../lib/acpi/", features = ["guid"] }

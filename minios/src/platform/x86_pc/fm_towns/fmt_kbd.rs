@@ -112,6 +112,10 @@ impl SimpleTextInput for FmtKbd {
         self.last_key_data = None;
     }
 
+    fn is_ready(&mut self) -> bool {
+        self.last_key_data.is_some()
+    }
+
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         self.last_key_data.take()
     }

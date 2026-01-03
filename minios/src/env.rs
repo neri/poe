@@ -8,6 +8,7 @@ use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
 use crate::mem::MemoryManager;
 use crate::null::NullTty;
 use crate::platform::*;
+use crate::task::event::{Event, PollResult};
 use crate::*;
 use core::fmt;
 use core::iter::Iterator;
@@ -193,6 +194,20 @@ impl System {
         }
     }
 
+    pub fn wait_for_events<'a, 'b, 'c>(events: &'a mut [&'c mut Event<'b>]) -> usize {
+        loop {
+            for (i, event) in events.iter_mut().enumerate() {
+                match event.poll() {
+                    PollResult::Ready => {
+                        return i;
+                    }
+                    PollResult::Pending => {}
+                }
+            }
+            Hal::cpu().wait_for_interrupt();
+        }
+    }
+
     pub fn line_input(max_len: usize) -> Option<String> {
         let mut buf = Vec::with_capacity(max_len);
         let stdin = Self::stdin();
@@ -200,6 +215,7 @@ impl System {
 
         loop {
             stdout.enable_cursor(true);
+            stdin.wait_for_key_event().wait();
             match stdin.read_key_stroke() {
                 Some(key) => {
                     stdout.enable_cursor(false);
@@ -244,10 +260,7 @@ impl System {
                         }
                     }
                 }
-                None => {
-                    // assert!(unsafe { Hal::cpu().is_interrupt_enabled() });
-                    Hal::cpu().wait_for_interrupt();
-                }
+                None => {}
             }
         }
         Some(buf.into_iter().collect())

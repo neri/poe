@@ -1,37 +1,39 @@
-//! VT100 Terminal Driver
+//! VT100 Serial Terminal Driver
 
 use super::*;
-use crate::System;
-use core::fmt::Write;
+#[allow(unused_imports)]
+use crate::{task::event::Event, *};
 use tui::prelude::box_drawing::AsciiExt;
 
 const COLOR_TABLE: [u8; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 
-pub struct VT100Err<'a> {
-    inner: VT100Inner<'a>,
+/// VT100 Serial Terminal Output Driver
+pub struct VT100Out<'a> {
+    inner: InnerSerial<'a>,
     mode: SimpleTextOutputMode,
     is_shifted_out: bool,
     charset: CharsetMode,
 }
 
+/// Inner Serial Device Wrapper
+struct InnerSerial<'a>(&'a mut dyn SerialIo);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum CharsetMode {
-    /// Terminal supports box drawing characters via VT100 charset switching
+    /// Terminal supports box drawing characters via VT100 charset switching.
     AsciiBoxChar,
-    /// Terminal supports pure ASCII characters only
+    /// Terminal supports pure ASCII characters only.
     AsciiFallback,
-    /// Terminal supports UTF-8
+    /// Terminal supports UTF-8.
     UTF8,
 }
 
-struct VT100Inner<'a>(&'a mut dyn SerialIo);
-
-impl<'a> VT100Err<'a> {
+impl<'a> VT100Out<'a> {
     #[inline]
     pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
         Self {
-            inner: VT100Inner(inner),
-            mode: SimpleTextOutputMode::default(),
+            inner: InnerSerial(inner),
+            mode: SimpleTextOutputMode::new(),
             is_shifted_out: false,
             charset: CharsetMode::AsciiBoxChar,
         }
@@ -40,52 +42,42 @@ impl<'a> VT100Err<'a> {
     #[inline]
     pub const fn with_charset(inner: &'a mut dyn SerialIo, charset: CharsetMode) -> Self {
         Self {
-            inner: VT100Inner(inner),
-            mode: SimpleTextOutputMode::default(),
+            inner: InnerSerial(inner),
+            mode: SimpleTextOutputMode::new(),
             is_shifted_out: false,
             charset,
         }
     }
 
+    pub fn wait_byte(&mut self) -> Option<u8> {
+        loop {
+            self.inner.0.wait_for_read_event().wait();
+            if let Some(ch) = self.inner.0.read_byte() {
+                return Some(ch);
+            }
+        }
+    }
+}
+
+impl VT100Out<'_> {
     #[inline]
     pub fn reset_with_charset(&mut self, charset: CharsetMode) {
         self.charset = charset;
         (self as &mut dyn SimpleTextOutput).reset();
     }
 
-    #[inline]
-    pub fn wait_response(&mut self, expected: &[u8]) -> Option<u8> {
-        while let Some(ch) = self.inner.0.read_byte() {
-            if expected.contains(&ch) {
-                return Some(ch);
-            }
-        }
-        None
-    }
-
-    pub fn wait_byte(&mut self) -> u8 {
-        loop {
-            if let Some(ch) = self.inner.0.read_byte() {
-                return ch;
-            }
-        }
-    }
-
-    pub fn get_cursor_position(&mut self) -> Option<(u8, u8)> {
-        // TODO: timeout
-        self.inner.0.flush_input();
-        let _ = self.inner.write_str("\x1b[6n");
+    pub fn wait_coords(&mut self, response_type: u8) -> Option<(u8, u8)> {
         let mut buf = [0u8; 16];
         let mut i = 0;
         while i < buf.len() {
-            let b = self.wait_byte();
+            let b = self.wait_byte()?;
             buf[i] = b;
             i += 1;
-            if b == b'R' {
+            if b == response_type {
                 break;
             }
         }
-        if i < 6 || buf[0] != 0x1b || buf[1] != b'[' || buf[i - 1] != b'R' {
+        if i < 6 || buf[0] != 0x1b || buf[1] != b'[' || buf[i - 1] != response_type {
             return None;
         }
         let mut semicolon_index = None;
@@ -96,11 +88,23 @@ impl<'a> VT100Err<'a> {
             }
         }
         let semicolon_index = semicolon_index?;
-        let row = core::str::from_utf8(&buf[2..semicolon_index]).ok()?;
-        let col = core::str::from_utf8(&buf[semicolon_index + 1..i - 1]).ok()?;
-        let row: u8 = row.parse().ok()?;
-        let col: u8 = col.parse().ok()?;
-        Some((col - 1, row - 1))
+        let rows = core::str::from_utf8(&buf[2..semicolon_index]).ok()?;
+        let cols = core::str::from_utf8(&buf[semicolon_index + 1..i - 1]).ok()?;
+        let rows: u8 = rows.parse().ok()?;
+        let cols: u8 = cols.parse().ok()?;
+        Some((cols, rows))
+    }
+
+    pub fn get_terminal_size(&mut self) -> Option<(u8, u8)> {
+        self.inner.0.flush_input();
+        let _ = self.inner.write_str("\x1b[18t");
+        self.wait_coords(b't')
+    }
+
+    pub fn get_cursor_position(&mut self) -> Option<(u8, u8)> {
+        self.inner.0.flush_input();
+        let _ = self.inner.write_str("\x1b[6n");
+        self.wait_coords(b'R').map(|(col, row)| (col - 1, row - 1))
     }
 
     #[inline]
@@ -112,7 +116,7 @@ impl<'a> VT100Err<'a> {
     }
 }
 
-impl Write for VT100Err<'_> {
+impl Write for VT100Out<'_> {
     #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         match self.charset {
@@ -151,7 +155,7 @@ impl Write for VT100Err<'_> {
     }
 }
 
-impl Write for VT100Inner<'_> {
+impl Write for InnerSerial<'_> {
     #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.0.write_bytes(s.as_bytes());
@@ -159,26 +163,29 @@ impl Write for VT100Inner<'_> {
     }
 }
 
-impl SimpleTextOutput for VT100Err<'_> {
+impl SimpleTextOutput for VT100Out<'_> {
     fn reset(&mut self) {
-        // reset and get terminal size
-        let _ = self.inner.write_str("\x1bc\x1b[255;255H");
-        if let Some((col, row)) = self.get_cursor_position() {
-            self.mode.columns = col.saturating_add(1);
-            self.mode.rows = row.saturating_add(1);
+        // reset inner tty
+        self.inner.0.reset();
+
+        // reset terminal
+        let _ = self.inner.write_str("\x1bc");
+
+        // get terminal size
+        if let Some((col, row)) = self.get_terminal_size() {
+            self.mode.columns = col;
+            self.mode.rows = row;
+        } else {
+            // fallback: move cursor to bottom-right and read position
+            let _ = self.inner.write_str("\x1b[255;255H");
+            if let Some((col, row)) = self.get_cursor_position() {
+                self.mode.columns = col.saturating_add(1);
+                self.mode.rows = row.saturating_add(1);
+            }
         }
 
-        // clear screen
+        // reset attributes
         self.set_attribute(0);
-        let _ = self.inner.write_str("\x1b[H");
-        for row in 0..self.mode.rows {
-            if row > 0 {
-                let _ = self.inner.write_char('\n');
-            }
-            for _ in 0..self.mode.columns {
-                let _ = self.inner.write_char(' ');
-            }
-        }
 
         // enable box drawing charset
         // if matches!(self.charset, CharsetMode::AsciiBoxChar) {
@@ -186,11 +193,7 @@ impl SimpleTextOutput for VT100Err<'_> {
         self.is_shifted_out = false;
         // }
 
-        // set cursor to home
-        self.set_cursor_position(0, 0);
-
-        // reset inner tty
-        self.inner.0.reset();
+        self.clear_screen();
     }
 
     fn set_attribute(&mut self, attribute: u8) {
@@ -247,15 +250,18 @@ impl SimpleTextOutput for VT100Err<'_> {
     }
 }
 
+/// VT100 Terminal Input/Output Driver
 pub struct VT100<'a> {
-    inner: VT100Err<'a>,
+    inner: VT100Out<'a>,
+    last_key_state: heapless::Vec<NonZeroInputKey, 16>,
 }
 
 impl<'a> VT100<'a> {
     #[inline]
     pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
         Self {
-            inner: VT100Err::new(inner),
+            inner: VT100Out::new(inner),
+            last_key_state: heapless::Vec::new(),
         }
     }
 }
@@ -299,15 +305,37 @@ impl SimpleTextOutput for VT100<'_> {
     }
 }
 
+impl VT100<'_> {
+    fn refill(&mut self) {
+        if !self.last_key_state.is_empty() {
+            return;
+        }
+        if let Some(key) = self
+            .inner
+            .inner
+            .0
+            .read_byte()
+            .and_then(|ch| NonZeroInputKey::new(0xffff, ch as u16))
+        {
+            self.last_key_state.push(key).unwrap();
+        }
+    }
+}
+
 impl SimpleTextInput for VT100<'_> {
     fn reset(&mut self) {
+        self.last_key_state.clear();
         self.inner.inner.0.reset();
     }
 
+    fn is_ready(&mut self) -> bool {
+        self.refill();
+        !self.last_key_state.is_empty()
+    }
+
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        match self.inner.inner.0.read_byte() {
-            Some(ch) => NonZeroInputKey::new(0xffff, ch as u16),
-            None => None,
-        }
+        // self.refill();
+        // self.last_key_state.try_remove(0)
+        self.is_ready().then(|| self.last_key_state.remove(0))
     }
 }

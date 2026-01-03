@@ -1,7 +1,6 @@
 //! Mini OS Library
 
 #![cfg_attr(not(test), no_std)]
-// #![feature(cfg_select)]
 #![feature(negative_impls)]
 
 extern crate alloc;
@@ -12,6 +11,7 @@ pub mod io;
 pub mod mem;
 pub mod platform;
 pub mod sync;
+pub mod task;
 
 #[allow(unused_imports)]
 pub use crate::_prelude_::*;

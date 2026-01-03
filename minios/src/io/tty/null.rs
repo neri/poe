@@ -2,10 +2,17 @@
 
 use super::*;
 
+/// Null TTY Device
+///
+/// This device has no internal state and performs no input or output operations.
 pub struct NullTty;
 
 impl SimpleTextInput for NullTty {
     fn reset(&mut self) {}
+
+    fn is_ready(&mut self) -> bool {
+        false
+    }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         None
