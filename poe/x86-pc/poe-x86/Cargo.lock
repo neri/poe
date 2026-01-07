@@ -198,6 +198,7 @@ name = "minios"
 version = "0.1.0"
 dependencies = [
  "acpi",
+ "bitflags",
  "edid",
  "embedded-graphics",
  "fdt",

@@ -6,6 +6,7 @@ pub mod vt100;
 use crate::task::event::{Event, PollResult, PollingEvent};
 use crate::*;
 use core::num::NonZero;
+use libhid::{Usage, UsageShort};
 
 pub trait SimpleTextInput {
     fn reset(&mut self);
@@ -16,7 +17,7 @@ pub trait SimpleTextInput {
 }
 
 impl<'a> dyn SimpleTextInput + 'a {
-    pub fn wait_for_key_event<'b>(&'b mut self) -> Event<'b> {
+    pub fn event_for_key<'b>(&'b mut self) -> Event<'b> {
         Event::with_polling(SimpleTextInputPoller(self))
     }
 }
@@ -34,11 +35,41 @@ impl PollingEvent for SimpleTextInputPoller<'_> {
     }
 }
 
+/// Input key structure.
+///
+/// `scan_code` (`usage()`) is represented as a HID Usage ID.
+/// `unicode_char` is a UTF-16 code unit.
+///
+/// # Note
+///
+/// * Invalid keystroke if `usage` value is 0.
+/// * If the `unicode_char` is 0, the key represents a non-character special key; refer to the `usage` value value for details in this case.
+/// * When the `unicode_char` falls within the range U+0020 to U+007E, the `usage` value may vary depending on the input locale and may not match the expected value.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InputKey {
-    pub scan_code: u16,
+    pub scan_code: UsageShort,
     pub unicode_char: u16,
+}
+
+impl InputKey {
+    /// Returns the Unicode character, if possible.
+    #[inline]
+    pub fn unicode_char(&self) -> Option<char> {
+        char::from_u32(self.unicode_char as u32)
+    }
+
+    /// Returns the HID Usage ID.
+    #[inline]
+    pub fn usage(&self) -> Usage {
+        Usage(self.scan_code.0 as u8)
+    }
+
+    /// Checks if the key is a special key (non-character).
+    #[inline]
+    pub const fn is_special_key(&self) -> bool {
+        self.unicode_char == 0
+    }
 }
 
 pub trait SimpleTextOutput: core::fmt::Write {
@@ -121,7 +152,7 @@ impl NonZeroInputKey {
     pub fn get(self) -> InputKey {
         let raw = self.0.get();
         InputKey {
-            scan_code: raw as u16,
+            scan_code: UsageShort(raw as u16),
             unicode_char: (raw >> 16) as u16,
         }
     }
@@ -130,7 +161,7 @@ impl NonZeroInputKey {
 impl From<InputKey> for Option<NonZeroInputKey> {
     #[inline]
     fn from(key: InputKey) -> Self {
-        NonZeroInputKey::new(key.scan_code, key.unicode_char)
+        NonZeroInputKey::new(key.scan_code.0, key.unicode_char)
     }
 }
 
@@ -155,7 +186,7 @@ pub trait SerialIo {
 }
 
 impl<'a> dyn SerialIo + 'a {
-    pub fn wait_for_read_event<'b>(&'b mut self) -> Event<'b> {
+    pub fn event_for_read<'b>(&'b mut self) -> Event<'b> {
         Event::with_polling(SerialPoller(self))
     }
 }

@@ -2,10 +2,11 @@
 
 mod cga_text;
 mod disk_bios;
+mod ps2;
 mod uart;
 mod vesa_bios;
-// mod ps2;
 
+#[allow(unused)]
 mod bios {
     use x86::prot::InterruptVector;
 
@@ -180,9 +181,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
         }
 
         if !USE_UART_STDIO {
-            let kbd = &mut *(&raw mut STDIN);
-            kbd.reset();
-            System::set_stdin(kbd);
+            let _ = ps2::Ps2::init();
         }
 
         vesa_bios::VesaBios::init();
@@ -214,44 +213,6 @@ impl SmapEntry {
             4 => MemoryType::AcpiNvs,
             // 2 => MemoryType::Reserved,
             _ => MemoryType::Reserved,
-        }
-    }
-}
-
-static mut STDIN: BiosTextInput = BiosTextInput {};
-
-struct BiosTextInput;
-
-impl SimpleTextInput for BiosTextInput {
-    fn reset(&mut self) {
-        while self.read_key_stroke().is_some() {}
-    }
-
-    fn is_ready(&mut self) -> bool {
-        unsafe {
-            let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x0100);
-            VM86::call_bios(bios::INT16, &mut regs);
-            !regs.eflags.contains(Eflags::ZF)
-        }
-    }
-
-    fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        unsafe {
-            let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x0100);
-            VM86::call_bios(bios::INT16, &mut regs);
-            if regs.eflags.contains(Eflags::ZF) {
-                return None;
-            }
-
-            regs.eax.set_d(0);
-            VM86::call_bios(bios::INT16, &mut regs);
-            InputKey {
-                scan_code: regs.eax.h() as u16,
-                unicode_char: regs.eax.b() as u16,
-            }
-            .into()
         }
     }
 }

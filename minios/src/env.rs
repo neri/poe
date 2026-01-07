@@ -215,13 +215,17 @@ impl System {
 
         loop {
             stdout.enable_cursor(true);
-            stdin.wait_for_key_event().wait();
+            stdin.event_for_key().wait();
             match stdin.read_key_stroke() {
                 Some(key) => {
                     stdout.enable_cursor(false);
                     let key = key.get();
-                    let c = key.unicode_char as u8 as char;
+                    let c = key.unicode_char().unwrap_or_default();
                     match c {
+                        '\x00' => {
+                            // non-character key
+                            let _ = write!(stdout, "[#{:04x}]", key.scan_code.0);
+                        }
                         // ctrl-c
                         '\x03' => {
                             return None;
@@ -255,6 +259,11 @@ impl System {
                                     buf.push(c);
                                 } else {
                                     // TODO: unprintable char
+                                    let _ = write!(
+                                        stdout,
+                                        "(#{:04x}:{:04x})",
+                                        c as usize, key.scan_code.0
+                                    );
                                 }
                             }
                         }

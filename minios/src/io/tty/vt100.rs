@@ -1,8 +1,7 @@
 //! VT100 Serial Terminal Driver
 
 use super::*;
-#[allow(unused_imports)]
-use crate::{task::event::Event, *};
+use crate::*;
 use tui::prelude::box_drawing::AsciiExt;
 
 const COLOR_TABLE: [u8; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
@@ -51,7 +50,7 @@ impl<'a> VT100Out<'a> {
 
     pub fn wait_byte(&mut self) -> Option<u8> {
         loop {
-            self.inner.0.wait_for_read_event().wait();
+            self.inner.0.event_for_read().wait();
             if let Some(ch) = self.inner.0.read_byte() {
                 return Some(ch);
             }
@@ -253,7 +252,7 @@ impl SimpleTextOutput for VT100Out<'_> {
 /// VT100 Terminal Input/Output Driver
 pub struct VT100<'a> {
     inner: VT100Out<'a>,
-    last_key_state: heapless::Vec<NonZeroInputKey, 16>,
+    key_buffer: heapless::Vec<NonZeroInputKey, 16>,
 }
 
 impl<'a> VT100<'a> {
@@ -261,7 +260,7 @@ impl<'a> VT100<'a> {
     pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
         Self {
             inner: VT100Out::new(inner),
-            last_key_state: heapless::Vec::new(),
+            key_buffer: heapless::Vec::new(),
         }
     }
 }
@@ -307,7 +306,7 @@ impl SimpleTextOutput for VT100<'_> {
 
 impl VT100<'_> {
     fn refill(&mut self) {
-        if !self.last_key_state.is_empty() {
+        if !self.key_buffer.is_empty() {
             return;
         }
         if let Some(key) = self
@@ -317,25 +316,25 @@ impl VT100<'_> {
             .read_byte()
             .and_then(|ch| NonZeroInputKey::new(0xffff, ch as u16))
         {
-            self.last_key_state.push(key).unwrap();
+            self.key_buffer.push(key).unwrap();
         }
     }
 }
 
 impl SimpleTextInput for VT100<'_> {
     fn reset(&mut self) {
-        self.last_key_state.clear();
+        self.key_buffer.clear();
         self.inner.inner.0.reset();
     }
 
     fn is_ready(&mut self) -> bool {
         self.refill();
-        !self.last_key_state.is_empty()
+        !self.key_buffer.is_empty()
     }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         // self.refill();
-        // self.last_key_state.try_remove(0)
-        self.is_ready().then(|| self.last_key_state.remove(0))
+        // self.key_buffer.try_remove(0)
+        self.is_ready().then(|| self.key_buffer.remove(0))
     }
 }
