@@ -1,57 +1,81 @@
+//! Human Interface Device (HID) manager
+
+#[path = "layouts/mod.rs"]
+pub mod layouts;
+
+use crate::*;
+use core::cell::UnsafeCell;
 use libhid::*;
 
-pub struct HidManager;
+static mut HID_MGR: UnsafeCell<HidManager> = UnsafeCell::new(HidManager::new());
+
+// Default to US 101-key layout
+static DEFAULT_LAYOUT: layouts::us101::Us101 = layouts::us101::Us101;
+
+pub struct HidManager {
+    layout: Option<Box<dyn Layout>>,
+}
 
 impl HidManager {
     #[allow(unused)]
     #[inline]
     const fn new() -> Self {
-        Self {}
+        Self { layout: None }
+    }
+
+    #[inline]
+    unsafe fn shared_mut<'a>() -> &'a mut Self {
+        unsafe { (&mut *(&raw mut HID_MGR)).get_mut() }
+    }
+
+    #[inline]
+    pub fn set_japanese_layout() {
+        let shared = unsafe { Self::shared_mut() };
+        let layout = layouts::jp109::Jp109;
+        shared.layout = Some(Box::new(layout));
+    }
+
+    pub fn set_layout(layout: Box<dyn Layout>) {
+        let shared = unsafe { Self::shared_mut() };
+        shared.layout = Some(layout);
+    }
+
+    pub fn current_layout<'a>() -> &'a dyn Layout {
+        let shared = unsafe { Self::shared_mut() };
+        match shared.layout.as_ref() {
+            Some(v) => v.as_ref(),
+            None => &DEFAULT_LAYOUT,
+        }
     }
 
     /// Translates a HID usage and modifier state into a Unicode character, if possible.
-    pub fn translate(usage: Usage, modifier: Modifier) -> Option<char> {
-        let usage = usage.0;
-        if usage >= 128 {
-            // currently unsupported
-            return None;
-        }
+    pub fn translate(key_stroke: KeyStroke) -> Option<char> {
+        Self::current_layout().translate(key_stroke)
+    }
 
-        if modifier.has_alt() {
-            return None;
-        } else if modifier.has_ctrl() {
-            let ascii = USAGE_TO_SHIFT[usage as usize];
-            return (ascii != 0 && ascii >= 0x40 && ascii <= 0x7e).then(|| (ascii & 0x1f) as char);
-        } else if modifier.has_shift() {
-            let ascii = USAGE_TO_SHIFT[usage as usize];
-            return (ascii != 0).then(|| ascii as char);
-        } else {
-            let ascii = USAGE_TO_ASCII[usage as usize];
-            (ascii != 0).then(|| ascii as char)
-        }
+    /// Infers a KeyStroke from a Unicode character, if possible.
+    pub fn infer_key_stroke_from_char(c: char) -> Option<KeyStroke> {
+        Self::current_layout().infer_key_stroke_from_char(c)
     }
 }
 
-#[rustfmt::skip]
-const USAGE_TO_ASCII: [u8; 128] = [
-    0x00, 0x00, 0x00, 0x00, b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l',
-    b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'1', b'2',
-    b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'0', 0x0d, 0x1b, 0x7f, b'\t', b' ', b'-', b'=', b'[',
-    b']', b'\\', 0x00, b';', b'\'', b'`', b',', b'.', b'/', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, b'/', b'*', b'-', b'+', 0x0d, b'1', b'2', b'3', b'4', b'5', b'6', b'7',
-    b'8', b'9', b'0', b'.', b'\\', 0x00, 0x00, b'=', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyStroke {
+    pub usage: Usage,
+    pub modifier: Modifier,
+}
 
-#[rustfmt::skip]
-const USAGE_TO_SHIFT: [u8; 128] = [
-    0x00, 0x00, 0x00, 0x00, b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L',
-    b'M', b'N', b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'!', b'@',
-    b'#', b'$', b'%', b'^', b'&', b'*', b'(', b')', 0x0d, 0x1b, 0x7f, b'\t', b' ', b'_', b'+', b'{',
-    b'}', b'|', 0x00, b':', b'"', b'~', b'<', b'>', b'?', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, b'/', b'*', b'-', b'+', 0x0d, b'1', b'2', b'3', b'4', b'5', b'6', b'7',
-    b'8', b'9', b'0', b'.', b'\\', 0x00, 0x00, b'=', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-];
+impl KeyStroke {
+    #[inline]
+    pub fn new(usage: Usage, modifier: Modifier) -> Self {
+        Self { usage, modifier }
+    }
+}
+
+pub trait Layout {
+    /// Translates a HID usage and modifier state into a Unicode character, if possible.
+    fn translate(&self, key_stroke: KeyStroke) -> Option<char>;
+
+    /// Infers a KeyStroke from a Unicode character, if possible.
+    fn infer_key_stroke_from_char(&self, c: char) -> Option<KeyStroke>;
+}

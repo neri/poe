@@ -3,10 +3,11 @@
 pub mod null;
 pub mod vt100;
 
+use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::task::event::{Event, PollResult, PollingEvent};
 use crate::*;
 use core::num::NonZero;
-use libhid::{Usage, UsageShort};
+use libhid::{Modifier, Usage};
 
 pub trait SimpleTextInput {
     fn reset(&mut self);
@@ -48,27 +49,79 @@ impl PollingEvent for SimpleTextInputPoller<'_> {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InputKey {
-    pub scan_code: UsageShort,
-    pub unicode_char: u16,
+    key_stroke: KeyStroke,
+    unicode_char: u16,
 }
 
 impl InputKey {
+    #[inline]
+    pub fn new(key_stroke: KeyStroke, unicode_char: u16) -> Self {
+        Self {
+            key_stroke,
+            unicode_char,
+        }
+    }
+
+    #[inline]
+    pub fn from_key_stroke(key_stroke: KeyStroke) -> Self {
+        let unicode_char = HidManager::translate(key_stroke)
+            .map(|c| c as u16)
+            .unwrap_or(0);
+        Self::new(key_stroke, unicode_char)
+    }
+
     /// Returns the Unicode character, if possible.
     #[inline]
     pub fn unicode_char(&self) -> Option<char> {
         char::from_u32(self.unicode_char as u32)
     }
 
-    /// Returns the HID Usage ID.
     #[inline]
-    pub fn usage(&self) -> Usage {
-        Usage(self.scan_code.0 as u8)
+    pub fn key_stroke(&self) -> KeyStroke {
+        self.key_stroke
     }
 
     /// Checks if the key is a special key (non-character).
     #[inline]
     pub const fn is_special_key(&self) -> bool {
         self.unicode_char == 0
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NonZeroInputKey(NonZero<u32>);
+
+impl NonZeroInputKey {
+    #[inline]
+    pub fn from_input_key(key: InputKey) -> Option<Self> {
+        if key.key_stroke.usage == Usage::NONE {
+            return None;
+        }
+        let raw_value = key.key_stroke.usage.0 as u32
+            | ((key.key_stroke.modifier.bits() as u32) << 8)
+            | ((key.unicode_char as u32) << 16);
+        // SAFETY: non-zero checked above
+        Some(Self(unsafe { NonZero::new_unchecked(raw_value) }))
+    }
+
+    #[inline]
+    pub fn get(self) -> InputKey {
+        let raw_value = self.0.get();
+        InputKey {
+            key_stroke: KeyStroke {
+                usage: Usage(raw_value as u8),
+                modifier: Modifier::from_bits_retain((raw_value >> 8) as u8),
+            },
+            unicode_char: (raw_value >> 16) as u16,
+        }
+    }
+}
+
+impl From<InputKey> for Option<NonZeroInputKey> {
+    #[inline]
+    fn from(key: InputKey) -> Self {
+        NonZeroInputKey::from_input_key(key)
     }
 }
 
@@ -131,37 +184,6 @@ impl SimpleTextOutputMode {
     #[inline]
     pub fn set_cursor_visible(&mut self, visible: bool) {
         self.cursor_visible = visible as u8;
-    }
-}
-
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NonZeroInputKey(NonZero<u32>);
-
-impl NonZeroInputKey {
-    #[inline]
-    pub const fn new(scan_code: u16, unicode_char: u16) -> Option<Self> {
-        if scan_code == 0 {
-            return None;
-        }
-        let raw = scan_code as u32 | (unicode_char as u32) << 16;
-        Some(Self(unsafe { NonZero::new_unchecked(raw) }))
-    }
-
-    #[inline]
-    pub fn get(self) -> InputKey {
-        let raw = self.0.get();
-        InputKey {
-            scan_code: UsageShort(raw as u16),
-            unicode_char: (raw >> 16) as u16,
-        }
-    }
-}
-
-impl From<InputKey> for Option<NonZeroInputKey> {
-    #[inline]
-    fn from(key: InputKey) -> Self {
-        NonZeroInputKey::new(key.scan_code.0, key.unicode_char)
     }
 }
 

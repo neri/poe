@@ -1,7 +1,8 @@
 //! FM TOWNS Keyboard Driver
 
-use crate::platform::x86_pc::pic::Irq;
+use crate::io::hid_mgr::KeyStroke;
 use crate::*;
+use crate::{io::hid_mgr::HidManager, platform::x86_pc::pic::Irq};
 use core::cell::UnsafeCell;
 use libhid::*;
 use x86::isolated_io::{IoPortRB, IoPortWB};
@@ -11,7 +12,7 @@ static mut FMT_KBD: UnsafeCell<FmtKbd> = UnsafeCell::new(FmtKbd::new());
 pub struct FmtKbd {
     leading_data: KbdLeadingData,
     key_modifier: Modifier,
-    key_buffer: heapless::Vec<NonZeroInputKey, 16>,
+    key_buffer: heapless::Vec<KeyStroke, 16>,
 }
 
 impl FmtKbd {
@@ -30,6 +31,8 @@ impl FmtKbd {
 
     pub unsafe fn init() {
         unsafe {
+            HidManager::set_japanese_layout();
+
             IoPortWB(0x0604).write(0x01);
             IoPortWB(0x0602).write(0xa1);
             IoPortWB(0x0604).write(0x01);
@@ -70,39 +73,13 @@ impl FmtKbd {
                 Modifier::LEFT_SHIFT,
                 leading.contains(KbdLeadingData::HAS_SHIFT),
             );
-            let scan_code = Usage(SCAN_TO_HID[0x7F & data as usize]);
-            if scan_code >= Usage::MOD_MIN && scan_code < Usage::MOD_MAX {
-                let bit_position =
-                    Modifier::from_bits_retain(1 << (scan_code.0 - Usage::MOD_MIN.0));
+            let usage = Usage(SCAN_TO_HID[0x7F & data as usize]);
+            if usage >= Usage::MOD_MIN && usage < Usage::MOD_MAX {
+                let bit_position = Modifier::from_bits_retain(1 << (usage.0 - Usage::MOD_MIN.0));
                 self.key_modifier.set(bit_position, !is_break);
             } else {
-                let ascii = SCAN_TO_ASCII[0x7F & data as usize];
-                let ascii = match ascii {
-                    0x21..=0x3f => {
-                        if self.key_modifier.has_shift() {
-                            ascii ^ 0x10
-                        } else {
-                            ascii
-                        }
-                    }
-                    0x40..=0x7e => {
-                        if self.key_modifier.has_ctrl() {
-                            ascii & 0x1f
-                        } else if self.key_modifier.has_shift() {
-                            ascii ^ 0x20
-                        } else {
-                            ascii
-                        }
-                    }
-                    _ => ascii,
-                };
-                let key = InputKey {
-                    unicode_char: ascii as u16,
-                    scan_code: UsageShort(scan_code.0 as u16),
-                };
-                Option::<NonZeroInputKey>::from(key).map(|key| {
-                    let _ = self.key_buffer.push(key);
-                });
+                let key_stroke = KeyStroke::new(usage, self.key_modifier);
+                let _ = self.key_buffer.push(key_stroke);
             }
         }
     }
@@ -120,7 +97,9 @@ impl SimpleTextInput for FmtKbd {
     }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        self.is_ready().then(|| self.key_buffer.remove(0))
+        self.is_ready()
+            .then(|| self.key_buffer.remove(0))
+            .and_then(|key_stroke| InputKey::from_key_stroke(key_stroke).into())
     }
 }
 
@@ -163,14 +142,13 @@ impl KbdLeadingData {
 // Keyboard scan code to HID usage table
 #[rustfmt::skip]
 static SCAN_TO_HID: [u8; 128] = [
-    0x00, 0x29, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2d, 0x2e, 0x89, 0x2a,
-    0x2b, 0x14, 0x1a, 0x08, 0x15, 0x17, 0x1c, 0x18, 0x0c, 0x12, 0x13, 0x2f, 0x30, 0x28, 0x04, 0x16,
-    0x07, 0x09, 0x0a, 0x0b, 0x0d, 0x0e, 0x0f, 0x33, 0x34, 0x31, 0x1d, 0x1b, 0x06, 0x19, 0x05, 0x11,
-    0x10, 0x36, 0x37, 0x38, 0x87, 0x2c, 0x55, 0x54, 0x57, 0x56, 0x5f, 0x60, 0x61, 0x00, 0x5c, 0x5d,
-    0x5e, 0x00, 0x59, 0x5a, 0x5b, 0x58, 0x62, 0x63, 0x4c, 0x00, 0x00, 0x4c, 0x00, 0x52, 0x4a, 0x50,
-    0x51, 0x4f, 0xe0, 0xe1, 0x00, 0x39, 0x00, 0x8b, 0x8a, 0x00, 0x00, 0x45, 0x00, 0x3a, 0x3b, 0x3c,
-    0x3d, 0x3e, 0x3f, 0x40, 0x41, 0x42, 0x43, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x46, 0x00, 0x00,
+    /*         -0    -1    -2    -3    -4    -5    -6    -7    -8    -9    -A    -B    -C    -D    -E    -F */
+    /* 0- */ 0x00, 0x29, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2d, 0x2e, 0x89, 0x2a,
+    /* 1- */ 0x2b, 0x14, 0x1a, 0x08, 0x15, 0x17, 0x1c, 0x18, 0x0c, 0x12, 0x13, 0x2f, 0x30, 0x28, 0x04, 0x16,
+    /* 2- */ 0x07, 0x09, 0x0a, 0x0b, 0x0d, 0x0e, 0x0f, 0x33, 0x34, 0x31, 0x1d, 0x1b, 0x06, 0x19, 0x05, 0x11,
+    /* 3- */ 0x10, 0x36, 0x37, 0x38, 0x87, 0x2c, 0x55, 0x54, 0x57, 0x56, 0x5f, 0x60, 0x61, 0x00, 0x5c, 0x5d,
+    /* 4- */ 0x5e, 0x00, 0x59, 0x5a, 0x5b, 0x58, 0x62, 0x63, 0x4c, 0x00, 0x00, 0x4c, 0x00, 0x52, 0x4a, 0x50,
+    /* 5- */ 0x51, 0x4f, 0xe0, 0xe1, 0x00, 0x39, 0x00, 0x8b, 0x8a, 0x00, 0x00, 0x45, 0x00, 0x3a, 0x3b, 0x3c,
+    /* 6- */ 0x3d, 0x3e, 0x3f, 0x40, 0x41, 0x42, 0x43, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    /* 7- */ 0x00, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x46, 0x00, 0x00,
 ];
-
-static SCAN_TO_ASCII: [u8; 128] = *b"\x00\x1b1234567890-^\\\x08\x09qwertyuiop@[\x0dasdfghjkl;:]zxcvbnm,./_ \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";

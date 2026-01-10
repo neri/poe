@@ -224,7 +224,11 @@ impl System {
                     match c {
                         '\x00' => {
                             // non-character key
-                            let _ = write!(stdout, "[#{:04x}]", key.scan_code.0);
+                            print!(
+                                "[#{:02x}{:02x}]",
+                                key.key_stroke().modifier.bits(),
+                                key.key_stroke().usage.0,
+                            );
                         }
                         // ctrl-c
                         '\x03' => {
@@ -259,11 +263,6 @@ impl System {
                                     buf.push(c);
                                 } else {
                                     // TODO: unprintable char
-                                    let _ = write!(
-                                        stdout,
-                                        "(#{:04x}:{:04x})",
-                                        c as usize, key.scan_code.0
-                                    );
                                 }
                             }
                         }

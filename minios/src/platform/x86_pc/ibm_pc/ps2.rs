@@ -1,7 +1,8 @@
 //! PS2 Driver
 
+use crate::io::hid_mgr::KeyStroke;
+use crate::platform::x86_pc::pic::Irq;
 use crate::*;
-use crate::{io::hid_mgr::HidManager, platform::x86_pc::pic::Irq};
 use bitflags::bitflags;
 use core::cell::UnsafeCell;
 use libhid::*;
@@ -12,7 +13,7 @@ static mut PS2: UnsafeCell<Ps2> = UnsafeCell::new(Ps2::new());
 pub struct Ps2 {
     key_phase: Ps2KeyPhase,
     key_modifier: Modifier,
-    key_buffer: heapless::Vec<NonZeroInputKey, 16>,
+    key_buffer: heapless::Vec<KeyStroke, 16>,
 }
 
 impl Ps2 {
@@ -106,14 +107,9 @@ impl Ps2 {
                 let bit_position = Modifier::from_bits_retain(1 << (usage.0 - Usage::MOD_MIN.0));
                 self.key_modifier.set(bit_position, !is_break);
             } else if !is_break {
-                let ch = HidManager::translate(usage, self.key_modifier);
-                let key = InputKey {
-                    scan_code: UsageShort(usage.0 as u16),
-                    unicode_char: ch.unwrap_or('\0') as u16,
-                };
-                Option::<NonZeroInputKey>::from(key).map(|key| {
-                    let _ = self.key_buffer.push(key);
-                });
+                let _ = self
+                    .key_buffer
+                    .push(KeyStroke::new(usage, self.key_modifier));
             }
         }
     }
@@ -199,7 +195,9 @@ impl SimpleTextInput for Ps2 {
     }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        self.is_ready().then(|| self.key_buffer.remove(0))
+        self.is_ready()
+            .then(|| self.key_buffer.remove(0))
+            .and_then(|key_stroke| InputKey::from_key_stroke(key_stroke).into())
     }
 }
 

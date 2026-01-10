@@ -1,28 +1,26 @@
 //! Human Interface Devices
 
 use alloc::vec::Vec;
-use core::{
-    mem::transmute,
-    num::{NonZeroU8, NonZeroU16, NonZeroU32},
-    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Deref},
-};
+use core::mem::transmute;
+use core::num::NonZero;
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Deref};
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UsagePage(pub NonZeroU16);
+pub struct UsagePage(pub NonZero<u16>);
 
 impl UsagePage {
-    pub const GENERIC_DESKTOP: Self = Self(NonZeroU16::new(0x0001).unwrap());
-    pub const KEYBOARD: Self = Self(NonZeroU16::new(0x0007).unwrap());
-    pub const LED: Self = Self(NonZeroU16::new(0x0008).unwrap());
-    pub const BUTTON: Self = Self(NonZeroU16::new(0x0009).unwrap());
-    pub const CONSUMER: Self = Self(NonZeroU16::new(0x000C).unwrap());
-    pub const DIGITIZERS: Self = Self(NonZeroU16::new(0x000D).unwrap());
+    pub const GENERIC_DESKTOP: Self = Self(NonZero::new(0x0001).unwrap());
+    pub const KEYBOARD: Self = Self(NonZero::new(0x0007).unwrap());
+    pub const LED: Self = Self(NonZero::new(0x0008).unwrap());
+    pub const BUTTON: Self = Self(NonZero::new(0x0009).unwrap());
+    pub const CONSUMER: Self = Self(NonZero::new(0x000C).unwrap());
+    pub const DIGITIZERS: Self = Self(NonZero::new(0x000D).unwrap());
 }
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UsageLong(NonZeroU32);
+pub struct UsageLong(NonZero<u32>);
 
 impl UsageLong {
     pub const POINTER: Self = Self::generic(0x0001);
@@ -235,7 +233,7 @@ impl UsageLong {
     #[inline]
     pub const fn new(page: UsagePage, usage: UsageShort) -> Self {
         unsafe {
-            Self(NonZeroU32::new_unchecked(
+            Self(NonZero::new_unchecked(
                 usage.0 as u32 + (page.0.get() as u32) * 0x10000,
             ))
         }
@@ -248,7 +246,7 @@ impl UsageLong {
 
     #[inline]
     pub const fn page(&self) -> Option<UsagePage> {
-        match NonZeroU16::new(self.page_u16()) {
+        match NonZero::new(self.page_u16()) {
             Some(v) => Some(UsagePage(v)),
             None => None,
         }
@@ -256,7 +254,7 @@ impl UsageLong {
 
     #[inline]
     pub const unsafe fn page_unchecked(&self) -> UsagePage {
-        unsafe { UsagePage(NonZeroU16::new_unchecked(self.page_u16())) }
+        unsafe { UsagePage(NonZero::new_unchecked(self.page_u16())) }
     }
 
     #[inline]
@@ -518,6 +516,22 @@ impl Modifier {
     }
 }
 
+impl BitOr<Self> for Modifier {
+    type Output = Self;
+
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl BitOrAssign<Self> for Modifier {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
 impl From<Modifier> for usize {
     #[inline]
     fn from(v: Modifier) -> Self {
@@ -700,12 +714,12 @@ impl From<MouseButton> for usize {
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct HidReportId(NonZeroU8);
+pub struct HidReportId(NonZero<u8>);
 
 impl HidReportId {
     #[inline]
     pub const fn new(v: u8) -> Option<Self> {
-        match NonZeroU8::new(v) {
+        match NonZero::new(v) {
             Some(v) => Some(Self(v)),
             None => None,
         }
@@ -1202,7 +1216,7 @@ pub enum DeviceMode {
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NonZeroUsageShort(pub NonZeroU16);
+pub struct NonZeroUsageShort(pub NonZero<u16>);
 
 impl NonZeroUsageShort {
     #[inline]
@@ -1212,7 +1226,7 @@ impl NonZeroUsageShort {
 
     #[inline]
     pub const fn new(value: UsageShort) -> Option<Self> {
-        match NonZeroU16::new(value.0) {
+        match NonZero::new(value.0) {
             Some(v) => Some(Self(v)),
             None => None,
         }
@@ -1220,7 +1234,7 @@ impl NonZeroUsageShort {
 
     #[inline]
     pub const unsafe fn new_unchecked(value: UsageShort) -> Self {
-        unsafe { Self(NonZeroU16::new_unchecked(value.0)) }
+        unsafe { Self(NonZero::new_unchecked(value.0)) }
     }
 }
 

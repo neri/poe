@@ -309,14 +309,20 @@ impl VT100<'_> {
         if !self.key_buffer.is_empty() {
             return;
         }
-        if let Some(key) = self
-            .inner
-            .inner
-            .0
-            .read_byte()
-            .and_then(|ch| NonZeroInputKey::new(0xffff, ch as u16))
-        {
-            self.key_buffer.push(key).unwrap();
+
+        let ch = self.inner.inner.0.read_byte();
+        // TODO: handle escape sequences
+
+        if let Some(ch) = ch {
+            let ch = ch as char;
+            let key_stroke = HidManager::infer_key_stroke_from_char(ch).unwrap_or(KeyStroke {
+                usage: Usage::ERR_ROLL_OVER,
+                modifier: Modifier::empty(),
+            });
+            let key = InputKey::new(key_stroke, ch as u16);
+            NonZeroInputKey::from_input_key(key).map(|v| {
+                let _ = self.key_buffer.push(v);
+            });
         }
     }
 }

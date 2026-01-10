@@ -1,4 +1,4 @@
-//! Human Interface Device
+//! Human Interface Devices
 
 #![cfg_attr(not(test), no_std)]
 
