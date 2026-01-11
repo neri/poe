@@ -194,18 +194,21 @@ impl System {
         }
     }
 
-    pub fn wait_for_events<'a, 'b, 'c>(events: &'a mut [&'c mut Event<'b>]) -> usize {
-        loop {
+    pub fn wait_for_events<'a, 'b, 'c>(
+        events: &'a mut [&'b mut Event<'c>],
+    ) -> &'a mut &'b mut Event<'c> {
+        let index = 'main: loop {
             for (i, event) in events.iter_mut().enumerate() {
                 match event.poll() {
                     PollResult::Ready => {
-                        return i;
+                        break 'main i;
                     }
                     PollResult::Pending => {}
                 }
             }
             Hal::cpu().wait_for_interrupt();
-        }
+        };
+        events.get_mut(index).unwrap()
     }
 
     pub fn line_input(max_len: usize) -> Option<String> {
