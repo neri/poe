@@ -1,11 +1,11 @@
 //! Human Interface Device (HID) manager
 
-#[path = "layouts/mod.rs"]
-pub mod layouts;
-
 use crate::*;
 use core::cell::UnsafeCell;
+use libhid::layouts::*;
 use libhid::*;
+
+pub use layouts::KeyStroke;
 
 static mut HID_MGR: UnsafeCell<HidManager> = UnsafeCell::new(HidManager::new());
 
@@ -13,7 +13,7 @@ static mut HID_MGR: UnsafeCell<HidManager> = UnsafeCell::new(HidManager::new());
 static DEFAULT_LAYOUT: layouts::us101::Us101 = layouts::us101::Us101;
 
 pub struct HidManager {
-    layout: Option<Box<dyn Layout>>,
+    layout: Option<Box<dyn KeyboardLayout>>,
 }
 
 impl HidManager {
@@ -35,12 +35,12 @@ impl HidManager {
         shared.layout = Some(Box::new(layout));
     }
 
-    pub fn set_layout(layout: Box<dyn Layout>) {
+    pub fn set_layout(layout: Box<dyn KeyboardLayout>) {
         let shared = unsafe { Self::shared_mut() };
         shared.layout = Some(layout);
     }
 
-    pub fn current_layout<'a>() -> &'a dyn Layout {
+    pub fn current_layout<'a>() -> &'a dyn KeyboardLayout {
         let shared = unsafe { Self::shared_mut() };
         match shared.layout.as_ref() {
             Some(v) => v.as_ref(),
@@ -53,29 +53,8 @@ impl HidManager {
         Self::current_layout().translate(key_stroke)
     }
 
-    /// Infers a KeyStroke from a Unicode character, if possible.
-    pub fn infer_key_stroke_from_char(c: char) -> Option<KeyStroke> {
-        Self::current_layout().infer_key_stroke_from_char(c)
+    /// Estimate a KeyStroke from a Unicode character, if possible.
+    pub fn estimate_key_stroke_from_char(c: char) -> Option<KeyStroke> {
+        Self::current_layout().estimate_key_stroke_from_char(c)
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct KeyStroke {
-    pub usage: Usage,
-    pub modifier: Modifier,
-}
-
-impl KeyStroke {
-    #[inline]
-    pub fn new(usage: Usage, modifier: Modifier) -> Self {
-        Self { usage, modifier }
-    }
-}
-
-pub trait Layout {
-    /// Translates a HID usage and modifier state into a Unicode character, if possible.
-    fn translate(&self, key_stroke: KeyStroke) -> Option<char>;
-
-    /// Infers a KeyStroke from a Unicode character, if possible.
-    fn infer_key_stroke_from_char(&self, c: char) -> Option<KeyStroke>;
 }

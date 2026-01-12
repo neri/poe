@@ -6,3 +6,11 @@ extern crate alloc;
 
 mod hid;
 pub use hid::*;
+
+#[path = "layouts/mod.rs"]
+pub mod layouts;
+
+pub mod parser;
+
+#[cfg(test)]
+mod tests;

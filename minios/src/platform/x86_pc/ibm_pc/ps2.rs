@@ -89,7 +89,7 @@ impl Ps2 {
             self.key_phase = Ps2KeyPhase::Default;
             return;
         }
-        if data == Ps2Data::SCAN_E0 {
+        if data == Ps2Data::PREFIX_E0 {
             self.key_phase = Ps2KeyPhase::PrefixE0;
         } else {
             let is_break = data.is_break();
@@ -237,7 +237,7 @@ impl Ps2Data {
     const DISABLE_SEND: Ps2Data = Ps2Data(0xF5);
     const SET_DEFAULT: Ps2Data = Ps2Data(0xF6);
 
-    const SCAN_E0: Ps2Data = Ps2Data(0xE0);
+    const PREFIX_E0: Ps2Data = Ps2Data(0xE0);
 
     const fn is_break(self) -> bool {
         (self.0 & 0x80) != 0

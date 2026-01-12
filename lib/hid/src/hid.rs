@@ -16,6 +16,14 @@ impl UsagePage {
     pub const BUTTON: Self = Self(NonZero::new(0x0009).unwrap());
     pub const CONSUMER: Self = Self(NonZero::new(0x000C).unwrap());
     pub const DIGITIZERS: Self = Self(NonZero::new(0x000D).unwrap());
+
+    #[inline]
+    pub const fn from_u16(value: u16) -> Option<Self> {
+        match NonZero::new(value) {
+            Some(v) => Some(Self(v)),
+            None => None,
+        }
+    }
 }
 
 #[repr(transparent)]
@@ -236,6 +244,36 @@ impl UsageLong {
             Self(NonZero::new_unchecked(
                 usage.0 as u32 + (page.0.get() as u32) * 0x10000,
             ))
+        }
+    }
+
+    #[inline]
+    pub const fn from_u32(value: u32) -> Option<Self> {
+        let page = match NonZero::new((value >> 16) as u16) {
+            Some(v) => UsagePage(v),
+            None => return None,
+        };
+        let usage_short = UsageShort((value & 0xFFFF) as u16);
+        Some(Self::new(page, usage_short))
+    }
+
+    /// # SAFETY
+    ///
+    /// The value must not be zero.
+    #[inline]
+    pub unsafe fn from_u32_unchecked(value: u32) -> Self {
+        unsafe { Self(NonZero::new_unchecked(value)) }
+    }
+
+    /// Creates a UsageLong from a possibly short usage value and a usage page.
+    pub fn from_maybe_short(value: u32, page: Option<UsagePage>) -> Option<Self> {
+        if value <= 0xFFFF {
+            match page {
+                Some(p) => Some(Self::new(p, UsageShort(value as u16))),
+                None => None,
+            }
+        } else {
+            Some(unsafe { Self::from_u32_unchecked(value) })
         }
     }
 
@@ -513,6 +551,11 @@ impl Modifier {
     #[inline]
     pub const fn has_alt(self) -> bool {
         self.contains(Self::LEFT_ALT) | self.contains(Self::RIGHT_ALT)
+    }
+
+    #[inline]
+    pub const fn has_menu(self) -> bool {
+        self.contains(Self::LEFT_GUI) | self.contains(Self::RIGHT_GUI)
     }
 }
 

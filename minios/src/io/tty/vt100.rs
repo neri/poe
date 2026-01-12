@@ -315,7 +315,7 @@ impl VT100<'_> {
 
         if let Some(ch) = ch {
             let ch = ch as char;
-            let key_stroke = HidManager::infer_key_stroke_from_char(ch).unwrap_or(KeyStroke {
+            let key_stroke = HidManager::estimate_key_stroke_from_char(ch).unwrap_or(KeyStroke {
                 usage: Usage::ERR_ROLL_OVER,
                 modifier: Modifier::empty(),
             });
