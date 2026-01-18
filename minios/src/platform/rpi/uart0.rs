@@ -67,7 +67,7 @@ impl Uart0 {
             // Clear pending interrupts.
             Uart0::ICR.write(0x7ff);
 
-            let mut mbox = Mbox::PROP.new::<10>();
+            let mut mbox = Mbox::PROP.fixed::<10>();
             mbox.append(Tag::SetClockRate(ClockId::UART, 3000000, 0))?;
             mbox.call()?;
 

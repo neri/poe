@@ -1,5 +1,5 @@
 use super::mbox::{Mbox, PixelOrder, Tag};
-use crate::io::graphics::*;
+use crate::io::graphics::{color::IndexedColor, *};
 use crate::*;
 use core::mem::transmute;
 use edid::Edid;
@@ -43,9 +43,22 @@ impl Fb {
             pixel_format: PixelFormat::BGRX8888,
         });
         for template in &[
-            (800, 600),
+            // (320, 200),
+            // (320, 240),
             (640, 480),
-            (320, 200),
+            (800, 600),
+            (1024, 768),
+        ] {
+            driver.modes.push(ModeInfo {
+                width: template.0 as u16,
+                height: template.1 as u16,
+                bytes_per_scanline: template.0 as u16,
+                pixel_format: PixelFormat::Indexed8,
+            });
+        }
+        for template in &[
+            (640, 480),
+            (800, 600),
             (1024, 768),
             (1280, 720),
             (1920, 1080),
@@ -63,29 +76,81 @@ impl Fb {
         System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
     }
 
-    pub fn set_resolution(width: u32, height: u32) -> Result<(*mut u32, u32, u32, usize), ()> {
-        let mut mbox = Mbox::PROP.new::<35>();
-        mbox.append(Tag::SetPhysicalWH(width, height))?;
-        mbox.append(Tag::SetVirtualWH(width, height))?;
-        mbox.append(Tag::SetVirtualOffset(0, 0))?;
-        mbox.append(Tag::SetDepth(32))?;
-        mbox.append(Tag::SetPixelOrder(PixelOrder::BGR))?;
-        let index_fb = mbox.append(Tag::GetFb(4096))?;
-        let index_pitch = mbox.append(Tag::GetPitch)?;
+    pub fn set_resolution(
+        width: u32,
+        height: u32,
+        pixel_format: PixelFormat,
+    ) -> Result<(*mut u32, u32, u32, usize), ()> {
+        match pixel_format {
+            PixelFormat::BGRX8888 | PixelFormat::RGBX8888 => {
+                let mut mbox = Mbox::PROP.fixed::<35>();
+                mbox.append(Tag::SetPhysicalWH(width, height))?;
+                mbox.append(Tag::SetVirtualWH(width, height))?;
+                mbox.append(Tag::SetVirtualOffset(0, 0))?;
 
-        match mbox.call() {
-            Ok(mbox) => {
-                let ptr = (mbox.response(index_fb) & 0x3fff_ffff) as usize as *mut u32;
-                let stride = mbox.response(index_pitch) as usize / 4;
-                Ok((ptr, width, height, stride))
+                mbox.append(Tag::SetDepth(32))?;
+                match pixel_format {
+                    PixelFormat::BGRX8888 => {
+                        mbox.append(Tag::SetPixelOrder(PixelOrder::BGR))?;
+                    }
+                    PixelFormat::RGBX8888 => {
+                        mbox.append(Tag::SetPixelOrder(PixelOrder::RGB))?;
+                    }
+                    _ => unreachable!(),
+                }
+
+                let index_fb = mbox.append(Tag::GetFb(4096))?;
+                let index_pitch = mbox.append(Tag::GetPitch)?;
+
+                match mbox.call() {
+                    Ok(mbox) => {
+                        let stride = mbox.response(index_pitch) as usize;
+                        let ptr = (mbox.response(index_fb) & 0x3fff_ffff) as usize as *mut u32;
+                        Ok((ptr, width, height, stride))
+                    }
+                    Err(_) => Err(()),
+                }
             }
-            Err(_) => Err(()),
+            PixelFormat::Indexed8 => {
+                let (pw, ph, vw, vh, adjust_offset) = match (width, height) {
+                    // (320, 200) => (320, 240, 320, 240, 20),
+                    _ => (width, height, width, height, 0),
+                };
+
+                let mut mbox = Mbox::PROP.alloc(280);
+                mbox.append(Tag::SetPhysicalWH(pw, ph))?;
+                mbox.append(Tag::SetVirtualWH(vw, vh))?;
+                mbox.append(Tag::SetVirtualOffset(0, 0))?;
+
+                mbox.append(Tag::SetDepth(8))?;
+                mbox.append(Tag::SetPixelOrder(PixelOrder::RGB))?;
+                // Convert the palette because the RPi firmware expects another format.
+                let mut palette = Box::new(IndexedColor::COLOR_PALETTE.clone());
+                palette.iter_mut().for_each(|color| {
+                    *color = ((*color >> 16) & 0xff) | (*color & 0xff00) | ((*color & 0xff) << 16);
+                });
+                mbox.append(Tag::SetPalette(&palette))?;
+
+                let index_fb = mbox.append(Tag::GetFb(4096))?;
+                let index_pitch = mbox.append(Tag::GetPitch)?;
+
+                match mbox.call() {
+                    Ok(mbox) => {
+                        let stride = mbox.response(index_pitch) as usize;
+                        let ptr = ((mbox.response(index_fb) as usize & 0x3fff_ffff)
+                            + (adjust_offset * stride))
+                            as *mut u32;
+                        Ok((ptr, width, height, stride))
+                    }
+                    Err(_) => Err(()),
+                }
+            }
         }
     }
 
     #[track_caller]
     pub fn get_default_size() -> (u32, u32) {
-        let mut mbox = Mbox::PROP.new::<8>();
+        let mut mbox = Mbox::PROP.fixed::<8>();
         let index_pwh = mbox.append(Tag::GetPhysicalWH).unwrap();
 
         match mbox.call() {
@@ -101,7 +166,7 @@ impl Fb {
     }
 
     pub fn get_edid_size(result: Option<&mut [u8; 128]>) -> Result<(u32, u32), ()> {
-        let mut mbox = Mbox::PROP.new::<40>();
+        let mut mbox = Mbox::PROP.fixed::<40>();
         let index_edid = mbox.append(Tag::GetEdid(0))?;
 
         match mbox.call() {
@@ -123,7 +188,7 @@ impl Fb {
     }
 
     pub fn set_overscan(top: u32, bottom: u32, left: u32, right: u32) -> Result<(), ()> {
-        let mut mbox = Mbox::PROP.new::<10>();
+        let mut mbox = Mbox::PROP.fixed::<10>();
         mbox.append(Tag::SetOverscan(top, bottom, left, right))?;
         match mbox.call() {
             Ok(_) => Ok(()),
@@ -132,7 +197,7 @@ impl Fb {
     }
 
     pub fn get_fb() -> Result<(PhysicalAddress, usize), ()> {
-        let mut mbox = Mbox::PROP.new::<8>();
+        let mut mbox = Mbox::PROP.fixed::<8>();
         let index_fb = mbox.append(Tag::GetFb(0))?;
 
         match mbox.call() {
@@ -158,13 +223,14 @@ impl GraphicsOutputDevice for Fb {
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {
         let info = *self.modes.get(mode.0 as usize).ok_or(())?;
-        if let Ok((ptr, _w, h, stride)) = Fb::set_resolution(info.width as u32, info.height as u32)
+        if let Ok((ptr, _w, h, stride)) =
+            Fb::set_resolution(info.width as u32, info.height as u32, info.pixel_format)
         {
             self.current_mode = CurrentMode {
                 current: mode,
                 info,
                 fb: PhysicalAddress::from_usize(ptr as usize),
-                fb_size: (stride * h as usize * 4),
+                fb_size: (stride * h as usize),
             };
             Ok(())
         } else {

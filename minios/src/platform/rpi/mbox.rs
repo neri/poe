@@ -22,19 +22,24 @@ pub enum Mbox {
 
 impl Mbox {
     #[inline]
-    pub const fn new<const N: usize>(&self) -> MboxContext<Request, N> {
-        MboxContext::new(*self)
+    pub const fn fixed<const N: usize>(&self) -> MboxContext<Request, FixedPayload<N>> {
+        MboxContext::fixed(*self)
+    }
+
+    #[inline]
+    pub fn alloc(&self, n: usize) -> MboxContext<Request, DynamicPayload> {
+        MboxContext::alloc(*self, n)
     }
 }
 
-pub struct MboxContext<CONTEXT: MboxContextType, const N: usize> {
-    payload: Payload<N>,
+pub struct MboxContext<CONTEXT: MboxContextType, PAYLOAD: Payload> {
+    payload: PAYLOAD,
     chan: Mbox,
     index: usize,
     _phantom: PhantomData<CONTEXT>,
 }
 
-impl<CONTEXT: MboxContextType, const N: usize> MboxContext<CONTEXT, N> {
+impl<CONTEXT: MboxContextType, PAYLOAD: Payload> MboxContext<CONTEXT, PAYLOAD> {
     const REQUEST: u32 = 0x0000_0000;
     const RESPONSE: u32 = 0x8000_0000;
     const FULL: u32 = 0x8000_0000;
@@ -42,17 +47,17 @@ impl<CONTEXT: MboxContextType, const N: usize> MboxContext<CONTEXT, N> {
 
     #[inline]
     pub fn mbox_addr(&self) -> u32 {
-        let p = self.payload.0.as_ptr() as usize as u32;
+        let p = self.payload.as_slice().as_ptr() as usize as u32;
         p | (self.chan as u32)
     }
 }
 
-impl<const N: usize> MboxContext<Request, N> {
+impl<const N: usize> MboxContext<Request, FixedPayload<N>> {
     #[inline]
-    pub const fn new(chan: Mbox) -> Self {
+    pub const fn fixed(chan: Mbox) -> Self {
         assert!(N >= 6);
         let mut mbox = Self {
-            payload: Payload([0; N]),
+            payload: FixedPayload([0; N]),
             chan,
             index: 2,
             _phantom: PhantomData,
@@ -60,7 +65,28 @@ impl<const N: usize> MboxContext<Request, N> {
         mbox.payload.0[1] = Self::REQUEST;
         mbox
     }
+}
 
+impl MboxContext<Request, DynamicPayload> {
+    #[inline]
+    pub fn alloc(chan: Mbox, n: usize) -> Self {
+        assert!(n >= 6);
+        let fixup = 1023;
+        let n = n.checked_add(fixup).unwrap() & !fixup;
+        let mut vec = Vec::with_capacity(n);
+        vec.resize(n, 0);
+        let mut mbox = Self {
+            payload: DynamicPayload(vec),
+            chan,
+            index: 2,
+            _phantom: PhantomData,
+        };
+        mbox.payload.0[1] = Self::REQUEST;
+        mbox
+    }
+}
+
+impl<PAYLOAD: Payload> MboxContext<Request, PAYLOAD> {
     #[inline]
     pub fn append(&mut self, tag: Tag) -> Result<usize, ()> {
         tag.append_to(self)
@@ -68,7 +94,7 @@ impl<const N: usize> MboxContext<Request, N> {
 
     #[inline]
     fn _push(&mut self, val: u32) -> Result<usize, ()> {
-        match self.payload.0.get_mut(self.index as usize) {
+        match self.payload.as_slice_mut().get_mut(self.index as usize) {
             Some(p) => {
                 *p = val;
                 self.index += 1;
@@ -98,14 +124,15 @@ impl<const N: usize> MboxContext<Request, N> {
     unsafe fn flush_payload(&self) {
         compiler_fence(Ordering::SeqCst);
         unsafe {
-            asm!("dc civac, {}", in(reg) self.payload.0.as_ptr());
+            asm!("dc civac, {}", in(reg) self.payload.as_slice().as_ptr());
         }
+        compiler_fence(Ordering::SeqCst);
     }
 
-    pub fn call(mut self) -> Result<MboxContext<Response, N>, ()> {
+    pub fn call(mut self) -> Result<MboxContext<Response, PAYLOAD>, ()> {
         unsafe {
             self._push(RawTag::End.as_u32())?;
-            self.payload.0[0] = self.index as u32 * 4;
+            self.payload.as_slice_mut()[0] = self.index as u32 * 4;
 
             self.flush_payload();
 
@@ -131,7 +158,7 @@ impl<const N: usize> MboxContext<Request, N> {
 
             self.flush_payload();
 
-            if self.payload.0[1] == Self::RESPONSE {
+            if self.payload.as_slice()[1] == Self::RESPONSE {
                 Ok(MboxContext {
                     payload: self.payload,
                     chan: self.chan,
@@ -145,11 +172,11 @@ impl<const N: usize> MboxContext<Request, N> {
     }
 }
 
-impl<const N: usize> MboxContext<Response, N> {
+impl<PAYLOAD: Payload> MboxContext<Response, PAYLOAD> {
     #[inline]
     #[track_caller]
     pub fn slice(&self) -> &[u32] {
-        &self.payload.0[..self.index]
+        &self.payload.as_slice()[..self.index]
     }
 
     #[inline]
@@ -174,6 +201,42 @@ impl MboxContextType for Request {}
 pub struct Response;
 
 impl MboxContextType for Response {}
+
+pub trait Payload {
+    fn as_slice(&self) -> &[u32];
+
+    fn as_slice_mut(&mut self) -> &mut [u32];
+}
+
+#[repr(align(16))]
+pub struct FixedPayload<const N: usize>([u32; N]);
+
+impl<const N: usize> Payload for FixedPayload<N> {
+    #[inline]
+    fn as_slice(&self) -> &[u32] {
+        &self.0
+    }
+
+    #[inline]
+    fn as_slice_mut(&mut self) -> &mut [u32] {
+        &mut self.0
+    }
+}
+
+#[repr(transparent)]
+pub struct DynamicPayload(Vec<u32>);
+
+impl Payload for DynamicPayload {
+    #[inline]
+    fn as_slice(&self) -> &[u32] {
+        &self.0
+    }
+
+    #[inline]
+    fn as_slice_mut(&mut self) -> &mut [u32] {
+        &mut self.0
+    }
+}
 
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]
@@ -200,9 +263,6 @@ unsafe impl Mmio32 for Regs {
         Self::base_addr() + *self as usize
     }
 }
-
-#[repr(align(16))]
-pub struct Payload<const N: usize>([u32; N]);
 
 #[allow(dead_code)]
 #[repr(u32)]
@@ -231,6 +291,9 @@ pub enum RawTag {
     SetVirtualOffset = 0x00048009,
     GetOverscan = 0x0004000A,
     SetOverscan = 0x0004800A,
+
+    GetPalette = 0x0004000B,
+    SetPalette = 0x0004800B,
 }
 
 impl RawTag {
@@ -262,7 +325,7 @@ pub enum ClockId {
 }
 
 #[allow(dead_code)]
-pub enum Tag {
+pub enum Tag<'a> {
     SetClockRate(ClockId, u32, u32),
     GetPhysicalWH,
     SetPhysicalWH(u32, u32),
@@ -276,12 +339,14 @@ pub enum Tag {
     GetEdid(u32),
     GetOverscan,
     SetOverscan(u32, u32, u32, u32),
+    GetPalette,
+    SetPalette(&'a [u32; 256]),
 }
 
-impl Tag {
+impl Tag<'_> {
     #[inline]
     const fn info(&self) -> (RawTag, u32) {
-        match *self {
+        match self {
             Tag::SetClockRate(_, _, _) => (RawTag::SetClockRate, 12),
             Tag::GetPhysicalWH => (RawTag::GetPhysicalWH, 8),
             Tag::SetPhysicalWH(_, _) => (RawTag::SetPhysicalWH, 8),
@@ -295,12 +360,14 @@ impl Tag {
             Tag::GetOverscan => (RawTag::GetOverscan, 16),
             Tag::SetOverscan(_, _, _, _) => (RawTag::SetOverscan, 16),
             Tag::GetEdid(_) => (RawTag::GetEdid, 136),
+            Tag::GetPalette => (RawTag::GetPalette, 1024),
+            Tag::SetPalette(_) => (RawTag::SetPalette, 1032),
         }
     }
 
-    pub fn append_to<const N: usize>(
+    pub fn append_to<PAYLOAD: Payload>(
         &self,
-        slice: &mut MboxContext<Request, N>,
+        slice: &mut MboxContext<Request, PAYLOAD>,
     ) -> Result<usize, ()> {
         let (tag, len1) = self.info();
         let new_len = slice.index + (len1 as usize + 3) / 4 + 3;
@@ -309,20 +376,24 @@ impl Tag {
         slice._push(len1)?;
         let result = slice._push(0)?;
 
-        let index = match *self {
-            Tag::SetClockRate(x, y, z) => slice._push_slice(&[x as u32, y, z]),
-            Tag::SetPhysicalWH(x, y) => slice._push_slice(&[x, y]),
-            Tag::SetVirtualWH(x, y) => slice._push_slice(&[x, y]),
-            Tag::SetVirtualOffset(x, y) => slice._push_slice(&[x, y]),
-            Tag::SetDepth(x) => slice._push(x),
-            Tag::SetPixelOrder(x) => slice._push(x as u32),
-            Tag::GetFb(x) => slice._push_slice(&[x, 0]),
+        let index = match self {
+            Tag::SetClockRate(x, y, z) => slice._push_slice(&[*x as u32, *y, *z]),
+            Tag::SetPhysicalWH(x, y) => slice._push_slice(&[*x, *y]),
+            Tag::SetVirtualWH(x, y) => slice._push_slice(&[*x, *y]),
+            Tag::SetVirtualOffset(x, y) => slice._push_slice(&[*x, *y]),
+            Tag::SetDepth(x) => slice._push(*x),
+            Tag::SetPixelOrder(x) => slice._push(*x as u32),
+            Tag::GetFb(x) => slice._push_slice(&[*x, 0]),
             Tag::GetPhysicalWH => slice._push_dummy(2),
             Tag::GetVirtualOffset => slice._push_dummy(2),
             Tag::GetPitch => slice._push_dummy(1),
             Tag::GetOverscan => slice._push_dummy(4),
-            Tag::SetOverscan(a, b, c, d) => slice._push_slice(&[a, b, c, d]),
-            Tag::GetEdid(x) => slice._push(x).and_then(|_| slice._push_dummy(33)),
+            Tag::SetOverscan(a, b, c, d) => slice._push_slice(&[*a, *b, *c, *d]),
+            Tag::GetEdid(x) => slice._push(*x).and_then(|_| slice._push_dummy(33)),
+            Tag::GetPalette => slice._push_dummy(256),
+            Tag::SetPalette(data) => slice
+                ._push_slice(&[0, 256])
+                .and_then(|_| slice._push_slice(*data)),
         }?;
 
         assert_eq!(new_len, index);
