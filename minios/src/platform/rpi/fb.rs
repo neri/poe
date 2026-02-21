@@ -76,6 +76,8 @@ impl Fb {
         System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
     }
 
+    /// Sets the resolution and pixel format.
+    /// Returns a pointer to the framebuffer, width, height, and stride in bytes.
     pub fn set_resolution(
         width: u32,
         height: u32,
@@ -148,7 +150,6 @@ impl Fb {
         }
     }
 
-    #[track_caller]
     pub fn get_default_size() -> (u32, u32) {
         let mut mbox = Mbox::PROP.fixed::<8>();
         let index_pwh = mbox.append(Tag::GetPhysicalWH).unwrap();
@@ -165,9 +166,11 @@ impl Fb {
         }
     }
 
+    /// Gets the EDID data and returns preferred resolution.
+    /// If `result` is `Some`, the EDID data will be copied into the provided buffer.
     pub fn get_edid_size(result: Option<&mut [u8; 128]>) -> Result<(u32, u32), ()> {
         let mut mbox = Mbox::PROP.fixed::<40>();
-        let index_edid = mbox.append(Tag::GetEdid(0))?;
+        let index_edid = mbox.append(Tag::GetEdid(0)).unwrap();
 
         match mbox.call() {
             Ok(mbox) => {
@@ -222,10 +225,11 @@ impl GraphicsOutputDevice for Fb {
     }
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {
-        let info = *self.modes.get(mode.0 as usize).ok_or(())?;
+        let mut info = *self.modes.get(mode.0 as usize).ok_or(())?;
         if let Ok((ptr, _w, h, stride)) =
             Fb::set_resolution(info.width as u32, info.height as u32, info.pixel_format)
         {
+            info.bytes_per_scanline = stride as u16;
             self.current_mode = CurrentMode {
                 current: mode,
                 info,

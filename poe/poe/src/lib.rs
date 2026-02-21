@@ -21,6 +21,7 @@ static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
 pub fn main() {
     let _ = System::conctl().set_graphics_mode_from_list(&[
+        (1280, 720, PixelFormat::BGRX8888),
         // (800, 600, PixelFormat::BGRX8888),
         // (800, 600, PixelFormat::Indexed8),
         (640, 480, PixelFormat::Indexed8),
@@ -44,7 +45,7 @@ pub fn main() {
 
         window.draw_box(window.bounds(), TuiAttribute(0xf0));
         // window.draw_simple_title("Hello", TuiAttribute(0x9f).into(), TuiAttribute(0x0f));
-        window.draw_simple_title("Hello", None, TuiAttribute(0x0e));
+        window.draw_simple_title(" Hello ", None, TuiAttribute(0xf0));
         window.put_string_at(Point::new(2, 2), "Hello, world!", window.default_attr);
         window.put_text(Point::new(2, 4), "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.", TuiAttribute(0x07), 0);
 

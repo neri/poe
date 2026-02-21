@@ -22,24 +22,24 @@ pub enum Mbox {
 
 impl Mbox {
     #[inline]
-    pub const fn fixed<const N: usize>(&self) -> MboxContext<Request, FixedPayload<N>> {
+    pub const fn fixed<const N: usize>(&self) -> MboxContext<Request, FixedMbox<N>> {
         MboxContext::fixed(*self)
     }
 
     #[inline]
-    pub fn alloc(&self, n: usize) -> MboxContext<Request, DynamicPayload> {
+    pub fn alloc(&self, n: usize) -> MboxContext<Request, DynamicMbox> {
         MboxContext::alloc(*self, n)
     }
 }
 
-pub struct MboxContext<CONTEXT: MboxContextType, PAYLOAD: Payload> {
-    payload: PAYLOAD,
+pub struct MboxContext<CONTEXT: MboxContextType, BUFFER: MboxBuffer> {
+    buffer: BUFFER,
     chan: Mbox,
     index: usize,
     _phantom: PhantomData<CONTEXT>,
 }
 
-impl<CONTEXT: MboxContextType, PAYLOAD: Payload> MboxContext<CONTEXT, PAYLOAD> {
+impl<CONTEXT: MboxContextType, BUFFER: MboxBuffer> MboxContext<CONTEXT, BUFFER> {
     const REQUEST: u32 = 0x0000_0000;
     const RESPONSE: u32 = 0x8000_0000;
     const FULL: u32 = 0x8000_0000;
@@ -47,27 +47,27 @@ impl<CONTEXT: MboxContextType, PAYLOAD: Payload> MboxContext<CONTEXT, PAYLOAD> {
 
     #[inline]
     pub fn mbox_addr(&self) -> u32 {
-        let p = self.payload.as_slice().as_ptr() as usize as u32;
+        let p = self.buffer.as_slice().as_ptr() as usize as u32;
         p | (self.chan as u32)
     }
 }
 
-impl<const N: usize> MboxContext<Request, FixedPayload<N>> {
+impl<const N: usize> MboxContext<Request, FixedMbox<N>> {
     #[inline]
     pub const fn fixed(chan: Mbox) -> Self {
         assert!(N >= 6);
         let mut mbox = Self {
-            payload: FixedPayload([0; N]),
+            buffer: FixedMbox([0; N]),
             chan,
             index: 2,
             _phantom: PhantomData,
         };
-        mbox.payload.0[1] = Self::REQUEST;
+        mbox.buffer.0[1] = Self::REQUEST;
         mbox
     }
 }
 
-impl MboxContext<Request, DynamicPayload> {
+impl MboxContext<Request, DynamicMbox> {
     #[inline]
     pub fn alloc(chan: Mbox, n: usize) -> Self {
         assert!(n >= 6);
@@ -76,17 +76,17 @@ impl MboxContext<Request, DynamicPayload> {
         let mut vec = Vec::with_capacity(n);
         vec.resize(n, 0);
         let mut mbox = Self {
-            payload: DynamicPayload(vec),
+            buffer: DynamicMbox(vec),
             chan,
             index: 2,
             _phantom: PhantomData,
         };
-        mbox.payload.0[1] = Self::REQUEST;
+        mbox.buffer.0[1] = Self::REQUEST;
         mbox
     }
 }
 
-impl<PAYLOAD: Payload> MboxContext<Request, PAYLOAD> {
+impl<BUFFER: MboxBuffer> MboxContext<Request, BUFFER> {
     #[inline]
     pub fn append(&mut self, tag: Tag) -> Result<usize, ()> {
         tag.append_to(self)
@@ -94,7 +94,7 @@ impl<PAYLOAD: Payload> MboxContext<Request, PAYLOAD> {
 
     #[inline]
     fn _push(&mut self, val: u32) -> Result<usize, ()> {
-        match self.payload.as_slice_mut().get_mut(self.index as usize) {
+        match self.buffer.as_slice_mut().get_mut(self.index as usize) {
             Some(p) => {
                 *p = val;
                 self.index += 1;
@@ -121,20 +121,20 @@ impl<PAYLOAD: Payload> MboxContext<Request, PAYLOAD> {
     }
 
     #[inline]
-    unsafe fn flush_payload(&self) {
+    unsafe fn flush(&self) {
         compiler_fence(Ordering::SeqCst);
         unsafe {
-            asm!("dc civac, {}", in(reg) self.payload.as_slice().as_ptr());
+            asm!("dc civac, {}", in(reg) self.buffer.as_slice().as_ptr());
         }
         compiler_fence(Ordering::SeqCst);
     }
 
-    pub fn call(mut self) -> Result<MboxContext<Response, PAYLOAD>, ()> {
+    pub fn call(mut self) -> Result<MboxContext<Response, BUFFER>, ()> {
         unsafe {
             self._push(RawTag::End.as_u32())?;
-            self.payload.as_slice_mut()[0] = self.index as u32 * 4;
+            self.buffer.as_slice_mut()[0] = self.index as u32 * 4;
 
-            self.flush_payload();
+            self.flush();
 
             let mbox_addr = self.mbox_addr();
 
@@ -156,11 +156,11 @@ impl<PAYLOAD: Payload> MboxContext<Request, PAYLOAD> {
                 }
             }
 
-            self.flush_payload();
+            self.flush();
 
-            if self.payload.as_slice()[1] == Self::RESPONSE {
+            if self.buffer.as_slice()[1] == Self::RESPONSE {
                 Ok(MboxContext {
-                    payload: self.payload,
+                    buffer: self.buffer,
                     chan: self.chan,
                     index: self.index,
                     _phantom: PhantomData,
@@ -172,11 +172,11 @@ impl<PAYLOAD: Payload> MboxContext<Request, PAYLOAD> {
     }
 }
 
-impl<PAYLOAD: Payload> MboxContext<Response, PAYLOAD> {
+impl<BUFFER: MboxBuffer> MboxContext<Response, BUFFER> {
     #[inline]
     #[track_caller]
     pub fn slice(&self) -> &[u32] {
-        &self.payload.as_slice()[..self.index]
+        &self.buffer.as_slice()[..self.index]
     }
 
     #[inline]
@@ -202,16 +202,16 @@ pub struct Response;
 
 impl MboxContextType for Response {}
 
-pub trait Payload {
+pub trait MboxBuffer {
     fn as_slice(&self) -> &[u32];
 
     fn as_slice_mut(&mut self) -> &mut [u32];
 }
 
 #[repr(align(16))]
-pub struct FixedPayload<const N: usize>([u32; N]);
+pub struct FixedMbox<const N: usize>([u32; N]);
 
-impl<const N: usize> Payload for FixedPayload<N> {
+impl<const N: usize> MboxBuffer for FixedMbox<N> {
     #[inline]
     fn as_slice(&self) -> &[u32] {
         &self.0
@@ -224,9 +224,9 @@ impl<const N: usize> Payload for FixedPayload<N> {
 }
 
 #[repr(transparent)]
-pub struct DynamicPayload(Vec<u32>);
+pub struct DynamicMbox(Vec<u32>);
 
-impl Payload for DynamicPayload {
+impl MboxBuffer for DynamicMbox {
     #[inline]
     fn as_slice(&self) -> &[u32] {
         &self.0
@@ -365,9 +365,9 @@ impl Tag<'_> {
         }
     }
 
-    pub fn append_to<PAYLOAD: Payload>(
+    pub fn append_to<BUFFER: MboxBuffer>(
         &self,
-        slice: &mut MboxContext<Request, PAYLOAD>,
+        slice: &mut MboxContext<Request, BUFFER>,
     ) -> Result<usize, ()> {
         let (tag, len1) = self.info();
         let new_len = slice.index + (len1 as usize + 3) / 4 + 3;

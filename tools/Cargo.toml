@@ -12,7 +12,7 @@ resolver = "3"
 compress = { git = "https://github.com/neri/compress.git" }
 # compress = { path = "../../compress/" }
 
-bitflags = { version = "2.9" }
+bitflags = { version = "2.11.0" }
 
 [profile.release]
 lto = true

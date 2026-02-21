@@ -86,7 +86,7 @@ $(BIN)/ssbl.bin: ssbl/ssbl.asm
 	$(ASM2BIN) -I boot $< -o $@
 
 poe:
-	(cd $(POE_SRC) && cargo build --release)
+	(cd $(POE_SRC) && cargo build --release -Zjson-target-spec)
 
 $(POE_CEF): $(POE_LD) poe
 	$(ELF2BIN) -v1 $(POE_LD) $(POE_CEF)
