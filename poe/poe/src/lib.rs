@@ -114,10 +114,7 @@ pub fn main() {
             if line.is_empty() {
                 continue;
             }
-            println!(
-                "Critical fatal error!!!\nUnable to execute command: {:?}",
-                line
-            );
+            println!("{:?}: Bad command or file name.", line);
         }
     }
 }

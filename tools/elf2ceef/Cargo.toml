@@ -8,3 +8,4 @@ version = "0.1.0"
 
 [dependencies]
 compress.workspace = true
+elf = { path = "../../lib/elf/" }

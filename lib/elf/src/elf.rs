@@ -12,7 +12,7 @@ pub const EI_PAD: usize = 9;
 
 pub const ELFMAG: [u8; 4] = *b"\x7FELF";
 
-// e_ident[EI_CLASS],
+// e_ident[EI_CLASS]
 pub const ELFCLASSNONE: u8 = 0;
 pub const ELFCLASS32: u8 = 1;
 pub const ELFCLASS64: u8 = 2;
@@ -191,7 +191,7 @@ impl SegmentFlags {
     pub const RWX: Self = Self(Self::READ.bits() | Self::WRITE.bits() | Self::EXEC.bits());
 
     #[inline]
-    pub const fn from_bits_truncate(bits: u32) -> Self {
+    pub const fn from_bits(bits: u32) -> Self {
         Self(bits)
     }
 
@@ -242,13 +242,26 @@ pub mod elf32 {
 
     impl Header {
         #[inline]
-        pub fn is_valid(&self, elf_type: ElfType, machine: Machine) -> bool {
+        pub fn from_slice<'a>(slice: &'a [u8]) -> Option<&'a Self> {
+            if slice.len() < core::mem::size_of::<Self>() {
+                None
+            } else {
+                // SAFETY: The size is checked above.
+                Some(unsafe { &*(slice.as_ptr() as *const Self) })
+            }
+        }
+
+        #[inline]
+        pub fn is_valid(&self) -> bool {
             (self.e_ident[..4] == ELFMAG)
                 && (self.e_ident[EI_CLASS] == ELFCLASS32)
                 && (self.e_ident[EI_DATA] == ELFDATA2LSB)
                 && (self.e_ident[EI_VERSION] == EV_CURRENT)
-                && self.e_type == elf_type
-                && self.e_machine == machine
+        }
+
+        #[inline]
+        pub fn is_valid_type(&self, elf_type: ElfType, machine: Machine) -> bool {
+            self.is_valid() && self.e_type == elf_type && self.e_machine == machine
         }
     }
 
@@ -293,13 +306,26 @@ pub mod elf64 {
 
     impl Header {
         #[inline]
-        pub fn is_valid(&self, elf_type: ElfType, machine: Machine) -> bool {
+        pub fn from_slice<'a>(slice: &'a [u8]) -> Option<&'a Self> {
+            if slice.len() < core::mem::size_of::<Self>() {
+                None
+            } else {
+                // SAFETY: The size is checked above.
+                Some(unsafe { &*(slice.as_ptr() as *const Self) })
+            }
+        }
+
+        #[inline]
+        pub fn is_valid(&self) -> bool {
             (self.e_ident[..4] == ELFMAG)
                 && (self.e_ident[EI_CLASS] == ELFCLASS64)
                 && (self.e_ident[EI_DATA] == ELFDATA2LSB)
                 && (self.e_ident[EI_VERSION] == EV_CURRENT)
-                && self.e_type == elf_type
-                && self.e_machine == machine
+        }
+
+        #[inline]
+        pub fn is_valid_type(&self, elf_type: ElfType, machine: Machine) -> bool {
+            self.is_valid() && self.e_type == elf_type && self.e_machine == machine
         }
     }
 

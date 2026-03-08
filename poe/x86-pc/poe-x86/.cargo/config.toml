@@ -1,6 +1,9 @@
 [build]
-target = "i586-unknown-none.json"
+# TODO: Since rust-analyzer is throwing errors, we'll set a temporary target here.
+target = "i586-unknown-linux-musl"
+# target = "i586-unknown-none.json"
 rustflags = [
+    "-Zunstable-options",
     "-C", "target-cpu=i386",
     "-C", "relocation-model=static", 
     "-C", "link-args=-T src/link.ld",

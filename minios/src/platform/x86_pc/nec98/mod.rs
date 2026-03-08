@@ -19,10 +19,10 @@ mod bios {
     pub const INT1B: InterruptVector = InterruptVector(0x1B);
 }
 
+use super::pic::Irq;
 use crate::arch::vm86::{VM86, X86StackContext};
 use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::mem::{MemoryManager, MemoryType};
-use crate::platform::x86_pc::pic::Irq;
 use crate::*;
 use libhid::{Modifier, Usage};
 use x86::isolated_io::LoIoPortDummyB;

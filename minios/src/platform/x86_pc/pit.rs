@@ -1,7 +1,6 @@
 //! PIT: Programmable Interval Timer i8253/i8254
 
-use super::pic::Irq;
-use crate::platform::x86_pc::pic::IrqHandler;
+use super::pic::{Irq, IrqHandler};
 use core::cell::UnsafeCell;
 use x86::isolated_io::IoPortWB;
 // use core::time::Duration;

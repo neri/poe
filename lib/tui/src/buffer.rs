@@ -327,7 +327,7 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
 
     /// Draw the entire buffer to the specified draw target.
     pub fn draw_to<T: TuiDrawTarget + ?Sized>(&self, target: &mut T) {
-        self.draw_subregion_to(target, Rect::new(Point::new(0, 0), self.buffer().size));
+        self.draw_subregion_to(target, Rect::new(Point::zero(), self.buffer().size));
     }
 
     /// Draw a subregion of the buffer to the specified draw target.
@@ -494,14 +494,14 @@ impl<TCHAR: TChar> TextBuffer<TCHAR> {
 impl<TCHAR: TChar> TextBufferDrawing<TCHAR> for TextBuffer<TCHAR> {
     #[inline]
     fn put_char_at(&mut self, pos: Point, ch: TCHAR, attr: TuiAttribute) -> Option<()> {
-        let idx = self.point_to_index(pos)?;
-        self.set(idx, ch, attr)
+        let index = self.point_to_index(pos)?;
+        self.set(index, ch, attr)
     }
 
     #[inline]
     fn get_char_at(&self, pos: Point) -> Option<(TCHAR, TuiAttribute)> {
-        let idx = self.point_to_index(pos)?;
-        self.get(idx)
+        let index = self.point_to_index(pos)?;
+        self.get(index)
     }
 
     fn draw_hline(&mut self, origin: Point, length: i32, ch: TCHAR, attr: TuiAttribute) {
@@ -561,13 +561,13 @@ impl<TCHAR: TChar> TextBufferView<'_, TCHAR> {
 impl<TCHAR: TChar> TextBufferDrawing<TCHAR> for TextBufferView<'_, TCHAR> {
     #[inline]
     fn put_char_at(&mut self, pos: Point, ch: TCHAR, attr: TuiAttribute) -> Option<()> {
-        let idx = self.point_to_index(pos)?;
-        self.buffer.set(idx, ch, attr)
+        let index = self.point_to_index(pos)?;
+        self.buffer.set(index, ch, attr)
     }
 
     #[inline]
     fn get_char_at(&self, pos: Point) -> Option<(TCHAR, TuiAttribute)> {
-        let idx = self.point_to_index(pos)?;
-        self.buffer.get(idx)
+        let index = self.point_to_index(pos)?;
+        self.buffer.get(index)
     }
 }

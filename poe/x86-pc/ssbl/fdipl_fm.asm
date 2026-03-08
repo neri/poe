@@ -321,9 +321,13 @@ forever:
     jmp short $
 
 sysname:
+%ifdef SYSTEM_NAME
+    db SYSTEM_NAME
+%else
     ;;  FilenameExt
     ;;  12345678123
-    db "OSLDR   SYS"
+    db "KERNEL  SYS"
+%endif
 
     times 0x01fe - ($-$$) db 0
     db 0x55, 0xaa

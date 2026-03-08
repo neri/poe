@@ -28,7 +28,7 @@ impl UsagePage {
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UsageLong(NonZero<u32>);
+pub struct UsageLong(pub(crate) NonZero<u32>);
 
 impl UsageLong {
     pub const POINTER: Self = Self::generic(0x0001);
@@ -1061,6 +1061,22 @@ pub enum HidReportCollectionType {
     NamedArray,
     UsageSwitch,
     UsageModifier,
+}
+
+impl HidReportCollectionType {
+    #[inline]
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Physical),
+            1 => Some(Self::Application),
+            2 => Some(Self::Logical),
+            3 => Some(Self::Report),
+            4 => Some(Self::NamedArray),
+            5 => Some(Self::UsageSwitch),
+            6 => Some(Self::UsageModifier),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]

@@ -1,7 +1,7 @@
 //! PS2 Driver
 
+use super::Irq;
 use crate::io::hid_mgr::KeyStroke;
-use crate::platform::x86_pc::pic::Irq;
 use crate::*;
 use bitflags::bitflags;
 use core::cell::UnsafeCell;

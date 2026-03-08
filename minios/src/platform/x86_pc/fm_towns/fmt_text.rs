@@ -1,13 +1,11 @@
 //! FM TOWNS Text Mode Driver
 
-use crate::{
-    System,
-    arch::cpu::Cpu,
-    io::{
-        graphics::color::IndexedColor,
-        tty::{SimpleTextOutput, SimpleTextOutputMode},
-    },
-    platform::x86_pc::fm_towns::crtc::Crtc,
+use super::crtc::Crtc;
+use crate::System;
+use crate::arch::cpu::Cpu;
+use crate::io::{
+    graphics::color::IndexedColor,
+    tty::{SimpleTextOutput, SimpleTextOutputMode},
 };
 use core::{cell::UnsafeCell, mem::transmute};
 use tui::prelude::box_drawing;

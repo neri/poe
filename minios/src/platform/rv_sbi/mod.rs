@@ -1,10 +1,8 @@
 //! Platform dependent module for riscv sbi generic (temp)
 
 use super::*;
-use crate::{
-    arch::{cpu, csr::CSR},
-    *,
-};
+use crate::arch::{cpu, csr::CSR};
+use crate::*;
 use core::{arch::naked_asm, ffi::c_void};
 
 mod sbi_console;

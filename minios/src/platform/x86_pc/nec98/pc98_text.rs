@@ -1,11 +1,9 @@
 //! PC98 Text Mode Driver
 
-use crate::{
-    arch::cpu::Cpu,
-    io::tty::{SimpleTextOutput, SimpleTextOutputMode},
-    platform::x86_pc::nec98::PORT_5F,
-    *,
-};
+use super::PORT_5F;
+use crate::arch::cpu::Cpu;
+use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
+use crate::*;
 use core::cell::UnsafeCell;
 use tui::prelude::box_drawing;
 use x86::isolated_io::{LoIoPortRB, LoIoPortWB};

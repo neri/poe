@@ -1,8 +1,8 @@
 //! FM TOWNS Keyboard Driver
 
-use crate::io::hid_mgr::KeyStroke;
+use crate::io::hid_mgr::{HidManager, KeyStroke};
+use crate::platform::x86_pc::pic::Irq;
 use crate::*;
-use crate::{io::hid_mgr::HidManager, platform::x86_pc::pic::Irq};
 use core::cell::UnsafeCell;
 use libhid::*;
 use x86::isolated_io::{IoPortRB, IoPortWB};

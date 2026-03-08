@@ -23,12 +23,12 @@ mod bios {
     pub const INT16: InterruptVector = InterruptVector(0x16);
 }
 
+use super::pic::Irq;
 use crate::arch::{
     lomem::LoMemoryManager,
     vm86::{VM86, X86StackContext},
 };
 use crate::mem::{MemoryManager, MemoryType};
-use crate::platform::x86_pc::pic::Irq;
 use crate::*;
 use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
 use core::{ffi::c_void, iter::Iterator, ops::Range};

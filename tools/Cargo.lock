@@ -17,10 +17,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "elf"
+version = "0.1.0"
+
+[[package]]
 name = "elf2ceef"
 version = "0.1.0"
 dependencies = [
  "compress",
+ "elf",
 ]
 
 [[package]]

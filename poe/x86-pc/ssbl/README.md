@@ -1,5 +1,9 @@
 # MEG-OS IPL boot protocol specification
 
+Status: Draft
+
+Copyright (c) 2026 MEG-OS Project
+
 ## First Stage Boot Loader (FSBL aka IPL)
 
 * Load a binary with a name like "KERNEL.SYS" or "OSLDR.SYS" from the boot disk.
@@ -9,11 +13,11 @@
 * REAL MODE
 * CS:IP = `0x1000`:`0x0000`
 * AX = signature (`0x1eaf`)
-* CH = platform type
-  * `0x01` NEC PC-98
-  * `0x02` IBM PC compatible
-  * `0x03` FUJITSU FM TOWNS
-* CL = boot drive id
+* CL = platform type
+  * `0x00` NEC PC-98
+  * `0x01` IBM PC compatible
+  * `0x02` FUJITSU FM TOWNS
+* CH = boot drive id
   * ex. `0x00` = Floppy on PC compatible machines
 
 ```
@@ -21,12 +25,10 @@
             | IDT               |
   0000_0400 +-------------------+
             | BIOS DATA AREA    |
-            +-------------------+
+            + - - - - - - - - - +
             | UNUSED            |
   0001_0000 +-------------------+
-            | SSBL              |
-  SSBL+_END +-------------------+
-            | KERNEL IMAGE      |
+            | KERNEL.SYS (SSBL) |
             +-------------------+
             | UNUSED            |
   000A_0000 +-------------------+
@@ -38,9 +40,9 @@
 
 ## Second Stage Boot Loader (SSBL)
 
-* After checking the system, go to protected mode and run the first binary in the kernel image.
+* After a simple system environment check, go to protected mode, decompresses the system image, and runs it.
 
-### State at transition from SSBL to KERNEL
+### State at transition from SSBL to SYSTEM
 
 * NON-PAGED PROTECTED MODE
 * CS = 32BIT FLAT RING0
@@ -55,20 +57,26 @@
             | BIOS DATA AREA    |
   0000_0800 +-------------------+
             | SSBL              |
-            +-------------------+
+            + - - - - - - - - - +
             | boot_info         |
-            +-------------------+
-            | UNUSED            |
-            +-------------------+
-            | KERNEL IMAGE      |
+            + - - - - - - - - - +
+            | SYSTEM IMAGE      |
             +-------------------+
             | UNUSED            |
   000A_0000 +-------------------+
             | VRAM & BIOS       |
   0010_0000 +-------------------+
- CEEF_ENTRY +-------------------+
-            | KERNEL            |
+            | SYSTEM            |
+ CEEF_ENTRY + - - - - - - - - - +
+            | SYSTEM            |
             +-------------------+
             | UNUSED            |
             +-------------------+
 ```
+
+## License
+
+Copyright (c) 2026 MEG-OS Project
+
+This document is licensed under CC BY-SA 4.0.
+https://creativecommons.org/licenses/by-sa/4.0/

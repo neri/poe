@@ -17,3 +17,7 @@ members = [
     "tui",
     "x86",
 ]
+
+[workspace.dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+paste = { version = "1.0" }

@@ -1,14 +1,12 @@
 //! CGA Text Mode Driver
 
-use crate::{
-    System,
-    arch::{
-        cpu::Cpu,
-        vm86::{VM86, X86StackContext},
-    },
-    io::tty::{SimpleTextOutput, SimpleTextOutputMode},
-    platform::x86_pc::ibm_pc::bios::INT10,
+use super::bios::INT10;
+use crate::System;
+use crate::arch::{
+    cpu::Cpu,
+    vm86::{VM86, X86StackContext},
 };
+use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 use core::cell::UnsafeCell;
 use tui::prelude::box_drawing;
 use x86::isolated_io::*;
@@ -20,21 +18,26 @@ pub struct CgaText {
     is_vga: bool,
 }
 
-static mut CGA_TEXT: UnsafeCell<CgaText> = UnsafeCell::new(CgaText {
-    mode: SimpleTextOutputMode {
-        columns: 80,
-        rows: 25,
-        cursor_column: 0,
-        cursor_row: 0,
-        attribute: 0,
-        cursor_visible: 0,
-    },
-    max_scan_line: 0,
-    attr_mask: 0x7f,
-    is_vga: false,
-});
+static mut CGA_TEXT: UnsafeCell<CgaText> = UnsafeCell::new(CgaText::new());
 
 impl CgaText {
+    #[inline]
+    const fn new() -> Self {
+        Self {
+            mode: SimpleTextOutputMode {
+                columns: 80,
+                rows: 25,
+                cursor_column: 0,
+                cursor_row: 0,
+                attribute: 0,
+                cursor_visible: 0,
+            },
+            max_scan_line: 0,
+            attr_mask: 0x7f,
+            is_vga: false,
+        }
+    }
+
     pub(super) unsafe fn init() {
         unsafe {
             let stdout = (&mut *(&raw mut CGA_TEXT)).get_mut();

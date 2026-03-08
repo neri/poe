@@ -8,6 +8,12 @@
 
 %define NOBOOTDIR
 
+%ifndef SYSTEM_NAME
+%define SYSTEM_NAME "KERNEL.SYS"
+%endif
+%strcat SYSNAME_REV SYSTEM_NAME, ";1"
+%strlen SYSNAME_LEN SYSNAME_REV
+
 [bits 16]
 [org 0x0800]
 
@@ -225,8 +231,8 @@ disk_error_msg:
 sysdir:
     db 4, "BOOT"
 %endif
-sysname: ; basename + dot + ext + revision
-    db 5+1+3+2, "OSLDR.SYS;1"
+sysname:
+    db SYSNAME_LEN, SYSNAME_REV
 
     alignb 4
 exit_sssp       dd 0

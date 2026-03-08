@@ -30,7 +30,8 @@
 ;; * REAL MODE
 ;; * CS:IP = 0x1000:0x0000
 ;; * AX = signature (0x1eaf)
-;; * DL = drive (ex. 0x00)
+;; * CL = platform type (0: NEC PC-98, 1: IBM PC COMPATIBLE, 2: FM TOWNS)
+;; * CH = drive number (ex. 0x00)
 ;;
 
 %define IPL_SIGN    0x1eaf
@@ -305,9 +306,13 @@ forever:
     jmp short $
 
 sysname:
+%ifdef SYSTEM_NAME
+    db SYSTEM_NAME
+%else
     ;;  FilenameExt
     ;;  12345678123
-    db "OSLDR   SYS"
+    db "KERNEL  SYS"
+%endif
 
     times 0x01fe - ($-$$) db 0
     db 0x55, 0xaa

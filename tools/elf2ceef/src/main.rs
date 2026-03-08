@@ -2,12 +2,14 @@
 //! Copyright (c) 2021 MEG-OS project
 
 pub mod ceef;
-pub mod elf;
 
 use ceef::*;
 use compress::stk1::{Configuration, S7s, Stk1};
 use core::mem::transmute;
-use elf::*;
+use elf::{
+    elf32::{Header as ElfHeader, ProgramHeader as ElfPhdr},
+    *,
+};
 use std::{
     env,
     fs::File,
@@ -73,7 +75,9 @@ fn main() {
 
     let mut data: Vec<u8> = Vec::with_capacity(src_blob.len());
 
-    let header = Elf32Hdr::from_slice(&src_blob).expect("Bad executable");
+    let header = ElfHeader::from_slice(&src_blob)
+        .filter(|v| v.is_valid_type(ET_EXEC, EM_386))
+        .expect("Bad executable");
 
     const BASE_ADDR_MASK: u32 = 0xFFFFF000;
     let mut base_addr = u32::MAX;
@@ -88,14 +92,14 @@ fn main() {
             println!("number of program headers: {}", n_segments);
 
             for i in 0..n_segments {
-                let phdr: &Elf32Phdr = unsafe {
+                let phdr: &ElfPhdr = unsafe {
                     transmute(
                         &src_blob[header.e_phoff as usize + (header.e_phentsize as usize) * i],
                     )
                 };
 
                 let ceef_hdr = CeefSecHeader::new(
-                    phdr.p_flags as u8,
+                    phdr.p_flags.bits() as u8,
                     phdr.p_vaddr,
                     phdr.p_filesz,
                     phdr.p_memsz,
@@ -113,13 +117,13 @@ fn main() {
                     ceef_hdr.align(),
                     ceef_hdr.vaddr,
                     ceef_hdr.memsz,
-                    phdr.p_type as usize,
+                    phdr.p_type.0 as usize,
                     phdr.p_type,
                     phdr.p_offset,
                     ceef_hdr.filesz,
                 );
 
-                if phdr.p_type == ElfSegmentType::LOAD {
+                if phdr.p_type == PT_LOAD {
                     let max_addr = phdr.p_vaddr + phdr.p_memsz;
                     base_addr = base_addr.min(phdr.p_vaddr & BASE_ADDR_MASK);
                     minalloc = minalloc.max(max_addr);
@@ -158,7 +162,7 @@ fn main() {
             println!("number of program headers: {}", n_segments);
 
             for i in 0..n_segments {
-                let phdr: &Elf32Phdr = unsafe {
+                let phdr: &ElfPhdr = unsafe {
                     transmute(
                         &src_blob[header.e_phoff as usize + (header.e_phentsize as usize) * i],
                     )
@@ -167,15 +171,15 @@ fn main() {
                 println!(
                     "Phdr #{} {} {:08x} {:08x} {:x}({:?}) {:08x}",
                     i,
-                    phdr.p_flags as u8,
+                    phdr.p_flags.bits() as u8,
                     phdr.p_vaddr,
                     phdr.p_filesz,
-                    phdr.p_type as usize,
+                    phdr.p_type.0 as usize,
                     phdr.p_type,
                     phdr.p_offset,
                 );
 
-                if phdr.p_type == ElfSegmentType::LOAD {
+                if phdr.p_type == PT_LOAD {
                     let max_addr = phdr.p_vaddr + phdr.p_memsz;
                     base_addr = base_addr.min(phdr.p_vaddr & BASE_ADDR_MASK);
                     minalloc = minalloc.max(max_addr);

@@ -71,6 +71,7 @@ forever:
 _crt0:
     xor ax, IPL_SIGN
     jnz forever
+    inc cx
 
     mov es, ax
     mov ss, ax
@@ -182,7 +183,6 @@ _init:
 
     pop es
     pop ax
-    inc ax
     mov [_platform], ax
     push es
 

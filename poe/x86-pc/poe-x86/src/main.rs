@@ -5,7 +5,5 @@ use poe::prelude::*;
 
 #[unsafe(no_mangle)]
 extern "fastcall" fn _start(info: &SsblInfo) -> ! {
-    unsafe {
-        System::init(info, 0, poe::main);
-    }
+    unsafe { System::init(info, 0, poe::main) }
 }
