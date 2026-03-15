@@ -8,3 +8,16 @@
 
 * Rust nightly
 * llvm
+
+### building
+
+```
+$ make
+$ make install
+```
+
+### run on QEMU
+
+```
+$ make run
+```

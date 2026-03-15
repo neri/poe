@@ -16,6 +16,11 @@ pub type Rflags = Flags;
 pub struct Gpr32(pub u32);
 
 impl Gpr32 {
+    #[inline]
+    pub fn set_zero(&mut self) {
+        self.0 = 0;
+    }
+
     /// Get the 32-bit value of the register.
     #[inline]
     pub const fn d(&self) -> u32 {
@@ -62,6 +67,34 @@ impl Gpr32 {
     #[inline]
     pub fn set_h(&mut self, h: u8) {
         self.0 = (self.0 & 0xffff00ff) | ((h as u32) << 8);
+    }
+}
+
+impl From<i32> for Gpr32 {
+    #[inline]
+    fn from(value: i32) -> Self {
+        Self(value as u32)
+    }
+}
+
+impl From<u32> for Gpr32 {
+    #[inline]
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<u16> for Gpr32 {
+    #[inline]
+    fn from(value: u16) -> Self {
+        Self(value as u32)
+    }
+}
+
+impl From<u8> for Gpr32 {
+    #[inline]
+    fn from(value: u8) -> Self {
+        Self(value as u32)
     }
 }
 

@@ -4,6 +4,7 @@ BIN			= ./bin
 TEMP		= ../../temp
 TOOLS		= ../../tools
 ISO_SRC		= $(TEMP)/iso
+DTB_PATH	= ./dtb
 
 MKFDFS		= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkfdfs --
 ELF2BIN		= cargo run --manifest-path $(TOOLS)/Cargo.toml -p elf2ceef --
@@ -34,14 +35,14 @@ refresh: clean
 run: run3
 
 run3:
-	qemu-system-aarch64 -M raspi3b -dtb ../../ext/dtb/bcm2710-rpi-3-b.dtb \
-	-kernel $(POE_BIN) \
-	-serial mon:stdio
+	qemu-system-aarch64 -M raspi3b -dtb $(DTB_PATH)/bcm2710-rpi-3-b.dtb \
+		-kernel $(POE_BIN) \
+		-serial mon:stdio
 
 run4:
-	qemu-system-aarch64 -M raspi4b -dtb ../../ext/dtb/bcm2711-rpi-4-b.dtb \
-	-kernel $(POE_BIN) \
-	-serial mon:stdio
+	qemu-system-aarch64 -M raspi4b -dtb $(DTB_PATH)/bcm2711-rpi-4-b.dtb \
+		-kernel $(POE_BIN) \
+		-serial mon:stdio
 
 test: poe
 

@@ -772,3 +772,20 @@ impl X86StackContext {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct BiosCallVector<const V: u8>;
+
+impl<const V: u8> BiosCallVector<V> {
+    #[inline]
+    pub const fn new() -> Self {
+        Self
+    }
+
+    #[inline]
+    pub unsafe fn call(&self, ctx: &mut X86StackContext) {
+        unsafe {
+            VM86::call_bios(InterruptVector(V), ctx);
+        }
+    }
+}

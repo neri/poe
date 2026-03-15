@@ -5,10 +5,8 @@
 use core::arch::naked_asm;
 use poe::prelude::*;
 
-fn rpi_main(dtb: usize) -> ! {
-    unsafe {
-        System::init_dt(dtb, 0, poe::main);
-    }
+fn _arch_rpi_start(dtb: usize) -> ! {
+    unsafe { System::init_dt(dtb, 0, poe::main) }
 }
 
 #[unsafe(naked)]
@@ -83,7 +81,7 @@ unsafe extern "C" fn _start() -> ! {
     4:  bl      {main}
     5:
     ",
-        main = sym rpi_main,
+        main = sym _arch_rpi_start,
     )
 }
 

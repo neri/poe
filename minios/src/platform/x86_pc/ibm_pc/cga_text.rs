@@ -2,10 +2,7 @@
 
 use super::bios::INT10;
 use crate::System;
-use crate::arch::{
-    cpu::Cpu,
-    vm86::{VM86, X86StackContext},
-};
+use crate::arch::{cpu::Cpu, vm86::X86StackContext};
 use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 use core::cell::UnsafeCell;
 use tui::prelude::box_drawing;
@@ -64,8 +61,8 @@ impl CgaText {
             let stdout = (&mut *(&raw mut CGA_TEXT)).get_mut();
 
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x1a00);
-            VM86::call_bios(INT10, &mut regs);
+            regs.eax = 0x1a00.into();
+            INT10.call(&mut regs);
             if regs.eax.b() == 0x1a {
                 // vga or later
                 stdout.is_vga = true;

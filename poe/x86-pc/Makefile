@@ -51,19 +51,19 @@ refresh: clean
 
 run:
 	qemu-system-i386 -machine q35 -boot a -rtc base=localtime,clock=host -serial mon:stdio \
-	-fda $(TARGET_FD) \
-	-device nec-usb-xhci,id=xhci \
-	-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick
+		-fda $(TARGET_FD) \
+		-device nec-usb-xhci,id=xhci \
+		-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick
 
 run_cd:
 	qemu-system-i386 -machine q35 -boot d -rtc base=localtime,clock=host -serial mon:stdio \
-	-cdrom $(TARGET_ISO)
+		-cdrom $(TARGET_ISO)
 
 run_headless:
 	qemu-system-i386 -boot a -rtc base=localtime,clock=host -nographic \
-	-fda $(TARGET_FD) \
-	-device nec-usb-xhci,id=xhci \
-	-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick \
+		-fda $(TARGET_FD) \
+		-device nec-usb-xhci,id=xhci \
+		-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick \
 
 # Check for use of i486 or later instructions
 test: poe

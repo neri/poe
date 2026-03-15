@@ -8,19 +8,19 @@
 mod pc98_text;
 mod pegc;
 
+#[allow(unused)]
 mod bios {
-    use x86::prot::InterruptVector;
+    use crate::arch::vm86::BiosCallVector;
 
     /// Video and keyboard BIOS Services
-    pub const INT18: InterruptVector = InterruptVector(0x18);
+    pub const INT18: BiosCallVector<0x18> = BiosCallVector::new();
 
-    #[allow(unused)]
     /// Disk BIOS Services
-    pub const INT1B: InterruptVector = InterruptVector(0x1B);
+    pub const INT1B: BiosCallVector<0x1B> = BiosCallVector::new();
 }
 
 use super::pic::Irq;
-use crate::arch::vm86::{VM86, X86StackContext};
+use crate::arch::vm86::X86StackContext;
 use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
@@ -109,16 +109,16 @@ impl SimpleTextInput for BiosTextInput {
     fn reset(&mut self) {
         unsafe {
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x0300);
-            VM86::call_bios(bios::INT18, &mut regs);
+            regs.eax = 0x0300.into();
+            bios::INT18.call(&mut regs);
         }
     }
 
     fn is_ready(&mut self) -> bool {
         unsafe {
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x0100);
-            VM86::call_bios(bios::INT18, &mut regs);
+            regs.eax = 0x0100.into();
+            bios::INT18.call(&mut regs);
             regs.ebx.h() != 0
         }
     }
@@ -126,22 +126,22 @@ impl SimpleTextInput for BiosTextInput {
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x0100);
-            VM86::call_bios(bios::INT18, &mut regs);
+            regs.eax = 0x0100.into();
+            bios::INT18.call(&mut regs);
             if regs.ebx.h() == 0 {
                 return None;
             }
 
-            regs.eax.set_d(0);
-            VM86::call_bios(bios::INT18, &mut regs);
+            regs.eax.set_zero();
+            bios::INT18.call(&mut regs);
             // let ch = match regs.eax.b() {
             //     ch @ 0x00..=0x7f => ch as char,
             //     _ => 0 as char,
             // };
             let usage = Usage(SCAN_TO_HID[0x7f & regs.eax.h() as usize]);
 
-            regs.eax.set_d(0x0200);
-            VM86::call_bios(bios::INT18, &mut regs);
+            regs.eax = 0x0200.into();
+            bios::INT18.call(&mut regs);
             let mut modifier = Modifier::empty();
             if (regs.eax.b() & 0b0000_0001) != 0 {
                 modifier |= Modifier::LEFT_SHIFT;

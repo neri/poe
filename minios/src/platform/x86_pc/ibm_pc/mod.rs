@@ -8,26 +8,23 @@ mod vesa_bios;
 
 #[allow(unused)]
 mod bios {
-    use x86::prot::InterruptVector;
+    use crate::arch::vm86::BiosCallVector;
 
     /// Video BIOS Services
-    pub const INT10: InterruptVector = InterruptVector(0x10);
+    pub const INT10: BiosCallVector<0x10> = BiosCallVector::new();
 
     /// Disk BIOS Services
-    pub const INT13: InterruptVector = InterruptVector(0x13);
+    pub const INT13: BiosCallVector<0x13> = BiosCallVector::new();
 
     /// Misc BIOS Services
-    pub const INT15: InterruptVector = InterruptVector(0x15);
+    pub const INT15: BiosCallVector<0x15> = BiosCallVector::new();
 
     /// Keyboard BIOS Services
-    pub const INT16: InterruptVector = InterruptVector(0x16);
+    pub const INT16: BiosCallVector<0x16> = BiosCallVector::new();
 }
 
 use super::pic::Irq;
-use crate::arch::{
-    lomem::LoMemoryManager,
-    vm86::{VM86, X86StackContext},
-};
+use crate::arch::{lomem::LoMemoryManager, vm86::X86StackContext};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
 use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
@@ -145,12 +142,12 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
         let buf = LoMemoryManager::alloc_page();
         let mut regs = X86StackContext::default();
         loop {
-            regs.eax.set_d(0xe820);
-            regs.edx.set_d(0x534d4150);
-            regs.ecx.set_d(24);
+            regs.eax = 0xe820.into();
+            regs.edx = 0x534d4150.into();
+            regs.ecx = 24.into();
             regs.set_vmes(buf.sel());
-            regs.edi.set_d(0);
-            VM86::call_bios(bios::INT15, &mut regs);
+            regs.edi.set_zero();
+            bios::INT15.call(&mut regs);
             if regs.eflags.contains(Eflags::CF) || regs.eax.d() != 0x534d4150 {
                 break;
             }

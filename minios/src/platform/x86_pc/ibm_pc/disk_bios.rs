@@ -1,7 +1,7 @@
 //! Disk Bios Driver
 
-use super::{bios, *};
-use arch::vm86::{VM86, X86StackContext};
+use super::{bios::INT13, *};
+use arch::vm86::X86StackContext;
 use x86::{gpr::Flags, prot::Selector};
 
 pub(super) struct DiskBios {
@@ -45,7 +45,7 @@ fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
     regs.ecx.set_d(0xffff);
     regs.edx.set_d(drive as u32);
     unsafe {
-        VM86::call_bios(bios::INT13, regs);
+        INT13.call(regs);
     }
     if regs.eflags.contains(Flags::CF) {
         println!("drive {:02x}: error {:02x}", drive, regs.eax.h());
@@ -59,7 +59,7 @@ fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
     unsafe { regs.set_vmes(Selector::NULL) };
     regs.edi.set_d(0);
     unsafe {
-        VM86::call_bios(bios::INT13, regs);
+        INT13.call(regs);
     }
     if regs.eflags.contains(Flags::CF) {
         println!("drive {:02x}: {:02x}", drive, drive_type);

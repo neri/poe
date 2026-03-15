@@ -68,9 +68,9 @@ pub trait HalCpu {
 #[macro_export]
 macro_rules! without_interrupts {
     ( $f:expr ) => {{
-        let flags = Hal::cpu().interrupt_guard();
+        let guard = Hal::cpu().interrupt_guard();
         let result = { $f };
-        drop(flags);
+        drop(guard);
         result
     }};
 }

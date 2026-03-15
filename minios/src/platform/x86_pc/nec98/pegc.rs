@@ -1,7 +1,7 @@
 //! PC-9821 640x480 Graphics Mode Driver
 
 use super::bios::INT18;
-use crate::arch::vm86::{VM86, X86StackContext};
+use crate::arch::vm86::X86StackContext;
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
@@ -62,17 +62,17 @@ impl GraphicsOutputDevice for PegcBios {
             let _inner_mode = *self.modes.get(mode.0 as usize).ok_or(())?;
 
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x300c);
-            regs.ebx.set_d(0x3200);
-            VM86::call_bios(INT18, &mut regs);
-            regs.eax.set_d(0x4d00);
-            regs.ecx.set_d(0x0100);
-            VM86::call_bios(INT18, &mut regs);
+            regs.eax = 0x300c.into();
+            regs.ebx = 0x3200.into();
+            INT18.call(&mut regs);
+            regs.eax = 0x4d00.into();
+            regs.ecx = 0x0100.into();
+            INT18.call(&mut regs);
 
-            regs.eax.set_d(0x0d00);
-            VM86::call_bios(INT18, &mut regs);
-            regs.eax.set_d(0x4000);
-            VM86::call_bios(INT18, &mut regs);
+            regs.eax = 0x0d00.into();
+            INT18.call(&mut regs);
+            regs.eax = 0x4000.into();
+            INT18.call(&mut regs);
 
             (0x000e_0100 as *mut u8).write_volatile(0);
             (0x000e_0102 as *mut u8).write_volatile(1);
@@ -91,18 +91,18 @@ impl GraphicsOutputDevice for PegcBios {
     fn detach(&mut self) {
         unsafe {
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x4100);
-            VM86::call_bios(INT18, &mut regs);
+            regs.eax = 0x4100.into();
+            INT18.call(&mut regs);
 
-            // regs.eax.set_d(0x3008);
-            // regs.ebx.set_d(0x2200);
-            // VM86::call_bios(INT18, &mut regs);
-            // regs.eax.set_d(0x4d00);
-            // regs.ecx.set_d(0x0000);
-            // VM86::call_bios(INT18, &mut regs);
+            // regs.eax = 0x3008.into();
+            // regs.ebx = 0x2200.into();
+            // INT18.call(&mut regs);
+            // regs.eax = 0x4d00.into();
+            // regs.ecx = 0x0000.into();
+            // INT18.call(&mut regs);
 
-            regs.eax.set_d(0x0c00);
-            VM86::call_bios(INT18, &mut regs);
+            regs.eax = 0x0c00.into();
+            INT18.call(&mut regs);
         }
     }
 }

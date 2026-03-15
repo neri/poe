@@ -1,10 +1,7 @@
 //! VESA BIOS Extensions (VBE) support
 
 use super::bios::INT10;
-use crate::arch::{
-    lomem::LoMemoryManager,
-    vm86::{VM86, X86StackContext},
-};
+use crate::arch::{lomem::LoMemoryManager, vm86::X86StackContext};
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
@@ -32,10 +29,10 @@ impl VesaBios {
             let buffer = LoMemoryManager::alloc_page();
 
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x4f00);
+            regs.eax = 0x4f00.into();
             regs.set_vmes(buffer.sel());
-            regs.edi.set_d(0);
-            VM86::call_bios(INT10, &mut regs);
+            regs.edi.set_zero();
+            INT10.call(&mut regs);
             if regs.eax.w() != 0x004f {
                 // VESA BIOS not supported
                 return;
@@ -53,11 +50,11 @@ impl VesaBios {
             });
 
             for mode in 0x100..0x200 {
-                regs.eax.set_d(0x4f01);
-                regs.ecx.set_d(mode);
+                regs.eax = 0x4f01.into();
+                regs.ecx = mode.into();
                 regs.set_vmes(buffer.sel());
-                regs.edi.set_d(0);
-                VM86::call_bios(INT10, &mut regs);
+                regs.edi.set_zero();
+                INT10.call(&mut regs);
                 if regs.eax.w() != 0x004f {
                     continue;
                 }
@@ -110,11 +107,11 @@ impl GraphicsOutputDevice for VesaBios {
 
             let buffer = LoMemoryManager::alloc_page();
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x4f01);
-            regs.ecx.set_d(bios_mode as u32);
+            regs.eax = 0x4f01.into();
+            regs.ecx = bios_mode.into();
             regs.set_vmes(buffer.sel());
-            regs.edi.set_d(0);
-            VM86::call_bios(INT10, &mut regs);
+            regs.edi.set_zero();
+            INT10.call(&mut regs);
             if regs.eax.w() != 0x004f {
                 return Err(());
             }
@@ -122,9 +119,9 @@ impl GraphicsOutputDevice for VesaBios {
             let fb = vbe_mode_info.phys_base_ptr as usize;
             let fb_size = info.bytes_per_scanline as usize * info.height as usize;
 
-            regs.eax.set_d(0x4f02);
-            regs.ebx.set_d(0x4000 | bios_mode as u32);
-            VM86::call_bios(INT10, &mut regs);
+            regs.eax = 0x4f02.into();
+            regs.ebx = (0x4000 | bios_mode as u32).into();
+            INT10.call(&mut regs);
             if regs.eax.w() != 0x004f {
                 return Err(());
             }
@@ -152,8 +149,8 @@ impl GraphicsOutputDevice for VesaBios {
     fn detach(&mut self) {
         unsafe {
             let mut regs = X86StackContext::default();
-            regs.eax.set_d(0x0003);
-            VM86::call_bios(INT10, &mut regs);
+            regs.eax = 0x0003.into();
+            INT10.call(&mut regs);
         }
     }
 }

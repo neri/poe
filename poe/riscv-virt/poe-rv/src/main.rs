@@ -25,7 +25,8 @@ pub unsafe extern "C" fn _arch_riscv_start(hart_id: usize, dtb: usize) -> ! {
     unsafe {
         let bss = &__bss as *const _ as *mut u8;
         let ebss = &__ebss as *const _;
-        bss.write_bytes(0, ebss as usize - bss as usize);
+        let count = ebss as usize - bss as usize;
+        bss.write_bytes(0, count);
 
         System::init_dt(dtb, hart_id, poe::main);
     }
