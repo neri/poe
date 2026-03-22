@@ -23,3 +23,34 @@ pub trait KeyboardLayout {
     /// Estimates a KeyStroke from a Unicode character, if possible.
     fn estimate_key_stroke_from_char(&self, c: char) -> Option<KeyStroke>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[track_caller]
+    pub fn layout_test(layout: &dyn KeyboardLayout) {
+        assert_eq!(layout.estimate_key_stroke_from_char('\0'), None);
+
+        // Keystroke estimation from ASCII codes isn't perfect.
+        // However, we guarantee that the estimated keystrokes can be reversed using the current layout.
+        for ch in 1..128 {
+            let ch = ch as u8 as char;
+            println!("Testing character {:?}", ch);
+
+            let key_stroke = layout.estimate_key_stroke_from_char(ch).unwrap();
+
+            let translated_char = layout.translate(key_stroke).unwrap();
+
+            assert_eq!(
+                ch, translated_char,
+                "Character translation mismatch: expected {:?}, got {:?}",
+                ch, translated_char
+            );
+        }
+
+        // for ch in 128..256 {
+        //     assert_eq!(layout.estimate_key_stroke_from_char(ch as u8 as char), None);
+        // }
+    }
+}

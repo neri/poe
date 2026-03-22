@@ -12,6 +12,3 @@ pub use hid::*;
 pub mod layouts;
 
 pub mod parser;
-
-#[cfg(test)]
-mod tests;

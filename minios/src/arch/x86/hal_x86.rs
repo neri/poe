@@ -102,7 +102,7 @@ impl Drop for InterruptGuard {
     #[inline]
     fn drop(&mut self) {
         compiler_fence(Ordering::SeqCst);
-        if Flags::from_bits_retain(self.flags).contains(Flags::IF) {
+        if Flags::from_bits(self.flags).contains(Flags::IF) {
             unsafe {
                 Hal::cpu().enable_interrupt();
             }

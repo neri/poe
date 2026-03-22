@@ -118,7 +118,7 @@ impl LoMemoryManager {
         Self::alloc_page_checked().expect("Out of low memory")
     }
 
-    unsafe fn free_page(page: &ManagedLowMemory) {
+    unsafe fn drop_mem(page: &ManagedLowMemory) {
         let shared = unsafe { Self::shared_mut() };
         let page_index = page.base().as_u32() as usize / Self::PAGE_SIZE;
         for i in 0..=(page.limit().as_u32() as usize / Self::PAGE_SIZE) {
@@ -191,7 +191,7 @@ impl Drop for ManagedLowMemory {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            LoMemoryManager::free_page(self);
+            LoMemoryManager::drop_mem(self);
         }
     }
 }

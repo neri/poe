@@ -5,9 +5,6 @@ use core::fmt::LowerHex;
 use core::mem::transmute;
 use paste::paste;
 
-#[allow(unused_imports)]
-use core::arch::asm;
-
 #[repr(transparent)]
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct DescriptorEntry(u64);
@@ -84,10 +81,10 @@ impl SegmentDescriptor {
         DescriptorEntry(
             DescriptorEntry::CODE_SEGMENT
                 | DescriptorEntry::READ_WRITE
+                | dpl.as_descriptor_entry()
+                | DescriptorEntry::PRESENT
                 | base.as_segment_base()
                 | limit.as_descriptor_entry()
-                | DescriptorEntry::PRESENT
-                | dpl.as_descriptor_entry()
                 | opr_size.as_descriptor_entry(),
         )
     }
@@ -102,15 +99,15 @@ impl SegmentDescriptor {
         DescriptorEntry(
             DescriptorEntry::SEGMENT
                 | DescriptorEntry::READ_WRITE
+                | dpl.as_descriptor_entry()
+                | DescriptorEntry::PRESENT
                 | base.as_segment_base()
                 | limit.as_descriptor_entry()
-                | DescriptorEntry::PRESENT
                 | if is_big_data {
                     DescriptorEntry::BIG_DATA
                 } else {
                     0
-                }
-                | dpl.as_descriptor_entry(),
+                },
         )
     }
 
@@ -119,9 +116,9 @@ impl SegmentDescriptor {
     pub const fn tss32(base: Linear32, limit: Limit16) -> DescriptorEntry {
         DescriptorEntry(
             DescriptorType::TSS.as_descriptor_entry()
+                | DescriptorEntry::PRESENT
                 | base.as_segment_base()
-                | limit.as_descriptor_entry()
-                | DescriptorEntry::PRESENT,
+                | limit.as_descriptor_entry(),
         )
     }
 
@@ -131,9 +128,9 @@ impl SegmentDescriptor {
         let (base_low, base_high) = base.as_segment_base_pair();
         let low = DescriptorEntry(
             DescriptorType::TSS.as_descriptor_entry()
+                | DescriptorEntry::PRESENT
                 | base_low
-                | limit.as_descriptor_entry()
-                | DescriptorEntry::PRESENT,
+                | limit.as_descriptor_entry(),
         );
         let high = DescriptorEntry(base_high);
         DescriptorPair::new(low, high)
@@ -268,7 +265,9 @@ impl Limit32 {
 pub struct Linear32(u32);
 
 impl Linear32 {
-    pub const NULL: Linear32 = Linear32(0);
+    pub const NULL: Self = Self(0);
+
+    pub const MAX: Self = Self(u32::MAX);
 
     #[inline]
     pub const fn new(val: u32) -> Self {
@@ -297,6 +296,8 @@ impl Linear32 {
 pub struct Linear64(u64);
 
 impl Linear64 {
+    pub const NULL: Self = Self(0);
+
     pub const MAX: Self = Self(u64::MAX);
 
     #[inline]
@@ -323,9 +324,11 @@ impl Linear64 {
 pub struct Offset32(u32);
 
 impl Offset32 {
+    pub const MAX: Self = Self(u32::MAX);
+
     #[inline]
-    pub const fn new(off: u32) -> Self {
-        Self(off)
+    pub const fn new(val: u32) -> Self {
+        Self(val)
     }
 
     #[inline]
@@ -343,9 +346,16 @@ impl Offset32 {
 /// Type of 64bit Offset Address
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Offset64(pub u64);
+pub struct Offset64(u64);
 
 impl Offset64 {
+    pub const MAX: Self = Self(u64::MAX);
+
+    #[inline]
+    pub const fn new(val: u64) -> Self {
+        Self(val)
+    }
+
     #[inline]
     pub const fn as_u64(&self) -> u64 {
         self.0
@@ -361,7 +371,7 @@ impl Offset64 {
 
 /// Type of x86 Segment Selector
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Selector(pub u16);
 
 impl Selector {
@@ -389,28 +399,6 @@ impl Selector {
         RPL::from_u16(self.0)
     }
 
-    /// Adjust RPL Field
-    #[cfg(target_arch = "x86")]
-    #[inline]
-    pub fn adjust_rpl(self, rhs: RPL) -> Result<Selector, Selector> {
-        let result: u16;
-        let setnz: u8;
-        unsafe {
-            asm!(
-                "arpl {0:x}, {1:x}",
-                "setnz {2}",
-                inout(reg) self.as_u16() => result,
-                in(reg) rhs.0 as u16,
-                lateout(reg_byte) setnz,
-            );
-        }
-        if setnz == 0 {
-            return Ok(Selector(result));
-        } else {
-            return Err(self);
-        }
-    }
-
     /// Returns the index field in the selector
     #[inline]
     pub const fn index(&self) -> usize {
@@ -419,12 +407,12 @@ impl Selector {
 
     #[inline]
     pub const fn is_global(&self) -> bool {
-        !self.is_local()
+        (self.0 & Self::TI_LDT) == 0
     }
 
     #[inline]
     pub const fn is_local(&self) -> bool {
-        (self.0 & Self::TI_LDT) == Self::TI_LDT
+        !self.is_global()
     }
 
     #[inline]
@@ -453,9 +441,11 @@ impl LowerHex for Selector {
 /// 32-bit aligned selector
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct AlignedSelector32(pub u32);
+pub struct AlignedSelector32(u32);
 
 impl AlignedSelector32 {
+    pub const NULL: Self = Self(0);
+
     #[inline]
     pub const fn sel(&self) -> Selector {
         Selector(self.0 as u16)
@@ -552,7 +542,7 @@ privilege_level_impl! {
     /// Requested Priviledge Level
     pub struct RPL;
 
-    /// I/O Priviledge Level (Historical use only)
+    /// I/O Priviledge Level
     pub struct IOPL;
 }
 
@@ -587,8 +577,8 @@ impl RPL {
 
 impl IOPL {
     #[inline]
-    pub const fn from_flags(val: usize) -> IOPL {
-        IOPL(PrivilegeLevel::from_usize(val >> 12))
+    pub const fn from_flags(val: Flags) -> IOPL {
+        IOPL(PrivilegeLevel::from_usize((val.bits() >> 12) & 3))
     }
 
     #[inline]
@@ -777,73 +767,74 @@ impl TryFrom<InterruptVector> for Exception {
 #[repr(C, packed)]
 #[derive(Default)]
 pub struct TaskStateSegment32 {
-    pub link: u16,
-    _reserved_10: u16,
-    pub esp0: u32,
-    pub ss0: u32,
-    pub esp1: u32,
-    pub ss1: u32,
-    pub esp2: u32,
-    pub ss2: u32,
+    pub link: AlignedSelector32,
+    pub esp0: Gpr32,
+    pub ss0: AlignedSelector32,
+    pub esp1: Gpr32,
+    pub ss1: AlignedSelector32,
+    pub esp2: Gpr32,
+    pub ss2: AlignedSelector32,
     pub cr3: u32,
-    pub eip: u32,
+    pub eip: Gpr32,
     pub eflags: u32,
-    pub eax: u32,
-    pub ecx: u32,
-    pub edx: u32,
-    pub ebx: u32,
-    pub esp: u32,
-    pub ebp: u32,
-    pub esi: u32,
-    pub edi: u32,
-    pub es: u32,
-    pub cs: u32,
-    pub ss: u32,
-    pub ds: u32,
-    pub fs: u32,
-    pub gs: u32,
-    pub ldtr: u32,
-    _reserved_3: u16,
-    pub iopb_base: u16,
+    pub eax: Gpr32,
+    pub ecx: Gpr32,
+    pub edx: Gpr32,
+    pub ebx: Gpr32,
+    pub esp: Gpr32,
+    pub ebp: Gpr32,
+    pub esi: Gpr32,
+    pub edi: Gpr32,
+    pub es: AlignedSelector32,
+    pub cs: AlignedSelector32,
+    pub ss: AlignedSelector32,
+    pub ds: AlignedSelector32,
+    pub fs: AlignedSelector32,
+    pub gs: AlignedSelector32,
+    pub ldtr: AlignedSelector32,
+    /// Debug trap flag
+    pub t: u16,
+    pub iopb_base: Offset16,
+    pub ssp: Gpr32,
 }
 
 #[cfg(target_arch = "x86")]
 impl TaskStateSegment32 {
     pub const OFFSET_ESP0: usize = 0x04;
 
-    pub const LIMIT: u16 = 0x67;
+    pub const LIMIT: Limit16 = Limit16(0x6b);
 
     #[inline]
-    pub const fn new() -> Self {
+    pub const fn empty() -> Self {
         Self {
-            link: 0,
-            _reserved_10: 0,
-            esp0: 0,
-            ss0: 0,
-            esp1: 0,
-            ss1: 0,
-            esp2: 0,
-            ss2: 0,
+            link: AlignedSelector32::NULL,
+            esp0: Gpr32::ZERO,
+            ss0: AlignedSelector32::NULL,
+            esp1: Gpr32::ZERO,
+            ss1: AlignedSelector32::NULL,
+            esp2: Gpr32::ZERO,
+            ss2: AlignedSelector32::NULL,
             cr3: 0,
-            eip: 0,
+            eip: Gpr32::ZERO,
             eflags: 0,
-            eax: 0,
-            ecx: 0,
-            edx: 0,
-            ebx: 0,
-            esp: 0,
-            ebp: 0,
-            esi: 0,
-            edi: 0,
-            es: 0,
-            cs: 0,
-            ss: 0,
-            ds: 0,
-            fs: 0,
-            gs: 0,
-            ldtr: 0,
-            _reserved_3: 0,
-            iopb_base: 0,
+            eax: Gpr32::ZERO,
+            ecx: Gpr32::ZERO,
+            edx: Gpr32::ZERO,
+            ebx: Gpr32::ZERO,
+            esp: Gpr32::ZERO,
+            ebp: Gpr32::ZERO,
+            esi: Gpr32::ZERO,
+            edi: Gpr32::ZERO,
+            es: AlignedSelector32::NULL,
+            cs: AlignedSelector32::NULL,
+            ss: AlignedSelector32::NULL,
+            ds: AlignedSelector32::NULL,
+            fs: AlignedSelector32::NULL,
+            gs: AlignedSelector32::NULL,
+            ldtr: AlignedSelector32::NULL,
+            t: 0,
+            iopb_base: Offset16::new(0),
+            ssp: Gpr32::ZERO,
         }
     }
 }
@@ -857,33 +848,32 @@ pub struct TaskStateSegment64 {
     _reserved_2: [u32; 2],
     pub ist: [u64; 7],
     _reserved_3: [u32; 2],
-    pub iopb_base: u16,
+    _reserved_4: u16,
+    pub iopb_base: Offset16,
 }
 
 #[cfg(target_arch = "x86_64")]
 impl TaskStateSegment64 {
     pub const OFFSET_RSP0: usize = 0x04;
 
-    pub const LIMIT: u16 = 0x67;
+    pub const LIMIT: Limit16 = Limit16(0x67);
 
     #[inline]
-    pub const fn new() -> Self {
+    pub const fn empty() -> Self {
         Self {
             _reserved_1: 0,
             stack_pointer: [0; 3],
             _reserved_2: [0, 0],
             ist: [0; 7],
             _reserved_3: [0, 0],
-            iopb_base: 0,
+            _reserved_4: 0,
+            iopb_base: Offset16::new(0),
         }
     }
 
     #[inline]
     pub fn as_descriptor_pair(&self) -> DescriptorPair {
-        SegmentDescriptor::tss64(
-            Linear64(self as *const _ as usize as u64),
-            Limit16(Self::LIMIT),
-        )
+        SegmentDescriptor::tss64(Linear64(self as *const _ as usize as u64), Self::LIMIT)
     }
 }
 
@@ -961,6 +951,15 @@ impl SelectorErrorCode {
     }
 
     #[inline]
+    pub fn selector(&self) -> Option<Selector> {
+        if self.is_idt() {
+            None
+        } else {
+            Some(Selector(self.0 & 0xfffc))
+        }
+    }
+
+    #[inline]
     pub fn int_vec(&self) -> Option<InterruptVector> {
         if self.is_idt() {
             Some(InterruptVector(self.index() as u8))
@@ -976,32 +975,32 @@ pub struct PageErrorCode(pub usize);
 impl PageErrorCode {
     #[inline]
     pub fn is_present(&self) -> bool {
-        (self.0 & 0x1) != 0
+        (self.0 & 0b0001) != 0
     }
 
     #[inline]
     pub fn is_write(&self) -> bool {
-        (self.0 & 0x2) != 0
+        (self.0 & 0b0010) != 0
     }
 
     #[inline]
     pub fn is_user(&self) -> bool {
-        (self.0 & 0x4) != 0
+        (self.0 & 0b0100) != 0
     }
 
     #[inline]
     pub fn is_reserved_write(&self) -> bool {
-        (self.0 & 0x8) != 0
+        (self.0 & 0b1000) != 0
     }
 
     #[inline]
     pub fn is_instruction_fetch(&self) -> bool {
-        (self.0 & 0x10) != 0
+        (self.0 & 0b0001_0000) != 0
     }
 
     #[inline]
     pub fn is_protection_key(&self) -> bool {
-        (self.0 & 0x20) != 0
+        (self.0 & 0b0010_0000) != 0
     }
 }
 
@@ -1038,3 +1037,8 @@ mod ist {
 
 #[cfg(target_arch = "x86_64")]
 pub use ist::*;
+
+use crate::gpr::Flags;
+#[cfg(target_arch = "x86")]
+use crate::gpr::Gpr32;
+use crate::real::Offset16;

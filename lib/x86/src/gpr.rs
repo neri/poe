@@ -16,6 +16,8 @@ pub type Rflags = Flags;
 pub struct Gpr32(pub u32);
 
 impl Gpr32 {
+    pub const ZERO: Self = Self(0);
+
     #[inline]
     pub fn set_zero(&mut self) {
         self.0 = 0;
@@ -216,13 +218,8 @@ impl Flags {
     }
 
     #[inline]
-    pub const fn from_bits_retain(bits: usize) -> Self {
+    pub const fn from_bits(bits: usize) -> Self {
         Self(bits)
-    }
-
-    #[inline]
-    pub fn from_bits(bits: usize) -> Self {
-        Self::from_bits_retain(bits).canonicalized()
     }
 
     #[inline]
@@ -265,7 +262,7 @@ impl Flags {
                 out(reg)flags,
             );
         }
-        Self::from_bits_retain(flags)
+        Self::from_bits(flags)
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -279,17 +276,17 @@ impl Flags {
                 out(reg)flags,
             );
         }
-        Self::from_bits_retain(flags)
+        Self::from_bits(flags)
     }
 
     #[inline]
     pub fn iopl(&self) -> IOPL {
-        IOPL::from_flags(self.bits())
+        IOPL::from_flags(*self)
     }
 
     #[inline]
     pub fn set_iopl(&mut self, iopl: IOPL) {
-        *self = Self::from_bits_retain((self.bits() & !Self::IOPL3.bits()) | (iopl.into_flags()))
+        *self = Self::from_bits((self.bits() & !Self::IOPL3.bits()) | (iopl.into_flags()))
     }
 
     #[inline]
@@ -298,16 +295,18 @@ impl Flags {
     }
 
     #[inline]
+    pub const fn canonical_bits(&self) -> usize {
+        (self.bits() & !Self::ALWAYS_0_BITMAP.bits()) | Self::ALWAYS_1_BITMAP.bits()
+    }
+
+    #[inline]
     pub const fn is_canonical(&self) -> bool {
-        self.bits() & Self::ALWAYS_1_BITMAP.bits() == Self::ALWAYS_1_BITMAP.bits()
-            && self.bits() & Self::ALWAYS_0_BITMAP.bits() == 0
+        self.bits() == self.canonical_bits()
     }
 
     #[inline]
     pub fn canonicalized(&self) -> Self {
-        Self::from_bits_retain(
-            (self.bits() & !Self::ALWAYS_0_BITMAP.bits()) | Self::ALWAYS_1_BITMAP.bits(),
-        )
+        Self::from_bits(self.canonical_bits())
     }
 
     #[inline]

@@ -26,6 +26,7 @@ impl Cpu {
         }
     }
 
+    /// Perform an IRET instruction to return to user mode with the specified stack context.
     #[unsafe(naked)]
     unsafe extern "fastcall" fn _iret_to_user_mode(
         regs: &X86StackContext,

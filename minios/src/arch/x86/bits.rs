@@ -1,52 +1,65 @@
 use core::arch::asm;
 use core::cell::UnsafeCell;
+use core::ffi::c_void;
 use core::mem::transmute;
 use core::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone)]
 pub struct BitArray<const N: usize> {
-    array: [u32; N],
+    inner: [u32; N],
 }
 
 pub struct AtomicBitArray<const N: usize> {
-    array: UnsafeCell<[u32; N]>,
+    _inner: UnsafeCell<[u32; N]>,
 }
 
 #[allow(unused)]
 impl<const N: usize> BitArray<N> {
     #[inline]
     pub const fn new() -> Self {
-        Self { array: [0; N] }
+        Self { inner: [0; N] }
     }
 
+    /// Return the number of bits in the array.
     #[inline]
     pub const fn len(&self) -> usize {
         N * 32
     }
 
     #[inline]
+    pub const fn as_ptr(&self) -> *const c_void {
+        self.inner.as_ptr() as *const c_void
+    }
+
+    #[inline]
+    pub const fn as_mut_ptr(&mut self) -> *mut c_void {
+        self.inner.as_mut_ptr() as *mut c_void
+    }
+
+    #[inline]
     pub fn clear_all(&mut self) {
-        self.array.fill(0);
+        self.inner.fill(0);
     }
 
     #[inline]
     pub fn set(&mut self, index: usize) {
-        self.array[index / 32] |= 1 << (index % 32);
+        self.inner[index / 32] |= 1 << (index % 32);
     }
 
     #[inline]
     pub fn reset(&mut self, index: usize) {
-        self.array[index / 32] &= !(1 << (index % 32));
+        self.inner[index / 32] &= !(1 << (index % 32));
     }
 
     #[inline]
     pub fn get(&self, index: usize) -> bool {
-        self.array[index / 32] & (1 << (index % 32)) != 0
+        self.inner[index / 32] & (1 << (index % 32)) != 0
     }
 
+    /// Count the number of set bits in the array.
     #[inline]
     pub fn count(&self) -> usize {
-        self.array
+        self.inner
             .iter()
             .map(|&x| x.count_ones() as usize)
             .sum::<usize>()
@@ -58,7 +71,7 @@ impl<const N: usize> AtomicBitArray<N> {
     #[inline]
     pub const fn new() -> Self {
         Self {
-            array: UnsafeCell::new([0; N]),
+            _inner: UnsafeCell::new([0; N]),
         }
     }
 
@@ -69,10 +82,11 @@ impl<const N: usize> AtomicBitArray<N> {
     pub unsafe fn fetch_set_unchecked(&mut self, index: usize) -> bool {
         let result: u8;
         unsafe {
+            let p = self.as_mut_ptr();
             asm!(
                 "lock bts [{}], {}",
                 "setc {}",
-                in(reg) &self.array as *const _ as usize,
+                in(reg) p,
                 in(reg) index,
                 lateout(reg_byte) result,
             );
@@ -87,10 +101,11 @@ impl<const N: usize> AtomicBitArray<N> {
     pub unsafe fn fetch_reset_unchecked(&mut self, index: usize) -> bool {
         let result: u8;
         unsafe {
+            let p = self.as_mut_ptr();
             asm!(
                 "lock btr [{}], {}",
                 "setc {}",
-                in(reg) &self.array as *const _ as usize,
+                in(reg) p,
                 in(reg) index,
                 lateout(reg_byte) result,
             );
@@ -105,10 +120,11 @@ impl<const N: usize> AtomicBitArray<N> {
     pub unsafe fn fetch_unchecked(&self, index: usize) -> bool {
         let result: u8;
         unsafe {
+            let p = self.as_ptr();
             asm!(
                 "lock bt [{}], {}",
                 "setc {}",
-                in(reg) &self.array as *const _ as usize,
+                in(reg) p,
                 in(reg) index,
                 lateout(reg_byte) result,
             );

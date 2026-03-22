@@ -445,6 +445,7 @@ impl<'a> Node<'a> {
         None
     }
 
+    /// Well-known property name `phandle`
     #[inline]
     pub fn phandle(&self) -> Option<PHandle> {
         self.get_prop_u32(PropName::PHANDLE).map(PHandle)
@@ -690,11 +691,7 @@ impl<'a> NodeName<'a> {
 
     #[inline]
     pub const fn as_str(&'a self) -> &'a str {
-        if self.0.len() == 0 {
-            "/"
-        } else {
-            self.0
-        }
+        if self.0.len() == 0 { "/" } else { self.0 }
     }
 }
 

@@ -2,7 +2,7 @@ use crate::prot::{Linear32, Selector};
 
 /// Type of 16bit Offset Address
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Offset16(u16);
 
 impl Offset16 {

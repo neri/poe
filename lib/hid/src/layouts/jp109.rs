@@ -196,3 +196,8 @@ const CHAR_TO_KEYSTROKE: [(Usage, Modifier); 128] = [
     (Usage(0x2e), Modifier::LEFT_SHIFT),       // 0x7e
     (Usage::DELETE, Modifier::empty()),        // 0x7f
 ];
+
+#[test]
+fn test_jp109() {
+    super::tests::layout_test(&Jp109);
+}

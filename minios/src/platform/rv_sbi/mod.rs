@@ -7,6 +7,9 @@ use core::{arch::naked_asm, ffi::c_void};
 
 mod sbi_console;
 
+#[cfg(feature = "virt")]
+mod virt;
+
 unsafe extern "C" {
     unsafe static _end: c_void;
 }
@@ -46,6 +49,10 @@ impl PlatformTrait for Platform {
                 println!("compatible: {}", item);
             }
 
+            if cfg!(feature = "virt") {
+                virt::init_early(dt);
+            }
+
             CSR::STVEC.write(_arch_stvec as *const () as usize);
             CSR::SIE.set(1 << 5);
             sbi::legacy::set_timer(1);
@@ -53,15 +60,22 @@ impl PlatformTrait for Platform {
     }
 
     unsafe fn init(_arg: usize) {
-        // TODO:
-        println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
-        // unsafe {
-        //     Hal::cpu().enable_interrupt();
-        // }
+        unsafe {
+            if cfg!(feature = "virt") {
+                virt::init_late();
+            }
+
+            println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
+            //     Hal::cpu().enable_interrupt();
+        }
     }
 
     unsafe fn exit() {
-        // TODO:
+        unsafe {
+            if cfg!(feature = "virt") {
+                virt::exit();
+            }
+        }
     }
 
     fn reset_system() -> ! {

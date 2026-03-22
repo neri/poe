@@ -1,13 +1,14 @@
 //! Global Descriptor Table
 
+use crate::arch::bits::BitArray;
 use crate::arch::cpu::SetDescriptorError;
-use crate::*;
 use core::arch::asm;
 use core::cell::UnsafeCell;
 use core::mem::offset_of;
 use core::ptr;
 use core::sync::atomic::{Ordering, compiler_fence};
 use x86::prot::*;
+use x86::real::Offset16;
 
 pub const SYSTEM_TSS: Selector = Selector::new(1, RPL0);
 pub const KERNEL_CSEL: Selector = Selector::new(2, RPL0);
@@ -22,7 +23,7 @@ static mut GDT: UnsafeCell<Gdt> = UnsafeCell::new(Gdt::new());
 pub struct Gdt {
     table: [DescriptorEntry; Self::NUM_ITEMS],
     tss: TaskStateSegment32,
-    iopb: [u8; 8192],
+    iopb: BitArray<{ 65536 / 32 }>,
 }
 
 impl Gdt {
@@ -32,21 +33,18 @@ impl Gdt {
     const fn new() -> Self {
         let mut gdt = Self {
             table: [DescriptorEntry::NULL; Self::NUM_ITEMS],
-            tss: TaskStateSegment32::new(),
-            iopb: [0; 8192],
+            tss: TaskStateSegment32::empty(),
+            iopb: BitArray::new(),
         };
 
         unsafe {
-            gdt.set_item_opt(KERNEL_CSEL, SegmentDescriptor::flat_code32(DPL0))
-                .unwrap();
-            gdt.set_item_opt(KERNEL_DSEL, SegmentDescriptor::flat_data(DPL0))
-                .unwrap();
+            gdt._set_item(KERNEL_CSEL, SegmentDescriptor::flat_code32(DPL0));
+            gdt._set_item(KERNEL_DSEL, SegmentDescriptor::flat_data(DPL0));
 
-            gdt.set_item_opt(USER_CSEL, SegmentDescriptor::flat_code32(DPL3))
-                .unwrap();
-            gdt.set_item_opt(USER_DSEL, SegmentDescriptor::flat_data(DPL3))
-                .unwrap();
+            gdt._set_item(USER_CSEL, SegmentDescriptor::flat_code32(DPL3));
+            gdt._set_item(USER_DSEL, SegmentDescriptor::flat_data(DPL3));
         }
+
         gdt
     }
 
@@ -64,13 +62,12 @@ impl Gdt {
         unsafe {
             let gdt = Self::shared();
 
-            gdt.tss.ss0 = KERNEL_DSEL.as_u16() as u32;
+            gdt.tss.ss0 = KERNEL_DSEL.into();
             let iopb_base = (offset_of!(Self, iopb) - offset_of!(Self, tss)) as u16;
-            gdt.tss.iopb_base = iopb_base;
+            gdt.tss.iopb_base = Offset16::new(iopb_base);
             let tss_base = Linear32::new(&gdt.tss as *const _ as u32);
             let tss_limit = Limit16::new(iopb_base + 8191);
-            gdt.set_item_opt(SYSTEM_TSS, SegmentDescriptor::tss32(tss_base, tss_limit))
-                .unwrap();
+            gdt._set_item(SYSTEM_TSS, SegmentDescriptor::tss32(tss_base, tss_limit));
 
             gdt.reload();
 
@@ -117,14 +114,13 @@ impl Gdt {
     }
 
     #[inline]
-    pub const unsafe fn set_item_opt(
-        &mut self,
-        selector: Selector,
-        desc: DescriptorEntry,
-    ) -> Option<()> {
-        match unsafe { self.set_item(selector, desc) } {
-            Ok(()) => Some(()),
-            Err(_) => None,
+    #[track_caller]
+    const unsafe fn _set_item(&mut self, selector: Selector, desc: DescriptorEntry) {
+        unsafe {
+            match self.set_item(selector, desc) {
+                Ok(()) => (),
+                Err(_) => panic!("Failed to set GDT selector"),
+            }
         }
     }
 

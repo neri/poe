@@ -91,13 +91,15 @@ impl VM86 {
     }
 
     /// Invokes virtual 8086 mode.
-    #[inline(always)]
+    #[allow(unused)]
+    #[inline]
     pub unsafe fn invoke<F>(ctx: &mut X86StackContext, context_modifier: F)
     where
         F: FnOnce(&mut X86StackContext),
     {
         unsafe {
-            without_interrupts!({
+            let interrupt_guard = Hal::cpu().interrupt_guard();
+            {
                 let shared = Self::shared_mut();
                 let old_vm_stack = shared.vm_stack.take();
                 let old_jmp_buf = shared.jmp_buf.clone();
@@ -131,7 +133,8 @@ impl VM86 {
                 shared.jmp_buf = old_jmp_buf;
                 shared.context = old_context;
                 shared.vm_stack = old_vm_stack;
-            });
+            }
+            drop(interrupt_guard);
         }
     }
 
@@ -211,11 +214,12 @@ impl VM86 {
 
             loop {
                 let prefix = vm_csip.add(skip).read_volatile();
-                if prefix == 0x66 {
-                    prefix_66 = true;
-                    skip += 1;
-                } else {
-                    break;
+                match prefix {
+                    0x66 => {
+                        prefix_66 = true;
+                        skip += 1;
+                    }
+                    _ => break,
                 }
             }
 
@@ -293,7 +297,7 @@ impl VM86 {
                     skip += 1;
                 }
                 _ => {
-                    // Unsupported
+                    // Otherwise unsupported
                     return false;
                 }
             }
@@ -349,29 +353,29 @@ impl X86StackContext {
     #[inline]
     pub const fn empty() -> Self {
         Self {
-            _es: AlignedSelector32(0),
-            _ds: AlignedSelector32(0),
-            _fs: AlignedSelector32(0),
-            _gs: AlignedSelector32(0),
-            edi: Gpr32(0),
-            esi: Gpr32(0),
-            ebp: Gpr32(0),
-            _esp: Gpr32(0),
-            ebx: Gpr32(0),
-            edx: Gpr32(0),
-            ecx: Gpr32(0),
-            eax: Gpr32(0),
+            _es: AlignedSelector32::NULL,
+            _ds: AlignedSelector32::NULL,
+            _fs: AlignedSelector32::NULL,
+            _gs: AlignedSelector32::NULL,
+            edi: Gpr32::ZERO,
+            esi: Gpr32::ZERO,
+            ebp: Gpr32::ZERO,
+            _esp: Gpr32::ZERO,
+            ebx: Gpr32::ZERO,
+            edx: Gpr32::ZERO,
+            ecx: Gpr32::ZERO,
+            eax: Gpr32::ZERO,
             _vector: 0,
             _error_code: 0,
             eip: Pointer32(0),
-            _cs: AlignedSelector32(0),
+            _cs: AlignedSelector32::NULL,
             eflags: Eflags::empty(),
             _esp3: Pointer32(0),
-            _ss3: AlignedSelector32(0),
-            _vmes: AlignedSelector32(0),
-            _vmds: AlignedSelector32(0),
-            _vmfs: AlignedSelector32(0),
-            _vmgs: AlignedSelector32(0),
+            _ss3: AlignedSelector32::NULL,
+            _vmes: AlignedSelector32::NULL,
+            _vmds: AlignedSelector32::NULL,
+            _vmfs: AlignedSelector32::NULL,
+            _vmgs: AlignedSelector32::NULL,
         }
     }
 
@@ -647,7 +651,7 @@ impl X86StackContext {
     }
 
     #[inline]
-    pub fn vm_csip_ptr(&self) -> *mut u8 {
+    pub fn vm_csip_ptr(&self) -> *const u8 {
         Far16Ptr::new(self.cs(), self.eip.offset16()).as_ptr()
     }
 

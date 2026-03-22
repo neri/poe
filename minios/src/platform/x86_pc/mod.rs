@@ -62,6 +62,11 @@ impl PlatformTrait for Platform {
     fn reset_system() -> ! {
         unsafe {
             match System::platform() {
+                Platform::Nec98 => {
+                    LoIoPortWB::<0x37>::new().write(0x0f);
+                    LoIoPortWB::<0x37>::new().write(0x0b);
+                    LoIoPortWB::<0xf0>::new().write(0x00);
+                }
                 Platform::PcBios => {
                     // PCI reset
                     IoPortWB(0x0CF9).write(0x06);
@@ -78,11 +83,6 @@ impl PlatformTrait for Platform {
                     }
                     LoIoPortWB::<0x64>::new().write(0xfe);
                 }
-                Platform::Nec98 => {
-                    LoIoPortWB::<0x37>::new().write(0x0f);
-                    LoIoPortWB::<0x37>::new().write(0x0b);
-                    LoIoPortWB::<0xf0>::new().write(0x00);
-                }
                 Platform::FmTowns => {
                     LoIoPortWB::<0x20>::new().write(0x01);
                     LoIoPortWB::<0x22>::new().write(0x00);
@@ -90,7 +90,9 @@ impl PlatformTrait for Platform {
                 _ => unreachable!(),
             }
 
-            Hal::cpu().halt();
+            loop {
+                Hal::cpu().halt();
+            }
         }
     }
 }
