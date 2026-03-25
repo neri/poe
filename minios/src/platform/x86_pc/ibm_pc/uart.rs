@@ -87,6 +87,7 @@ impl Uart16550 {
         unsafe { (&mut *(&raw mut SHARED)).get_mut() }
     }
 
+    #[inline]
     fn is_ready_to_write(&mut self) -> bool {
         unsafe { (IoPortRB(self.base_port + 5).read() & 0x20) != 0 }
     }

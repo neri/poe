@@ -208,7 +208,6 @@ dependencies = [
  "minilib",
  "num",
  "paste",
- "sbi",
  "seq-macro",
  "simple_font",
  "smbios",
@@ -337,13 +336,6 @@ name = "pxfm"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a041e753da8b807c9255f28de81879c78c876392ff2469cde94799b2896b9d"
-
-[[package]]
-name = "sbi"
-version = "0.1.0"
-dependencies = [
- "minilib",
-]
 
 [[package]]
 name = "seq-macro"

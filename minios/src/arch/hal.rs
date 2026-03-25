@@ -28,6 +28,8 @@ pub trait HalCpu {
 
     fn wait_for_interrupt(&self);
 
+    fn bad_instruction(&self) -> !;
+
     unsafe fn enable_interrupt(&self);
 
     unsafe fn disable_interrupt(&self);

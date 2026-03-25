@@ -12,6 +12,7 @@ pub type Eflags = Flags;
 pub type Rflags = Flags;
 
 /// 32-bit general purpose register.
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Gpr32(pub u32);
 
@@ -101,6 +102,7 @@ impl From<u8> for Gpr32 {
 }
 
 /// 32-bit pointer register.
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Pointer32(pub u32);
 
@@ -164,6 +166,7 @@ impl From<Offset32> for Pointer32 {
     }
 }
 
+#[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Flags(usize);
 

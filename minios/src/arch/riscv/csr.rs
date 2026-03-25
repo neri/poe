@@ -44,6 +44,16 @@ impl CSR {
         }
         result
     }
+
+    /// Set the supervisor trap handler base address and mode.
+    #[inline]
+    pub unsafe fn set_stvec(mode: VectorMode, addr: usize) {
+        compiler_fence(Ordering::SeqCst);
+        let stvec_val = (addr & !0x3) | mode as usize;
+        unsafe {
+            Self::STVEC.write(stvec_val);
+        }
+    }
 }
 
 pub struct CsrReg<const N: usize>;
@@ -82,4 +92,10 @@ impl<const N: usize> CsrReg<N> {
             asm!("csrc {csr}, {0}", in(reg) bits, csr = const N,);
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum VectorMode {
+    Direct = 0,
+    Vectored = 1,
 }

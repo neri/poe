@@ -6,6 +6,10 @@ use crate::prot::{Linear32, Selector};
 pub struct Offset16(u16);
 
 impl Offset16 {
+    pub const ZERO: Self = Self(0);
+
+    pub const MAX: Self = Self(u16::MAX);
+
     #[inline]
     pub const fn new(off: u16) -> Self {
         Self(off)

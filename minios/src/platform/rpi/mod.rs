@@ -104,24 +104,6 @@ impl PlatformTrait for Platform {
     }
 }
 
-// #[inline]
-// pub fn std_screen() -> Option<(*mut TrueColor, usize, usize, usize)> {
-//     let ptr = STD_SCR_PTR.load(Ordering::Relaxed) as *mut TrueColor;
-//     (ptr != null_mut()).then(|| {
-//         (
-//             ptr,
-//             STD_SCR_W.load(Ordering::Relaxed),
-//             STD_SCR_H.load(Ordering::Relaxed),
-//             STD_SCR_S.load(Ordering::Relaxed),
-//         )
-//     })
-// }
-
-// static STD_SCR_PTR: AtomicUsize = AtomicUsize::new(0);
-// static STD_SCR_W: AtomicUsize = AtomicUsize::new(0);
-// static STD_SCR_H: AtomicUsize = AtomicUsize::new(0);
-// static STD_SCR_S: AtomicUsize = AtomicUsize::new(0);
-
 #[inline]
 pub fn current_machine_type() -> MachineType {
     unsafe { CURRENT_MACHINE_TYPE.assume_init() }

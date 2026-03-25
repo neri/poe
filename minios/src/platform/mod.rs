@@ -10,18 +10,23 @@ pub mod rpi;
 #[cfg(feature = "rpi")]
 pub use rpi as current;
 
-#[cfg(feature = "sbi")]
-pub mod rv_sbi;
-#[cfg(feature = "sbi")]
-pub use rv_sbi as current;
+#[cfg(all(
+    any(target_arch = "riscv32", target_arch = "riscv64"),
+    feature = "virt"
+))]
+pub mod rv_virt;
+#[cfg(all(
+    any(target_arch = "riscv32", target_arch = "riscv64"),
+    feature = "virt"
+))]
+pub use rv_virt as current;
 
 use core::fmt;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub enum Platform {
-    #[default]
-    Unspecified = 0,
+    // Unspecified = 0,
     /// IA32-Legacy NEC PC-98 Series Computer
     Nec98 = 1,
     /// IA32-Legacy IBM PC Compatible
@@ -36,15 +41,14 @@ pub enum Platform {
     DeviceTree = 6,
     /// Raspberry Pi
     RaspberryPi = 7,
-    /// RISC-V with OpenSBI
-    OpenSbi = 8,
+    /// Virt Machine (e.g. QEMU virt)
+    Virt = 8,
 }
 
 impl Platform {
     #[inline]
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Unspecified => "Unspecified",
             Self::PcBios => "PC (BIOS)",
             Self::Nec98 => "PC-98",
             Self::FmTowns => "FM TOWNS",
@@ -52,7 +56,7 @@ impl Platform {
             Self::UefiBridged => "UEFI (Bridged)",
             Self::DeviceTree => "Device Tree",
             Self::RaspberryPi => "Raspberry Pi",
-            Self::OpenSbi => "OpenSBI",
+            Self::Virt => "Virt Machine",
         }
     }
 }

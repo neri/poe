@@ -28,7 +28,7 @@ impl VM86 {
     #[inline]
     const fn new() -> Self {
         Self {
-            vmbp: Linear32::NULL,
+            vmbp: Linear32::ZERO,
             vm_stack: None,
             jmp_buf: JmpBuf::new(),
             context: null_mut(),
@@ -40,7 +40,7 @@ impl VM86 {
             let shared = Self::shared_mut();
             shared.vm_stack = LoMemoryManager::alloc_page_checked();
 
-            let mut vmbp = Linear32::NULL;
+            let mut vmbp = Linear32::ZERO;
 
             // Find ARPL as VMBP
             for p in 0x0f_0000..0x0f_fff0 {
@@ -51,7 +51,7 @@ impl VM86 {
                 }
             }
 
-            if vmbp == Linear32::NULL {
+            if vmbp == Linear32::ZERO {
                 // TODO: other methods
                 panic!("VMBP not found");
             }

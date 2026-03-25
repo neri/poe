@@ -7,6 +7,7 @@ use core::cell::UnsafeCell;
 use core::mem::offset_of;
 use core::ptr;
 use core::sync::atomic::{Ordering, compiler_fence};
+use x86::gpr::Gpr32;
 use x86::prot::*;
 use x86::real::Offset16;
 
@@ -51,11 +52,6 @@ impl Gdt {
     #[inline]
     pub unsafe fn shared<'a>() -> &'a mut Self {
         unsafe { (&mut *(&raw mut GDT)).get_mut() }
-    }
-
-    #[inline]
-    pub fn tss_mut(&mut self) -> &mut TaskStateSegment32 {
-        &mut self.tss
     }
 
     pub(super) unsafe fn init() {
@@ -141,20 +137,25 @@ impl Gdt {
     }
 
     #[inline]
-    pub unsafe fn set_tss_esp0(esp: u32) {
+    pub fn tss_mut(&mut self) -> &mut TaskStateSegment32 {
+        &mut self.tss
+    }
+
+    #[inline]
+    pub unsafe fn set_tss_esp0(esp: Gpr32) {
         compiler_fence(Ordering::SeqCst);
         unsafe {
-            let gdt = Self::shared();
-            ptr::addr_of_mut!(gdt.tss.esp0).write_volatile(esp);
+            let tss = Self::shared().tss_mut();
+            ptr::addr_of_mut!(tss.esp0).write_volatile(esp);
         }
         compiler_fence(Ordering::SeqCst);
     }
 
     #[inline]
-    pub fn get_tss_esp0() -> u32 {
+    pub fn get_tss_esp0() -> Gpr32 {
         unsafe {
-            let gdt = Self::shared();
-            ptr::addr_of!(gdt.tss.esp0).read_volatile()
+            let tss = Self::shared().tss_mut();
+            ptr::addr_of!(tss.esp0).read_volatile()
         }
     }
 }

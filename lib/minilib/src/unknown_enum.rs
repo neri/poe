@@ -45,7 +45,7 @@ macro_rules! unknown_enum {
 
 pub struct Unknown<KnownType, RawType> {
     raw: RawType,
-    _phantom: PhantomData<KnownType>,
+    _phantom: PhantomData<(RawType, KnownType)>,
 }
 
 impl<KnownType, RawType> Unknown<KnownType, RawType>

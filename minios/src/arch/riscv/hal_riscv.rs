@@ -28,10 +28,19 @@ impl HalCpu for CpuImpl {
     }
 
     #[inline]
+    fn bad_instruction(&self) -> ! {
+        unsafe {
+            asm!("unimp", options(nomem, nostack, noreturn));
+        }
+    }
+
+    #[inline]
     fn wait_for_interrupt(&self) {
         compiler_fence(Ordering::SeqCst);
         unsafe {
-            asm!("wfi", options(nomem, nostack));
+            // TODO: wfi is currently not working
+            asm!("nop", options(nomem, nostack));
+            // asm!("wfi", options(nomem, nostack));
         }
     }
 
@@ -96,6 +105,10 @@ impl Drop for InterruptGuard {
 
 impl fmt::Debug for PhysicalAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:016x}", self.as_u64())
+        if cfg!(target_pointer_width = "32") {
+            write!(f, "{:08x}", self.as_usize())
+        } else {
+            write!(f, "{:016x}", self.as_usize())
+        }
     }
 }

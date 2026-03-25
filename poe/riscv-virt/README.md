@@ -1,4 +1,4 @@
-# POE for RISC-V
+# POE for RISC-V virt machine
 
 ## Requirements
 

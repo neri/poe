@@ -10,7 +10,7 @@ default = []
 device_tree = []
 pc = []
 rpi = ["device_tree"]
-sbi = ["device_tree"]
+# sbi = ["device_tree"]
 virt = []
 
 [dependencies]
@@ -32,8 +32,8 @@ edid = { path = "../lib/edid/" }
 simple_font = { path = "../lib/simple_font/" }
 tui = { path = "../lib/tui/" }
 
+# [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
+sbi = { path = "../lib/sbi/", optional = true }
+
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 x86 = { path = "../lib/x86/" }
-
-[target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
-sbi = { path = "../lib/sbi/" }

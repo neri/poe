@@ -11,8 +11,10 @@ MKINITRD	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkinitrd --
 MKKRNIMG	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkkrnimg --
 OBJCOPY		= llvm-objcopy
 
+POE_TARGET	= riscv64gc-unknown-none-elf
+# POE_TARGET	= riscv32imac-unknown-none-elf
 POE_SRC		= ./poe-rv
-POE_LD		= $(POE_SRC)/target/riscv64gc-unknown-none-elf/release/poe-rv
+POE_LD		= $(POE_SRC)/target/$(POE_TARGET)/release/poe-rv
 POE_BIN		= $(BIN)/kernel.elf
 TARGETS		= poe $(POE_BIN)
 
@@ -32,7 +34,13 @@ refresh: clean
 	-rm **/Cargo.lock
 
 run:
-	qemu-system-riscv64 -smp 4 -M virt \
+	qemu-system-riscv64 -M virt \
+		-device virtio-vga \
+		-kernel $(POE_BIN) \
+		-serial mon:stdio
+
+run32:
+	qemu-system-riscv32 -M virt -bios none \
 		-device virtio-vga \
 		-kernel $(POE_BIN) \
 		-serial mon:stdio
@@ -42,8 +50,8 @@ test: poe
 $(BIN):
 	mkdir -p $@
 
-poe:
-	(cd $(POE_SRC) && cargo build --release)
+poe: $(POE_SRC)/src/link.ld
+	(cd $(POE_SRC) && cargo build --release --target $(POE_TARGET))
 
 $(POE_BIN): poe $(BIN)
 	cp $(POE_LD) $(POE_BIN)

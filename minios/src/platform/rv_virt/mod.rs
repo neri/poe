@@ -1,14 +1,15 @@
-//! Platform dependent module for riscv sbi generic (temp)
+//! Platform dependent module for RISC-V virt machine
 
 use super::*;
-use crate::arch::{cpu, csr::CSR};
+use crate::arch::cpu;
+use crate::arch::csr::{CSR, VectorMode};
 use crate::*;
 use core::{arch::naked_asm, ffi::c_void};
 
+#[cfg(feature = "sbi")]
 mod sbi_console;
 
-#[cfg(feature = "virt")]
-mod virt;
+mod uart;
 
 unsafe extern "C" {
     unsafe static _end: c_void;
@@ -18,30 +19,44 @@ impl PlatformTrait for Platform {
     unsafe fn init_dt_early(dt: &fdt::DeviceTree, arg: usize) {
         let hart_id = arg;
         unsafe {
-            sbi_console::SbiConsole::init();
-            System::set_stdin(sbi_console::SbiConsole::shared());
-            System::set_stdout(sbi_console::SbiConsole::shared());
-            System::set_stderr(sbi_console::SbiConsole::shared());
+            #[cfg(feature = "sbi")]
+            {
+                sbi_console::SbiConsole::init();
+                System::set_stdin(sbi_console::SbiConsole::shared());
+                System::set_stdout(sbi_console::SbiConsole::shared());
+                System::set_stderr(sbi_console::SbiConsole::shared());
+            }
+            #[cfg(not(feature = "sbi"))]
+            {
+                uart::Uart16550::init(0x1000_0000);
+                System::set_stdin(uart::Uart16550::shared());
+                System::set_stdout(uart::Uart16550::shared());
+                System::set_stderr(uart::Uart16550::shared());
+            }
 
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
-            let spec_ver = sbi::base::get_spec_version();
-            let impl_id = sbi::base::get_impl_id().unwrap();
-            let impl_ver = sbi::base::get_impl_version().unwrap();
-            println!(
-                "SBI version {}.{} impl {:?} version {:x}",
-                spec_ver.major(),
-                spec_ver.minor(),
-                impl_id,
-                impl_ver
-            );
+            #[cfg(feature = "sbi")]
+            {
+                let spec_ver = sbi::base::get_spec_version();
+                let impl_id = sbi::base::get_impl_id().unwrap();
+                let impl_ver = sbi::base::get_impl_version().unwrap();
+                println!(
+                    "SBI version {}.{} impl {:?} version {:x}",
+                    spec_ver.major(),
+                    spec_ver.minor(),
+                    impl_id,
+                    impl_ver
+                );
+            }
             println!("Hart ID: {}", hart_id);
 
             let boot_info = System::boot_info_mut();
-            boot_info.platform = Platform::OpenSbi;
+            boot_info.platform = Platform::Virt;
 
             let end = PhysicalAddress::new(&_end as *const _ as PhysicalAddressRepr);
-            boot_info.start_conventional_memory =
-                end.rounding_up(mem::MemoryManager::PAGE_SIZE).as_repr() as u32;
+            boot_info.start_conventional_memory = end
+                .rounding_up(mem::MemoryManager::PAGE_SIZE as PhysicalAddressRepr)
+                .as_repr() as u32;
             boot_info.conventional_memory_size = 0x40_0000;
 
             println!("Model: {}", dt.root().model());
@@ -49,37 +64,41 @@ impl PlatformTrait for Platform {
                 println!("compatible: {}", item);
             }
 
-            if cfg!(feature = "virt") {
-                virt::init_early(dt);
+            CSR::set_stvec(VectorMode::Direct, _arch_stvec as *const () as usize);
+            // CSR::SIE.set(1 << 5);
+            #[cfg(feature = "sbi")]
+            {
+                sbi::legacy::set_timer(1);
             }
-
-            CSR::STVEC.write(_arch_stvec as *const () as usize);
-            CSR::SIE.set(1 << 5);
-            sbi::legacy::set_timer(1);
         }
     }
 
     unsafe fn init(_arg: usize) {
+        #[allow(unused_unsafe)]
         unsafe {
-            if cfg!(feature = "virt") {
-                virt::init_late();
-            }
-
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
-            //     Hal::cpu().enable_interrupt();
+
+            // loop {
+            //     Hal::cpu().halt();
+            // }
+            // Hal::cpu().bad_instruction();
+            Hal::cpu().enable_interrupt();
         }
     }
 
     unsafe fn exit() {
-        unsafe {
-            if cfg!(feature = "virt") {
-                virt::exit();
-            }
-        }
+        // TODO:
     }
 
     fn reset_system() -> ! {
-        sbi::legacy::shutdown();
+        #[cfg(feature = "sbi")]
+        {
+            sbi::legacy::shutdown();
+        }
+        #[cfg(not(feature = "sbi"))]
+        {
+            todo!()
+        }
     }
 }
 
@@ -210,7 +229,15 @@ unsafe fn _arch_handle_trap(context: &ExceptionContext) {
             "s10 {:016x} s11 {:016x} sp {:016x}",
             context.s10, context.s11, context.sp,
         );
-        sbi::legacy::shutdown()
+
+        #[cfg(feature = "sbi")]
+        {
+            sbi::legacy::shutdown()
+        }
+        #[cfg(not(feature = "sbi"))]
+        {
+            todo!()
+        }
     }
 }
 

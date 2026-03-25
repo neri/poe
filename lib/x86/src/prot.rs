@@ -265,7 +265,7 @@ impl Limit32 {
 pub struct Linear32(u32);
 
 impl Linear32 {
-    pub const NULL: Self = Self(0);
+    pub const ZERO: Self = Self(0);
 
     pub const MAX: Self = Self(u32::MAX);
 
@@ -296,7 +296,7 @@ impl Linear32 {
 pub struct Linear64(u64);
 
 impl Linear64 {
-    pub const NULL: Self = Self(0);
+    pub const ZERO: Self = Self(0);
 
     pub const MAX: Self = Self(u64::MAX);
 
@@ -324,6 +324,8 @@ impl Linear64 {
 pub struct Offset32(u32);
 
 impl Offset32 {
+    pub const ZERO: Self = Self(0);
+
     pub const MAX: Self = Self(u32::MAX);
 
     #[inline]
@@ -349,6 +351,8 @@ impl Offset32 {
 pub struct Offset64(u64);
 
 impl Offset64 {
+    pub const ZERO: Self = Self(0);
+
     pub const MAX: Self = Self(u64::MAX);
 
     #[inline]
@@ -833,7 +837,7 @@ impl TaskStateSegment32 {
             gs: AlignedSelector32::NULL,
             ldtr: AlignedSelector32::NULL,
             t: 0,
-            iopb_base: Offset16::new(0),
+            iopb_base: Offset16::ZERO,
             ssp: Gpr32::ZERO,
         }
     }

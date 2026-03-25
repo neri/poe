@@ -26,6 +26,13 @@ impl HalCpu for CpuImpl {
     }
 
     #[inline]
+    fn bad_instruction(&self) -> ! {
+        unsafe {
+            asm!("ud2", options(nomem, nostack, noreturn));
+        }
+    }
+
+    #[inline]
     fn wait_for_interrupt(&self) {
         unsafe {
             asm!("hlt", options(nomem, nostack));

@@ -339,8 +339,6 @@ impl SimpleTextInput for VT100<'_> {
     }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
-        // self.refill();
-        // self.key_buffer.try_remove(0)
         self.is_ready().then(|| self.key_buffer.remove(0))
     }
 }

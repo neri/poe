@@ -25,6 +25,13 @@ impl HalCpu for CpuImpl {
     }
 
     #[inline]
+    fn bad_instruction(&self) -> ! {
+        unsafe {
+            asm!("udf #0", options(nomem, nostack, noreturn));
+        }
+    }
+
+    #[inline]
     fn wait_for_interrupt(&self) {
         unsafe {
             // TODO: currentry wfi is not working
