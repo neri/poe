@@ -20,27 +20,13 @@ static SYSTEM_NAME: &str = "POE";
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
 pub fn main() {
-    #[cfg(feature = "device_tree")]
-    if false {
-        if let Some(fdt) = System::device_tree() {
-            println!("DEVICE TREE:");
-            println!("  Model: {}", fdt.root().model());
-            // println!("  Compatible: {}", fdt.root().compatible());
-            println!("");
-
-            if true {
-                dump_fdt_node(fdt.root(), 0);
-                println!("");
-            }
-        }
-    }
-
     if true {
         let _ = System::conctl().set_graphics_mode_from_list(&[
-            // (1280, 720, PixelFormat::BGRX8888),
+            // (1920, 1080, PixelFormat::BGRX8888),
+            (1280, 720, PixelFormat::BGRX8888),
             // (800, 600, PixelFormat::BGRX8888),
             // (800, 600, PixelFormat::Indexed8),
-            // (640, 480, PixelFormat::Indexed8),
+            (640, 480, PixelFormat::Indexed8),
             (320, 200, PixelFormat::Indexed8),
         ]);
 
@@ -49,12 +35,6 @@ pub fn main() {
         stdout.enable_cursor(false);
         stdout.set_attribute(0xb7);
         stdout.clear_screen();
-
-        println!(
-            "console: {} {}",
-            stdout.current_mode().columns,
-            stdout.current_mode().rows,
-        );
 
         {
             use tui::prelude::*;
@@ -78,6 +58,10 @@ pub fn main() {
         println!("");
         println!("");
     }
+
+    // Hal::cpu().bad_instruction();
+    // #[allow(unreachable_code)]
+    // {}
 
     //-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-
 
@@ -110,147 +94,5 @@ pub fn main() {
             }
             println!("{:?}: Bad command or file name.", line);
         }
-    }
-}
-
-#[cfg(feature = "device_tree")]
-use fdt;
-
-#[allow(dead_code)]
-#[cfg(feature = "device_tree")]
-fn dump_fdt_node(node: &fdt::Node, level: usize) {
-    use fdt::*;
-
-    if let Some(compatible) = node.get_prop_str(PropName::COMPATIBLE) {
-        println!(
-            "{}{} ({:?})",
-            "  ".repeat(level),
-            node.name().as_str(),
-            compatible,
-        );
-    } else {
-        println!("{}{}", "  ".repeat(level), node.name().as_str(),);
-    }
-
-    for prop in node.props() {
-        match prop.name() {
-            PropName::COMPATIBLE => {
-                for _ in 0..level {
-                    print!("  ");
-                }
-                print!("  {} <", prop.name().as_str());
-                for (i, s) in prop.string_list().enumerate() {
-                    if i > 0 {
-                        print!(" {:?}", s);
-                    } else {
-                        print!("{:?}", s);
-                    }
-                }
-                println!(">");
-            }
-            PropName::REG => {
-                let reg = node.reg().unwrap();
-                for reg in reg {
-                    for _ in 0..level {
-                        print!("  ");
-                    }
-                    if reg.1 > 0 {
-                        println!("  reg <{:#010x} {:#010x}>", reg.0, reg.1,);
-                    } else {
-                        println!("  reg <{:#010x}>", reg.0,);
-                    }
-                }
-            }
-            PropName::ADDRESS_CELLS
-            | PropName::SIZE_CELLS
-            | PropName::INTERRUPT_CELLS
-            | PropName::INTERRUPT_PARENT
-            | PropName::CLOCK_CELLS
-            | PropName::PHANDLE => {
-                for _ in 0..level {
-                    print!("  ");
-                }
-                println!(
-                    "  {} <{:#x}>",
-                    prop.name().as_str(),
-                    prop.as_u32().unwrap_or_default()
-                );
-            }
-            PropName("linux,initrd-end")
-            | PropName("linux,initrd-start")
-            | PropName::CLOCK_FREQUENCY
-            | PropName::TIMEBASE_FREQUENCY => {
-                for _ in 0..level {
-                    print!("  ");
-                }
-                println!(
-                    "  {} <{:#x}>",
-                    prop.name().as_str(),
-                    prop.as_u32().unwrap_or_default()
-                );
-            }
-            PropName::DEVICE_TYPE | PropName::MODEL | PropName::NAME | PropName::STATUS => {
-                for _ in 0..level {
-                    print!("  ");
-                }
-                println!("  {} <{:?}>", prop.name().as_str(), prop.as_str());
-            }
-            _ => {
-                for _ in 0..level {
-                    print!("  ");
-                }
-                print!("  {} <", prop.name().as_str());
-
-                let bytes = prop.bytes();
-                let len = bytes.len();
-                if len > 0 {
-                    let maybe_words = (len & 3) == 0;
-                    let mut maybe_asciz = false;
-                    if bytes[len - 1] == 0 {
-                        maybe_asciz = true;
-                        for i in 0..len - 1 {
-                            if bytes[i] < 0x20 || bytes[i] > 0x7e {
-                                maybe_asciz = false;
-                                break;
-                            }
-                        }
-                    }
-
-                    if maybe_asciz || !maybe_words {
-                        print!("\"");
-                        for c in bytes {
-                            match *c {
-                                0 => {
-                                    print!("\\0");
-                                }
-                                0x20..=0x7E => {
-                                    print!("{}", *c as char);
-                                }
-                                _ => {
-                                    print!("\\x{:02x}", *c);
-                                }
-                            }
-                        }
-                        print!("\"");
-                    } else {
-                        let words = unsafe {
-                            core::slice::from_raw_parts(bytes.as_ptr() as *const BeU32, len / 4)
-                        };
-                        for (i, w) in words.iter().enumerate() {
-                            if i > 0 {
-                                print!(" {:#x}", w.as_u32());
-                            } else {
-                                print!("{:#x}", w.as_u32());
-                            }
-                        }
-                    }
-                }
-                println!(">");
-            }
-        }
-    }
-
-    for child in node.children() {
-        dump_fdt_node(&child, level + 1);
     }
 }

@@ -9,7 +9,8 @@ use core::{arch::naked_asm, ffi::c_void};
 #[cfg(feature = "sbi")]
 mod sbi_console;
 
-mod uart;
+pub mod syscon;
+pub mod uart;
 
 unsafe extern "C" {
     unsafe static _end: c_void;
@@ -35,6 +36,7 @@ impl PlatformTrait for Platform {
             }
 
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
+
             #[cfg(feature = "sbi")]
             {
                 let spec_ver = sbi::base::get_spec_version();
@@ -48,6 +50,7 @@ impl PlatformTrait for Platform {
                     impl_ver
                 );
             }
+
             println!("Hart ID: {}", hart_id);
 
             let boot_info = System::boot_info_mut();
@@ -82,7 +85,7 @@ impl PlatformTrait for Platform {
             //     Hal::cpu().halt();
             // }
             // Hal::cpu().bad_instruction();
-            Hal::cpu().enable_interrupt();
+            // Hal::cpu().enable_interrupt();
         }
     }
 
@@ -97,7 +100,20 @@ impl PlatformTrait for Platform {
         }
         #[cfg(not(feature = "sbi"))]
         {
-            todo!()
+            syscon::Syscon::Reboot.write();
+            Hal::cpu().halt();
+        }
+    }
+
+    fn halt() -> ! {
+        #[cfg(feature = "sbi")]
+        {
+            sbi::legacy::shutdown()
+        }
+        #[cfg(not(feature = "sbi"))]
+        {
+            syscon::Syscon::PowerOff.write();
+            Hal::cpu().halt();
         }
     }
 }
@@ -186,7 +202,7 @@ unsafe extern "C" fn _arch_stvec() -> ! {
     );
 }
 
-unsafe fn _arch_handle_trap(context: &ExceptionContext) {
+unsafe fn _arch_handle_trap(ctx: &ExceptionContext) {
     unsafe {
         let scause = CSR::SCAUSE.read();
         let stval = CSR::STVAL.read();
@@ -199,45 +215,38 @@ unsafe fn _arch_handle_trap(context: &ExceptionContext) {
         );
         println!(
             "ra {:016x} gp {:016x} tp {:016x} t0 {:016x}",
-            context.ra, context.gp, context.tp, context.t0,
+            ctx.ra, ctx.gp, ctx.tp, ctx.t0,
         );
         println!(
             "t1 {:016x} t2 {:016x} t3 {:016x} t4 {:016x}",
-            context.t1, context.t2, context.t3, context.t4,
+            ctx.t1, ctx.t2, ctx.t3, ctx.t4,
         );
         println!(
             "t5 {:016x} t6 {:016x} a0 {:016x} a1 {:016x}",
-            context.t5, context.t6, context.a0, context.a1,
+            ctx.t5, ctx.t6, ctx.a0, ctx.a1,
         );
         println!(
             "a2 {:016x} a3 {:016x} a4 {:016x} a5 {:016x}",
-            context.a2, context.a3, context.a4, context.a5,
+            ctx.a2, ctx.a3, ctx.a4, ctx.a5,
         );
         println!(
             "a6 {:016x} a7 {:016x} s0 {:016x} s1 {:016x}",
-            context.a6, context.a7, context.s0, context.s1,
+            ctx.a6, ctx.a7, ctx.s0, ctx.s1,
         );
         println!(
             "s2 {:016x} s3 {:016x} s4 {:016x} s5 {:016x}",
-            context.s2, context.s3, context.s4, context.s5,
+            ctx.s2, ctx.s3, ctx.s4, ctx.s5,
         );
         println!(
             "s6 {:016x} s7 {:016x} s8 {:016x} s9 {:016x}",
-            context.s6, context.s7, context.s8, context.s9,
+            ctx.s6, ctx.s7, ctx.s8, ctx.s9,
         );
         println!(
             "s10 {:016x} s11 {:016x} sp {:016x}",
-            context.s10, context.s11, context.sp,
+            ctx.s10, ctx.s11, ctx.sp,
         );
 
-        #[cfg(feature = "sbi")]
-        {
-            sbi::legacy::shutdown()
-        }
-        #[cfg(not(feature = "sbi"))]
-        {
-            todo!()
-        }
+        Platform::halt();
     }
 }
 

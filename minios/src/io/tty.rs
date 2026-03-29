@@ -72,12 +72,12 @@ impl InputKey {
 
     /// Returns the Unicode character, if possible.
     #[inline]
-    pub fn unicode_char(&self) -> Option<char> {
+    pub const fn unicode_char(&self) -> Option<char> {
         char::from_u32(self.unicode_char as u32)
     }
 
     #[inline]
-    pub fn key_stroke(&self) -> KeyStroke {
+    pub const fn key_stroke(&self) -> KeyStroke {
         self.key_stroke
     }
 

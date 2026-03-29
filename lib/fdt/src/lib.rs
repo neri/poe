@@ -1,4 +1,4 @@
-//! Zero Allocation Device Tree Parser
+//! Zero Allocation Flattened Device Tree Parser
 #![cfg_attr(not(test), no_std)]
 
 use core::{

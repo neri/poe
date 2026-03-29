@@ -69,19 +69,6 @@ SECTIONS {
 		*(.fini.literal)
 		KEEP (*(.fini))
 
-W_RODAT:	*(.rodata)
-W_RODAT:	*(.rodata1)
-W_RODAT:	*(.rodata.*)
-W_RODAT:	*(.gnu.linkonce.r*)
-
-		/* .ARM.extab name sections containing exception unwinding information */
-		*(.ARM.extab* .gnu.linkonce.armextab.*)
-
-		/* .ARM.exidx name sections containing index entries for section unwinding */
-		__exidx_start = .;
-		*(.ARM.exidx* .gnu.linkonce.armexidx.*)
-		__exidx_end = .;
-
 		/* This is special code area at the end of the normal
 		   text section.  It contains a small lookup table at
 		   the start followed by the code pointed to by entries

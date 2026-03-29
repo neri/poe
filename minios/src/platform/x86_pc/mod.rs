@@ -90,9 +90,7 @@ impl PlatformTrait for Platform {
                 _ => unreachable!(),
             }
 
-            loop {
-                Hal::cpu().halt();
-            }
+            Hal::cpu().halt();
         }
     }
 }

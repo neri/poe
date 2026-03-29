@@ -33,11 +33,15 @@ clean:
 refresh: clean
 	-rm **/Cargo.lock
 
-run:
+run: run64
+
+run64:
 	qemu-system-riscv64 -M virt \
-		-device virtio-vga \
+		-nographic \
 		-kernel $(POE_BIN) \
 		-serial mon:stdio
+
+# 		-device virtio-vga \
 
 run32:
 	qemu-system-riscv32 -M virt -bios none \

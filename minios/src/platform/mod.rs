@@ -21,6 +21,7 @@ pub mod rv_virt;
 ))]
 pub use rv_virt as current;
 
+use crate::*;
 use core::fmt;
 
 #[repr(u8)]
@@ -76,6 +77,10 @@ pub trait PlatformTrait {
     unsafe fn exit();
 
     fn reset_system() -> !;
+
+    fn halt() -> ! {
+        Hal::cpu().halt();
+    }
 }
 
 pub trait PlatformTimer {

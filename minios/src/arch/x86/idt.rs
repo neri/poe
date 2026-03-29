@@ -195,8 +195,8 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
         return;
     }
 
-    let stderr = System::stderr();
-    stderr.set_attribute(0x1f);
+    let output = System::stdout();
+    output.set_attribute(0x1f);
 
     let is_vm = ctx.is_vm();
 
@@ -208,14 +208,14 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
     let es = ctx.vmes().unwrap_or(ctx.es());
 
     let _ = writeln!(
-        stderr,
+        output,
         "#### EXCEPTION {:02x}-{:04x}",
         ctx.vector().0,
         ctx.error_code(),
     );
     if is_vm {
         let _ = writeln!(
-            stderr,
+            output,
             "CS:IP {:04x}:{:04x} SS:SP {:04x}:{:04x}",
             ctx.cs(),
             ctx.eip.as_u16(),
@@ -224,7 +224,7 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
         );
     } else {
         let _ = writeln!(
-            stderr,
+            output,
             "CS:EIP {:02x}:{:08x} SS:ESP {:02x}:{:08x}",
             ctx.cs(),
             ctx.eip.as_u32(),
@@ -233,7 +233,7 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
         );
     }
     let _ = writeln!(
-        stderr,
+        output,
         "EAX {:08x} EBX {:08x} ECX {:08x} EDX {:08x} ESI {:08x} EDI {:08x}",
         ctx.eax.d(),
         ctx.ebx.d(),
@@ -243,7 +243,7 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
         ctx.edi.d(),
     );
     let _ = writeln!(
-        stderr,
+        output,
         "EBP {:08x} DS {:04x} ES {:04x} EFL {}",
         ctx.ebp.d(),
         ds,

@@ -42,13 +42,7 @@ impl Fb {
             bytes_per_scanline: (width * 4) as u16,
             pixel_format: PixelFormat::BGRX8888,
         });
-        for template in &[
-            // (320, 200),
-            // (320, 240),
-            (640, 480),
-            (800, 600),
-            (1024, 768),
-        ] {
+        for template in &[(320, 200), (320, 240), (640, 480), (800, 600), (1024, 768)] {
             driver.modes.push(ModeInfo {
                 width: template.0 as u16,
                 height: template.1 as u16,
