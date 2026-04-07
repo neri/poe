@@ -175,7 +175,7 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
             origin: frame.top_left(),
             insets,
             default_attr,
-            redraw_region: Diagonal::INVALID,
+            redraw_region: Diagonal::VOID,
             // title: title.map(|s| s.to_string()),
         }
     }
@@ -195,11 +195,11 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
         self.bounds().insets(&self.insets)
     }
 
-    pub fn invalidate_rect(&mut self, region: Option<&Rect>) {
-        if let Some(region) = region {
-            let mut region = *region;
-            region.clip(&self.bounds());
-            self.redraw_region.expand_rect(&region);
+    pub fn invalidate_rect(&mut self, rect: Option<&Rect>) {
+        if let Some(rect) = rect {
+            let mut rect = *rect;
+            rect.clip(&self.bounds());
+            self.redraw_region.expand_rect(&rect);
         } else {
             self.redraw_region.expand_rect(&self.bounds());
         }
@@ -318,7 +318,7 @@ impl<TCHAR: TChar> TuiWindowBuffer<TCHAR> {
     pub fn redraw_if_needed<T: TuiDrawTarget + ?Sized>(&mut self, target: &mut T) -> Option<()> {
         if let Some(redraw_region) = self.redraw_region.to_rect() {
             self.draw_subregion_to(target, redraw_region);
-            self.redraw_region = Diagonal::INVALID;
+            self.redraw_region = Diagonal::VOID;
             Some(())
         } else {
             None

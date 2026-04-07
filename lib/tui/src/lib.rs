@@ -6,6 +6,7 @@ pub mod buffer;
 pub mod color;
 pub mod coord;
 pub mod fixed_str;
+// pub mod region;
 
 #[allow(unused)]
 pub mod prelude {

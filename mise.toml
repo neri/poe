@@ -7,10 +7,10 @@ confirm = "Are you sure?"
 description = "Clean the build artifacts"
 run = "make clean"
 
-[tasks.refresh]
+[tasks.update]
 confirm = "Are you sure?"
-description = "Refresh the dependencies"
-run = "make refresh"
+description = "Update the dependencies"
+run = "make update"
 
 [tasks.test]
 description = "Run the tests"

@@ -401,8 +401,8 @@ impl AddAssign<Inset> for Rect {
 }
 
 impl Diagonal {
-    /// A diagonal that is always invalid.
-    pub const INVALID: Self = Self {
+    /// A diagonal that contains no points (i.e., an invalid diagonal).
+    pub const VOID: Self = Self {
         top_left: Point {
             x: ScalarType::MAX,
             y: ScalarType::MAX,
@@ -500,7 +500,7 @@ impl Diagonal {
     ///
     /// # Returns
     ///
-    /// Returns `Some(())` if the clipping was successful, or `None` if
+    /// Returns `Some(())` if the clipping was successful, or `None` if the diagonal is invalid.
     pub fn clip(&mut self, region: &Rect) -> Option<()> {
         if let Some(diag) = region.to_diagonal() {
             if self.top_left.x < diag.top_left.x {

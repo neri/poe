@@ -402,7 +402,7 @@ impl Tag<'_> {
     }
 }
 
-#[allow(dead_code)]
+#[allow(unused)]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone)]
 pub enum PixelOrder {

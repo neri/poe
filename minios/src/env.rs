@@ -124,12 +124,14 @@ impl System {
         unsafe { (&mut *(&raw mut SYSTEM)).assume_init_mut() }
     }
 
+    /// Returns boot information
     #[inline]
     pub fn boot_info<'a>() -> &'a SsblInfo {
         let shared = Self::shared();
         &shared.info
     }
 
+    /// Returns boot information (mutable)
     #[inline]
     pub unsafe fn boot_info_mut<'a>() -> &'a mut SsblInfo {
         unsafe {
@@ -138,11 +140,13 @@ impl System {
         }
     }
 
+    /// Returns platform type
     #[inline]
     pub fn platform() -> Platform {
         Self::boot_info().platform
     }
 
+    /// Returns device tree if available
     #[inline]
     pub fn device_tree<'a>() -> Option<&'a fdt::DeviceTree<'a>> {
         let shared = Self::shared();
@@ -162,6 +166,7 @@ impl System {
         }
     }
 
+    /// Get current stdin
     #[inline]
     pub fn stdin<'a>() -> &'a mut dyn SimpleTextInput {
         unsafe {
@@ -170,6 +175,7 @@ impl System {
         }
     }
 
+    /// Get current stdout
     #[inline]
     pub fn stdout<'a>() -> &'a mut dyn SimpleTextOutput {
         unsafe {
@@ -178,6 +184,7 @@ impl System {
         }
     }
 
+    /// Get current stderr
     #[inline]
     pub fn stderr<'a>() -> &'a mut dyn SimpleTextOutput {
         unsafe {
@@ -186,6 +193,7 @@ impl System {
         }
     }
 
+    /// Returns console controller
     #[inline]
     pub fn conctl<'a>() -> &'a mut ConsoleController {
         unsafe {
@@ -194,6 +202,7 @@ impl System {
         }
     }
 
+    /// Wait for any of the events to be signaled and returns the signaled event.
     pub fn wait_for_events<'a, 'b, 'c>(
         events: &'a mut [&'b mut Event<'c>],
     ) -> &'a mut &'b mut Event<'c> {
@@ -211,78 +220,14 @@ impl System {
         events.get_mut(index).unwrap()
     }
 
-    pub fn line_input(max_len: usize) -> Option<String> {
-        let mut buf = Vec::with_capacity(max_len);
-        let stdin = Self::stdin();
-        let stdout = Self::stdout();
-
-        loop {
-            stdout.enable_cursor(true);
-            stdin.event_for_key().wait();
-            match stdin.read_key_stroke() {
-                Some(key) => {
-                    stdout.enable_cursor(false);
-                    let key = key.get();
-                    let c = key.unicode_char().unwrap_or_default();
-                    match c {
-                        '\x00' => {
-                            // non-character key
-                            print!(
-                                "[#{:02x}{:02x}]",
-                                key.key_stroke().modifier.bits(),
-                                key.key_stroke().usage.0,
-                            );
-                        }
-                        // ctrl-c
-                        '\x03' => {
-                            return None;
-                        }
-                        // backspace
-                        '\x08' | '\x7f' => match buf.pop() {
-                            Some(c) => {
-                                if c < ' ' {
-                                    stdout.write_str("\x08\x08  \x08\x08").unwrap();
-                                } else {
-                                    stdout.write_str("\x08 \x08").unwrap();
-                                }
-                            }
-                            None => {}
-                        },
-                        // enter
-                        '\x0a' | '\x0d' => {
-                            stdout.write_str("\r\n").unwrap();
-                            break;
-                        }
-                        _ => {
-                            if buf.len() < max_len {
-                                if c < ' ' {
-                                    // control char
-                                    stdout.write_char('^').unwrap();
-                                    stdout.write_char((c as u8 | 0x40) as char).unwrap();
-                                    buf.push(c);
-                                } else if c <= '\x7E' {
-                                    // printable char
-                                    let _ = stdout.write_char(c);
-                                    buf.push(c);
-                                } else {
-                                    // TODO: unprintable char
-                                }
-                            }
-                        }
-                    }
-                }
-                None => {}
-            }
-        }
-        Some(buf.into_iter().collect())
-    }
-
+    /// Returns configuration table entries
     #[inline]
     pub fn config_table<'a>() -> impl Iterator<Item = &'a ConfigurationTableEntry> {
         let shared = Self::shared();
         shared.config_table.iter()
     }
 
+    /// Finds configuration table entry by GUID
     #[inline]
     pub fn find_config_table_entry(guid: &Guid) -> Option<&'static ConfigurationTableEntry> {
         let shared = Self::shared();
@@ -294,6 +239,7 @@ impl System {
         None
     }
 
+    /// Adds a configuration table entry
     #[inline]
     pub unsafe fn add_config_table_entry(guid: Guid, address: NonNullPhysicalAddress) {
         unsafe {
@@ -338,6 +284,7 @@ impl System {
     }
 }
 
+/// Panic handler
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     let stderr = System::stderr();
@@ -456,17 +403,20 @@ impl ConsoleController {
         }
     }
 
+    /// Set graphics output device.
     #[inline]
     pub fn set_graphics(&mut self, graphics_out: Box<dyn GraphicsOutputDevice>) {
         self.set_text_mode();
         self.graphics_out = Some(graphics_out);
     }
 
+    /// Returns whether the console is in text mode
     #[inline]
     pub const fn is_text_mode(&self) -> bool {
         self.is_text_mode
     }
 
+    /// Returns whether the console is in graphics mode
     #[inline]
     pub const fn is_graphics_mode(&self) -> bool {
         !self.is_text_mode()
@@ -557,6 +507,7 @@ impl ConsoleController {
         Ok(())
     }
 
+    /// Finds graphics mode index by resolution and pixel format
     pub fn find_graphics_mode(
         &self,
         width: u16,
@@ -572,6 +523,7 @@ impl ConsoleController {
         None
     }
 
+    /// Sets the best graphics mode matching the given criteria
     pub fn set_best_graphics_mode(
         &mut self,
         width: u16,
@@ -584,6 +536,8 @@ impl ConsoleController {
         self.set_graphics_mode(mode)
     }
 
+    /// Sets the best graphics mode from the given list of candidates.
+    /// The candidates should be ordered by priority.
     pub fn set_graphics_mode_from_list(
         &mut self,
         candidates: &[(u16, u16, PixelFormat)],

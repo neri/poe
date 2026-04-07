@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run test apps kernel refresh
+.PHONY: love all default clean install full run test apps kernel update
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -29,8 +29,8 @@ clean:
 	(cd $(POE_SRC) && cargo clean)
 	-rm -rf $(TARGETS) $(POE_LD)
 
-refresh: clean
-	-rm **/Cargo.lock
+update: clean
+	(cd $(POE_SRC) && cargo update)
 
 run: run3
 

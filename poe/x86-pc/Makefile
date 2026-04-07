@@ -1,4 +1,4 @@
-.PHONY: love all default clean install iso full run test apps kernel refresh
+.PHONY: love all default clean install iso full run test apps kernel update
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -46,8 +46,8 @@ clean:
 	(cd $(POE_SRC) && cargo clean)
 	-rm -rf $(TARGETS) $(POE_LD)
 
-refresh: clean
-	-rm **/Cargo.lock
+update: clean
+	(cd $(POE_SRC) && cargo update)
 
 run:
 	qemu-system-i386 -machine q35 -boot a -rtc base=localtime,clock=host -serial mon:stdio \

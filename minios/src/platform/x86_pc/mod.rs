@@ -9,7 +9,6 @@ use super::{Platform, PlatformTrait};
 use crate::arch::{cpu, gdt, idt, lomem, vm86};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
-use x86::isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB};
 
 impl PlatformTrait for Platform {
     unsafe fn init(_arg: usize) {
@@ -60,37 +59,22 @@ impl PlatformTrait for Platform {
     }
 
     fn reset_system() -> ! {
-        unsafe {
-            match System::platform() {
-                Platform::Nec98 => {
-                    LoIoPortWB::<0x37>::new().write(0x0f);
-                    LoIoPortWB::<0x37>::new().write(0x0b);
-                    LoIoPortWB::<0xf0>::new().write(0x00);
-                }
-                Platform::PcBios => {
-                    // PCI reset
-                    IoPortWB(0x0CF9).write(0x06);
-
-                    // OADG reset
-                    LoIoPortWB::<0x92>::new().write(0x01);
-
-                    // PS/2 reset
-                    loop {
-                        let al = LoIoPortRB::<0x64>::new().read();
-                        if (al & 0x02) == 0 {
-                            break;
-                        }
-                    }
-                    LoIoPortWB::<0x64>::new().write(0xfe);
-                }
-                Platform::FmTowns => {
-                    LoIoPortWB::<0x20>::new().write(0x01);
-                    LoIoPortWB::<0x22>::new().write(0x00);
-                }
-                _ => unreachable!(),
+        match System::platform() {
+            Platform::Nec98 => {
+                nec98::reset_system();
             }
-
-            Hal::cpu().halt();
+            Platform::PcBios => {
+                ibm_pc::reset_system();
+            }
+            Platform::FmTowns => {
+                fm_towns::reset_system();
+            }
+            _ => unreachable!(),
         }
+    }
+
+    fn halt() -> ! {
+        // TODO:
+        Hal::cpu().halt();
     }
 }

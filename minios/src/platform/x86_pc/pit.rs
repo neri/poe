@@ -57,9 +57,30 @@ impl Pit {
         unsafe { (&mut *(&raw mut PIT)).get_mut() }
     }
 
+    /// Get monotonic timer value.
+    pub fn monotonic() -> u64 {
+        unsafe {
+            let shared = Self::shared();
+            let p = &shared.monotonic as *const _ as *const u32;
+
+            loop {
+                let lo = p.read_volatile();
+                let hi = p.add(1).read_volatile();
+                if lo == p.read_volatile() {
+                    return ((hi as u64) << 32) | (lo as u64);
+                }
+            }
+        }
+    }
+
+    /// Advance monotonic timer by one tick.
+    ///
+    /// # SAFETY
+    ///
+    /// This function should only be called by the PIT interrupt handler.
     #[inline(always)]
     #[allow(dead_code)]
-    pub(super) fn advance_tick(_irq: Irq) {
+    pub(super) unsafe fn advance_tick(_irq: Irq) {
         let shared = unsafe { Self::shared() };
         shared.monotonic += Self::TIMER_RES;
     }

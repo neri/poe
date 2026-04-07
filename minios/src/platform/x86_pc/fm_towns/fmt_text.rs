@@ -1,4 +1,4 @@
-//! FM TOWNS Text Mode Driver
+//! FM TOWNS Pseudo Text Mode Driver
 
 use super::crtc::Crtc;
 use crate::System;

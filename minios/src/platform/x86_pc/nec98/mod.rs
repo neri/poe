@@ -25,7 +25,7 @@ use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
 use libhid::{Modifier, Usage};
-use x86::isolated_io::LoIoPortDummyB;
+use x86::isolated_io::{LoIoPortDummyB, LoIoPortWB};
 
 pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
 
@@ -87,6 +87,16 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
 
 pub(super) unsafe fn exit() {
     // TODO:
+}
+
+pub(super) fn reset_system() -> ! {
+    unsafe {
+        LoIoPortWB::<0x37>::new().write(0x0f);
+        LoIoPortWB::<0x37>::new().write(0x0b);
+        LoIoPortWB::<0xf0>::new().write(0x00);
+
+        Hal::cpu().halt();
+    }
 }
 
 static mut STDIN: BiosTextInput = BiosTextInput {};

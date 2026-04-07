@@ -90,7 +90,7 @@ impl PlatformTrait for Platform {
     }
 
     unsafe fn exit() {
-        // TODO:
+        // Nothing to do
     }
 
     fn reset_system() -> ! {

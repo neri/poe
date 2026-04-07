@@ -54,12 +54,21 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
 }
 
 pub(super) unsafe fn exit() {
-    // TODO:
+    // to do nothing for now
+}
+
+pub(super) fn reset_system() -> ! {
+    unsafe {
+        LoIoPortWB::<0x20>::new().write(0x01);
+        LoIoPortWB::<0x22>::new().write(0x00);
+
+        Hal::cpu().halt();
+    }
 }
 
 fn timer_irq_handler(irq: Irq) {
-    super::pit::Pit::advance_tick(irq);
     unsafe {
+        super::pit::Pit::advance_tick(irq);
         let mut al = LoIoPortRB::<0x60>::new().read();
         al = (al >> 2) | 0x80;
         LoIoPortWB::<0x60>::new().write(al);

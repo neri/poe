@@ -1,4 +1,4 @@
-.PHONY: love all default clean install iso full run test apps kernel refresh
+.PHONY: love all default clean install iso full run test apps kernel update
 
 default:
 
@@ -8,11 +8,11 @@ clean:
 	(cd poe/arm64-rpi && make clean)
 	(cd poe/riscv-virt && make clean)
 
-refresh:
+update: clean
 	-rm -rf lib/Cargo.lock lib/target tools/target tools/Cargo.lock
-	(cd poe/x86-pc && make refresh)
-	(cd poe/arm64-rpi && make refresh)
-	(cd poe/riscv-virt && make refresh)
+	(cd poe/x86-pc && make update)
+	(cd poe/arm64-rpi && make update)
+	(cd poe/riscv-virt && make update)
 
 test:
 # 	(cd lib; cargo test)

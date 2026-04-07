@@ -31,6 +31,7 @@ use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
 use core::{ffi::c_void, iter::Iterator, ops::Range};
 use smbios::{SMBIOS_GUID, SmBios};
 use x86::gpr::Eflags;
+use x86::isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB};
 
 const USE_UART_STDIO: bool = false;
 
@@ -189,6 +190,27 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
 
 pub(super) unsafe fn exit() {
     // TODO:
+}
+
+pub(super) fn reset_system() -> ! {
+    unsafe {
+        // PCI reset
+        IoPortWB(0x0CF9).write(0x06);
+
+        // OADG reset
+        LoIoPortWB::<0x92>::new().write(0x01);
+
+        // PS/2 reset
+        loop {
+            let al = LoIoPortRB::<0x64>::new().read();
+            if (al & 0x02) == 0 {
+                break;
+            }
+        }
+        LoIoPortWB::<0x64>::new().write(0xfe);
+
+        Hal::cpu().halt();
+    }
 }
 
 #[repr(C, packed)]

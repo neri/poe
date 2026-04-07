@@ -1,5 +1,6 @@
 // use super::*;
 use crate::*;
+use core::time::Duration;
 
 // pub type EventCallback = *const fn(usize);
 
@@ -76,7 +77,7 @@ struct TimerPoller {
 
 impl PollingEvent for TimerPoller {
     fn poll(&mut self) -> PollResult {
-        // todo!()
+        // TODO: implement
         PollResult::Pending
     }
 }
@@ -85,6 +86,12 @@ impl PollingEvent for TimerPoller {
 pub enum TimerEvent {
     Timeout(u64),
     Periodic(u64),
+}
+
+impl TimerEvent {
+    pub fn with_timeout(duration: Duration) -> Self {
+        todo!()
+    }
 }
 
 pub struct NullEvent;
