@@ -6,13 +6,15 @@ clean:
 	-rm -rf poe/**/target tools/target lib/target
 	(cd poe/x86-pc && make clean)
 	(cd poe/arm64-rpi && make clean)
-	(cd poe/riscv-virt && make clean)
+	(cd poe/rv32-virt && make clean)
+	(cd poe/rv64-virt && make clean)
 
 update: clean
 	-rm -rf lib/Cargo.lock lib/target tools/target tools/Cargo.lock
 	(cd poe/x86-pc && make update)
 	(cd poe/arm64-rpi && make update)
-	(cd poe/riscv-virt && make update)
+	(cd poe/rv32-virt && make update)
+	(cd poe/rv64-virt && make update)
 
 test:
 # 	(cd lib; cargo test)

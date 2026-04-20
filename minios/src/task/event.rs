@@ -89,7 +89,7 @@ pub enum TimerEvent {
 }
 
 impl TimerEvent {
-    pub fn with_timeout(duration: Duration) -> Self {
+    pub fn with_timeout(_duration: Duration) -> Self {
         todo!()
     }
 }

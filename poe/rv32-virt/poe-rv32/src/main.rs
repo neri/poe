@@ -1,4 +1,4 @@
-//! Pre-OS Execution Environment for riscv-virtio
+//! Pre-OS Execution Environment for rv32-virt
 #![no_std]
 #![no_main]
 

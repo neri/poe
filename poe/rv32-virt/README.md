@@ -1,7 +1,8 @@
-# POE for RISC-V virt machine
+# POE for RISC-V32 virt machine
 
 ## Requirements
 
+* risc-v rv32imac
 * qemu (qemu-system-riscv64 -M virt)
 
 ## Build Environment
