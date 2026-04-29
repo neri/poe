@@ -139,7 +139,7 @@ impl KbdLeadingData {
     }
 }
 
-// Keyboard scan code to HID usage table
+/// Keyboard scan code to HID usage table
 #[rustfmt::skip]
 static SCAN_TO_HID: [u8; 128] = [
     /*         -0    -1    -2    -3    -4    -5    -6    -7    -8    -9    -A    -B    -C    -D    -E    -F */

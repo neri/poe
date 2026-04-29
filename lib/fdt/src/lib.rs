@@ -706,63 +706,63 @@ impl fmt::Display for NodeName<'_> {
 pub struct PropName<'a>(pub &'a str);
 
 impl PropName<'_> {
-    /// Well-known property name `#address-cells`, <u32>
+    /// Well-known property name `#address-cells`, `<u32>`
     pub const ADDRESS_CELLS: Self = Self("#address-cells");
-    /// Well-known property name `bootargs`, <string>
+    /// Well-known property name `bootargs`, `<string>`
     pub const BOOTARGS: Self = Self("bootargs");
     /// `#clock-cells`
     pub const CLOCK_CELLS: Self = Self("#clock-cells");
-    /// Well-known property name `clock-frequency`, <prop-encoded-array>
+    /// Well-known property name `clock-frequency`, `<prop-encoded-array>`
     pub const CLOCK_FREQUENCY: Self = Self("clock-frequency");
-    /// Well-known property name `compatible`, <string-list>
+    /// Well-known property name `compatible`, `<string-list>`
     pub const COMPATIBLE: Self = Self("compatible");
-    /// Well-known property name `device_type`, <string> (deprecated)
+    /// Well-known property name `device_type`, `<string>` (deprecated)
     pub const DEVICE_TYPE: Self = Self("device_type");
-    /// Well-known property name `dma-coherent`, <empty>
+    /// Well-known property name `dma-coherent`, `<empty>`
     pub const DMA_COHERENT: Self = Self("dma-coherent");
-    /// Well-known property name `dma-ranges`, <prop-encoded-array>
+    /// Well-known property name `dma-ranges`, `<prop-encoded-array>`
     pub const DMA_RANGES: Self = Self("dma-ranges");
-    /// Well-known property name `#interrupt-cells`, <u32>
+    /// Well-known property name `#interrupt-cells`, `<u32>`
     pub const INTERRUPT_CELLS: Self = Self("#interrupt-cells");
-    /// Well-known property name `interrupt-controller`, <empty>
+    /// Well-known property name `interrupt-controller`, `<empty>`
     pub const INTERRUPT_CONTROLLER: Self = Self("interrupt-controller");
-    /// Well-known property name `interrupt-map`, <prop-encoded-array>
+    /// Well-known property name `interrupt-map`, `<prop-encoded-array>`
     pub const INTERRUPT_MAP: Self = Self("interrupt-map");
-    /// Well-known property name `interrupt-map-mask`, <prop-encoded-array>
+    /// Well-known property name `interrupt-map-mask`, `<prop-encoded-array>`
     pub const INTERRUPT_MAP_MASK: Self = Self("interrupt-map-mask");
-    /// Well-known property name `interrupts`, <prop-encoded-array>
+    /// Well-known property name `interrupts`, `<prop-encoded-array>`
     pub const INTERRUPTS: Self = Self("interrupts");
-    /// Well-known property name `interrupt-parent`, <phandle>
+    /// Well-known property name `interrupt-parent`, `<phandle>`
     pub const INTERRUPT_PARENT: Self = Self("interrupt-parent");
-    /// Well-known property name `interrupts-extended`, <phandle> <prop-encoded-array>
+    /// Well-known property name `interrupts-extended`, `<phandle>` `<prop-encoded-array>`
     pub const INTERRUPTS_EXTENDED: Self = Self("interrupts-extended");
-    /// Well-known property name `model`, <string>
+    /// Well-known property name `model`, `<string>`
     pub const MODEL: Self = Self("model");
-    /// Well-known property name `name`, <string> (deprecated)
+    /// Well-known property name `name`, `<string>` (deprecated)
     pub const NAME: Self = Self("name");
-    /// Well-known property name `no-map`, <empty>
+    /// Well-known property name `no-map`, `<empty>`
     pub const NO_MAP: Self = Self("no-map");
-    /// Well-known property name `phandle`, <u32>
+    /// Well-known property name `phandle`, `<u32>`
     pub const PHANDLE: Self = Self("phandle");
-    /// Well-known property name `ranges`, <prop-encoded-array>
+    /// Well-known property name `ranges`, `<prop-encoded-array>`
     pub const RANGES: Self = Self("ranges");
-    /// Well-known property name `reg`, <prop-encoded-array>
+    /// Well-known property name `reg`, `<prop-encoded-array>`
     pub const REG: Self = Self("reg");
-    /// Well-known property name `reusable`, <empty>
+    /// Well-known property name `reusable`, `<empty>`
     pub const REUSABLE: Self = Self("reusable");
-    /// Well-known property name `serial-number`, <string>
+    /// Well-known property name `serial-number`, `<string>`
     pub const SERIAL_NUMBER: Self = Self("serial-number");
-    /// Well-known property name `#size-cells`, <u32>
+    /// Well-known property name `#size-cells`, `<u32>`
     pub const SIZE_CELLS: Self = Self("#size-cells");
-    /// Well-known property name `status`, <string>
+    /// Well-known property name `status`, `<string>`
     pub const STATUS: Self = Self("status");
-    /// Well-known property name `stdout-path`, <string>
+    /// Well-known property name `stdout-path`, `<string>`
     pub const STDOUT_PATH: Self = Self("stdout-path");
-    /// Well-known property name `stdin-path`, <string>
+    /// Well-known property name `stdin-path`, `<string>`
     pub const STDIN_PATH: Self = Self("stdin-path");
-    /// Well-known property name `timebase-frequency`, <prop-encoded-array>
+    /// Well-known property name `timebase-frequency`, `<prop-encoded-array>`
     pub const TIMEBASE_FREQUENCY: Self = Self("timebase-frequency");
-    /// Well-known property name `virtual-reg`, <u32>
+    /// Well-known property name `virtual-reg`, `<u32>`
     pub const VIRTUAL_REG: Self = Self("virtual-reg");
 }
 

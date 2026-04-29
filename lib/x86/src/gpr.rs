@@ -173,7 +173,7 @@ pub struct Flags(usize);
 impl Flags {
     /// Carry flag
     pub const CF: Self = Self(0x0000_0001);
-    // Reserved Always 1
+    /// Reserved Always 1
     pub const _VF: Self = Self(0x0000_0002);
     /// Parity flag
     pub const PF: Self = Self(0x0000_0004);
@@ -215,36 +215,46 @@ impl Flags {
 
     pub const ALWAYS_0_BITMAP: Self = Self(0x0000_8028);
 
+    /// The value of all flags is cleared.
+    pub const ZERO: Self = Self(0);
+
+    /// Returns canonical empty flags
     #[inline]
-    pub const fn empty() -> Self {
-        Self(0)
+    pub const fn canonical_empty() -> Self {
+        Self(Self::ALWAYS_1_BITMAP.bits())
     }
 
+    /// Create a set of flags from the given bits.
     #[inline]
     pub const fn from_bits(bits: usize) -> Self {
         Self(bits)
     }
 
+    /// Returns the raw bits of the flags.
     #[inline]
     pub const fn bits(&self) -> usize {
         self.0
     }
 
+    /// Returns `true` if all of the specified flags are set.
     #[inline]
     pub const fn contains(&self, other: Self) -> bool {
         (self.0 & other.0) == other.0
     }
 
+    /// Merge the specified flags into this set of flags.
     #[inline]
     pub fn insert(&mut self, other: Self) {
         self.0 |= other.0;
     }
 
+    /// Remove the specified flags from this set of flags.
     #[inline]
     pub fn remove(&mut self, other: Self) {
         self.0 &= !other.0;
     }
 
+    /// Set or clear the specified flags based on the value of `value`.
     #[inline]
     pub fn set(&mut self, bit: Self, value: bool) {
         if value {
@@ -254,9 +264,10 @@ impl Flags {
         }
     }
 
+    /// Read the flags from the CPU.
     #[cfg(target_arch = "x86")]
     #[inline]
-    pub unsafe fn read() -> Self {
+    pub fn read() -> Self {
         let flags: usize;
         unsafe {
             asm!(
@@ -268,9 +279,10 @@ impl Flags {
         Self::from_bits(flags)
     }
 
+    /// Read the flags from the CPU.
     #[cfg(target_arch = "x86_64")]
     #[inline]
-    pub unsafe fn read() -> Self {
+    pub fn read() -> Self {
         let flags: usize;
         unsafe {
             asm!(
@@ -282,36 +294,43 @@ impl Flags {
         Self::from_bits(flags)
     }
 
+    /// Returns the IOPL of the flags.
     #[inline]
     pub fn iopl(&self) -> IOPL {
         IOPL::from_flags(*self)
     }
 
+    /// Set the IOPL of the flags.
     #[inline]
     pub fn set_iopl(&mut self, iopl: IOPL) {
         *self = Self::from_bits((self.bits() & !Self::IOPL3.bits()) | (iopl.into_flags()))
     }
 
+    /// Set the IOPL of the flags to 0.
     #[inline]
     pub fn clear_iopl(&mut self) {
         self.remove(Self::IOPL3);
     }
 
+    /// Returns canonicalized flags
     #[inline]
     pub const fn canonical_bits(&self) -> usize {
         (self.bits() & !Self::ALWAYS_0_BITMAP.bits()) | Self::ALWAYS_1_BITMAP.bits()
     }
 
+    /// Returns `true` if the flags are canonical.
     #[inline]
     pub const fn is_canonical(&self) -> bool {
         self.bits() == self.canonical_bits()
     }
 
+    /// Returns a canonicalized copy of the flags.
     #[inline]
     pub fn canonicalized(&self) -> Self {
         Self::from_bits(self.canonical_bits())
     }
 
+    /// Canonicalize the flags in place.
     #[inline]
     pub fn canonicalize(&mut self) {
         *self = self.canonicalized();

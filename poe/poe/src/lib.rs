@@ -85,9 +85,8 @@ pub fn main() {
     // println!(", PLATFORM {}", info.platform);
     // println!("");
 
-    // println!("* SUPER POE SHELL v0.0 *");
     loop {
-        print!(">");
+        print!("poe>");
         if let Some(line) = line_input(64) {
             if line.is_empty() {
                 continue;

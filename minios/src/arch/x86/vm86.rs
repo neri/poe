@@ -1,14 +1,21 @@
 //! Simple Virtual 8086 Mode Manager
 
-use super::cpu::Cpu;
-use super::gdt::Gdt;
-use super::idt::Idt;
-use super::lomem::{LoMemoryManager, ManagedLowMemory};
-use super::setjmp::JmpBuf;
+use super::{
+    cpu::Cpu,
+    gdt::Gdt,
+    idt::Idt,
+    lomem::{LoMemoryManager, ManagedLowMemory},
+    setjmp::JmpBuf,
+};
 use crate::*;
-use core::cell::UnsafeCell;
-use core::num::NonZeroUsize;
-use core::ptr::null_mut;
+use core::{
+    cell::UnsafeCell,
+    marker::PhantomData,
+    mem::transmute,
+    num::NonZeroUsize,
+    ops::{Deref, DerefMut},
+    ptr::null_mut,
+};
 use x86::{gpr::*, prot::*, real::*};
 
 static mut VMM: UnsafeCell<VM86> = UnsafeCell::new(VM86::new());
@@ -18,7 +25,7 @@ pub struct VM86 {
     vmbp: Linear32,
     vm_stack: Option<ManagedLowMemory>,
     jmp_buf: JmpBuf,
-    context: *mut X86StackContext,
+    context: *mut Vm86StackContext,
 }
 
 impl VM86 {
@@ -43,6 +50,8 @@ impl VM86 {
             let mut vmbp = Linear32::ZERO;
 
             // Find ARPL as VMBP
+            //
+            // ARPL instruction is safe to use as a breakpoint for virtual 8086 mode, and it is likely to be present in the BIOS code.
             for p in 0x0f_0000..0x0f_fff0 {
                 let p = p as *mut u8;
                 if p.read_volatile() == 0x63 {
@@ -70,8 +79,11 @@ impl VM86 {
     /// Invokes virtual 8086 mode with INT instruction executed.
     /// Typically used for BIOS calls.
     ///
+    /// # Safety
+    ///
+    /// - Some BIOS implementations may cause unexpected results if called recursively.
     #[allow(unused)]
-    pub unsafe fn call_bios(int_vec: InterruptVector, ctx: &mut X86StackContext) {
+    pub unsafe fn call_bios(int_vec: InterruptVector, ctx: &mut Vm86StackContext) {
         unsafe {
             Self::invoke(ctx, |ctx| {
                 ctx.vm_redirect_interrupt(int_vec, true);
@@ -82,7 +94,7 @@ impl VM86 {
     /// Invokes virtual 8086 mode with FAR CALL instruction executed.
     ///
     #[allow(unused)]
-    pub unsafe fn call_far(target: Far16Ptr, ctx: &mut X86StackContext) {
+    pub unsafe fn call_far(target: Far16Ptr, ctx: &mut Vm86StackContext) {
         unsafe {
             Self::invoke(ctx, |ctx| {
                 ctx.vm_call_far(target);
@@ -93,9 +105,9 @@ impl VM86 {
     /// Invokes virtual 8086 mode.
     #[allow(unused)]
     #[inline]
-    pub unsafe fn invoke<F>(ctx: &mut X86StackContext, context_modifier: F)
+    pub unsafe fn invoke<F>(ctx: &mut Vm86StackContext, context_modifier: F)
     where
-        F: FnOnce(&mut X86StackContext),
+        F: FnOnce(&mut Vm86StackContext),
     {
         unsafe {
             let interrupt_guard = Hal::cpu().interrupt_guard();
@@ -125,7 +137,7 @@ impl VM86 {
 
                 shared.context = ctx;
                 if shared.jmp_buf.set_jmp().is_returned() {
-                    Cpu::enter_to_user_mode(ctx);
+                    Cpu::jump_to_user_mode(ctx);
                 }
                 drop(temp_stack);
 
@@ -138,8 +150,9 @@ impl VM86 {
         }
     }
 
+    /// Handles VMBP interception by jumping back to the caller of `invoke` with the modified stack context.
     #[inline(always)]
-    unsafe fn intercept_vmbp(&mut self, ctx: &X86StackContext) -> ! {
+    unsafe fn intercept_vmbp(&mut self, ctx: &Vm86StackContext) -> ! {
         unsafe {
             self.context.write_volatile(ctx.clone());
             self.jmp_buf.long_jmp(NonZeroUsize::new(1).unwrap());
@@ -149,7 +162,7 @@ impl VM86 {
     /// Handles #UD exception in virtual 8086 mode.
     unsafe fn _handle_ud(ctx: &mut X86StackContext) -> bool {
         unsafe {
-            if ctx.is_vm() {
+            if let Some(ctx) = ctx.try_as_vm() {
                 let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip.as_u16())).to_linear();
                 let shared = Self::shared_mut();
                 if shared.vmbp == vm_csip {
@@ -163,7 +176,7 @@ impl VM86 {
     /// Handles #GP exception in virtual 8086 mode.
     unsafe fn _handle_gpf(ctx: &mut X86StackContext) -> bool {
         unsafe {
-            if ctx.is_vm() {
+            if let Some(ctx) = ctx.try_as_vm_mut() {
                 let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip.as_u16())).to_linear();
                 let shared = Self::shared_mut();
                 if shared.vmbp == vm_csip {
@@ -188,10 +201,10 @@ impl VM86 {
     /// otherwise (running in protected mode) invoke virtual 8086 mode.
     pub unsafe fn redirect_interrupt(int_vec: InterruptVector, ctx: &mut X86StackContext) {
         unsafe {
-            if ctx.is_vm() {
+            if let Some(ctx) = ctx.try_as_vm_mut() {
                 ctx.vm_redirect_interrupt(int_vec, true);
             } else {
-                let mut regs = X86StackContext::default();
+                let mut regs = Vm86StackContext::default();
                 Self::call_bios(int_vec, &mut regs);
             }
         }
@@ -206,7 +219,7 @@ impl VM86 {
     ///
     /// More accurate emulation is needed to create an OS, but POE is not an OS, so we cut corners.
     #[must_use]
-    unsafe fn simulate_vm_instruction(ctx: &mut X86StackContext) -> bool {
+    unsafe fn simulate_vm_instruction(ctx: &mut Vm86StackContext) -> bool {
         unsafe {
             let vm_csip = ctx.vm_csip_ptr();
             let mut skip = 0;
@@ -241,7 +254,7 @@ impl VM86 {
                         new_fl = Eflags::from_bits(ctx.vm_pop32() as usize);
                     } else {
                         new_fl = Eflags::from_bits(
-                            (ctx.eflags.bits() & 0xffff_0000) | ctx.vm_pop16() as usize,
+                            (ctx._eflags.bits() & 0xffff_0000) | ctx.vm_pop16() as usize,
                         );
                     }
                     ctx.set_vm_eflags(new_fl);
@@ -271,7 +284,7 @@ impl VM86 {
                         new_eip = Pointer32::from_u16(ctx.vm_pop16());
                         new_cs = Selector(ctx.vm_pop16());
                         new_fl = Eflags::from_bits(
-                            (ctx.eflags.bits() & 0xffff_0000) | ctx.vm_pop16() as usize,
+                            (ctx._eflags.bits() & 0xffff_0000) | ctx.vm_pop16() as usize,
                         );
                     }
                     ctx.set_cs(new_cs);
@@ -288,12 +301,12 @@ impl VM86 {
                 }
                 0xFA => {
                     // FA: CLI
-                    ctx.eflags.remove(Eflags::IF);
+                    ctx._eflags.remove(Eflags::IF);
                     skip += 1;
                 }
                 0xFB => {
                     // FB: STI
-                    ctx.eflags.insert(Eflags::IF);
+                    ctx._eflags.insert(Eflags::IF);
                     skip += 1;
                 }
                 _ => {
@@ -309,7 +322,6 @@ impl VM86 {
 }
 
 /// A stack structure for handling exceptions and entering virtual 8086 mode.
-#[allow(dead_code)]
 #[repr(C)]
 #[derive(Debug, Clone, Default)]
 pub struct X86StackContext {
@@ -329,13 +341,13 @@ pub struct X86StackContext {
     pub ecx: Gpr32,
     pub eax: Gpr32,
 
-    // `vector` and `error_code` are set only when an exception occurs
+    // `vector` and `error_code` are set only when an exception occurs, otherwise they are 0.
     _vector: u32,
     _error_code: u32,
 
     pub eip: Pointer32,
     _cs: AlignedSelector32,
-    pub eflags: Eflags,
+    _eflags: Eflags,
 
     // Valid only if `is_user()` is `true` after this point.
     _esp3: Pointer32,
@@ -346,6 +358,67 @@ pub struct X86StackContext {
     _vmds: AlignedSelector32,
     _vmfs: AlignedSelector32,
     _vmgs: AlignedSelector32,
+}
+
+#[derive(Debug)]
+pub struct X86StackContextView<VIEW> {
+    inner: X86StackContext,
+    _phantom: PhantomData<VIEW>,
+}
+
+impl<VIEW> Clone for X86StackContextView<VIEW> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl Default for X86StackContextView<Virtual8086Mode> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            inner: X86StackContext {
+                _eflags: Eflags::VM,
+                ..Default::default()
+            },
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl Deref for X86StackContextView<UserMode> {
+    type Target = X86StackContext;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for X86StackContextView<UserMode> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl Deref for X86StackContextView<Virtual8086Mode> {
+    type Target = X86StackContextView<UserMode>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        unsafe { transmute(self) }
+    }
+}
+
+impl DerefMut for X86StackContextView<Virtual8086Mode> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { transmute(self) }
+    }
 }
 
 #[allow(unused)]
@@ -369,7 +442,7 @@ impl X86StackContext {
             _error_code: 0,
             eip: Pointer32(0),
             _cs: AlignedSelector32::NULL,
-            eflags: Eflags::empty(),
+            _eflags: Eflags::ZERO,
             _esp3: Pointer32(0),
             _ss3: AlignedSelector32::NULL,
             _vmes: AlignedSelector32::NULL,
@@ -382,13 +455,18 @@ impl X86StackContext {
     /// Returns `true` if the context is in virtual 8086 mode.
     #[inline]
     pub fn is_vm(&self) -> bool {
-        self.eflags.contains(Eflags::VM)
+        self._eflags.contains(Eflags::VM)
     }
 
     /// Returns `true` if the context is in user mode or virtual 8086 mode.
     #[inline]
     pub fn is_user(&self) -> bool {
         self.is_vm() || (self.cs().rpl() != RPL0)
+    }
+
+    #[inline]
+    pub const fn eflags(&self) -> Eflags {
+        self._eflags
     }
 
     #[inline]
@@ -431,108 +509,10 @@ impl X86StackContext {
         InterruptVector(self._vector as u8)
     }
 
-    /// Returns the value of DS in virtual 8086 mode.
+    /// Returns pointer to esp3 in the stack.
     #[inline]
-    pub fn vmds(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(self._vmds.sel())
-        } else {
-            None
-        }
-    }
-
-    /// Returns the value of ES in virtual 8086 mode.
-    #[inline]
-    pub fn vmes(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(self._vmes.sel())
-        } else {
-            None
-        }
-    }
-
-    /// Returns the value of FS in virtual 8086 mode.
-    #[inline]
-    pub fn vmfs(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(self._vmfs.sel())
-        } else {
-            None
-        }
-    }
-
-    /// Returns the value of GS in virtual 8086 mode.
-    #[inline]
-    pub fn vmgs(&self) -> Option<Selector> {
-        if self.is_vm() {
-            Some(self._vmgs.sel())
-        } else {
-            None
-        }
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn vmds_unchecked(&self) -> Selector {
-        self._vmds.sel()
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn vmes_unchecked(&self) -> Selector {
-        self._vmes.sel()
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn vmfs_unchecked(&self) -> Selector {
-        self._vmfs.sel()
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn vmgs_unchecked(&self) -> Selector {
-        self._vmgs.sel()
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn set_vmds(&mut self, vmds: Selector) {
-        self._vmds = AlignedSelector32::from(vmds);
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn set_vmes(&mut self, vmes: Selector) {
-        self._vmes = AlignedSelector32::from(vmes);
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn set_vmfs(&mut self, vmfs: Selector) {
-        self._vmfs = AlignedSelector32::from(vmfs);
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
-    #[inline]
-    pub unsafe fn set_vmgs(&mut self, vmgs: Selector) {
-        self._vmgs = AlignedSelector32::from(vmgs);
+    pub const fn esp3_ptr(&self) -> *const Pointer32 {
+        &self._esp3
     }
 
     #[inline]
@@ -540,98 +520,160 @@ impl X86StackContext {
         self._cs = AlignedSelector32::from(cs);
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
-    pub unsafe fn set_esp3(&mut self, esp3: Pointer32) {
-        self._esp3 = esp3;
+    pub fn try_as_user(&self) -> Option<&X86StackContextView<UserMode>> {
+        if self.is_user() {
+            Some(unsafe { transmute(self) })
+        } else {
+            None
+        }
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
-    pub unsafe fn esp3_unchecked(&self) -> Pointer32 {
+    pub fn try_as_user_mut(&mut self) -> Option<&mut X86StackContextView<UserMode>> {
+        if self.is_user() {
+            Some(unsafe { transmute(self) })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn try_as_vm(&self) -> Option<&X86StackContextView<Virtual8086Mode>> {
+        if self.is_vm() {
+            Some(unsafe { transmute(self) })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn try_as_vm_mut(&mut self) -> Option<&mut X86StackContextView<Virtual8086Mode>> {
+        if self.is_vm() {
+            Some(unsafe { transmute(self) })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn try_into_vm(self) -> Option<X86StackContextView<Virtual8086Mode>> {
+        if self.is_vm() {
+            Some(X86StackContextView {
+                inner: self,
+                _phantom: PhantomData,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+pub struct UserMode;
+
+impl X86StackContextView<UserMode> {
+    #[inline]
+    pub fn ss3(&self) -> Selector {
+        self._ss3.sel()
+    }
+
+    #[inline]
+    pub fn set_ss3(&mut self, ss3: Selector) {
+        self._ss3 = AlignedSelector32::from(ss3);
+    }
+
+    #[inline]
+    pub fn esp3(&self) -> Pointer32 {
         self._esp3
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
-    pub unsafe fn update_esp3<F>(&mut self, f: F)
+    pub fn set_esp3(&mut self, esp3: Pointer32) {
+        self._esp3 = esp3;
+    }
+
+    #[inline]
+    pub fn ss_esp3(&self) -> (Selector, Pointer32) {
+        (self._ss3.sel(), self._esp3)
+    }
+
+    #[inline]
+    pub fn update_esp3<F>(&mut self, f: F)
     where
         F: FnOnce(Pointer32) -> Pointer32,
     {
         self._esp3 = f(self._esp3);
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
-    pub unsafe fn update_sp3<F>(&mut self, f: F)
+    pub fn update_sp3<F>(&mut self, f: F)
     where
         F: FnOnce(u16) -> u16,
     {
         self._esp3 = Pointer32::from_u16(f(self._esp3.as_u16()));
     }
+}
 
-    #[inline]
-    pub fn esp3(&self) -> Option<Pointer32> {
-        if self.is_user() {
-            Some(self._esp3)
-        } else {
-            None
-        }
-    }
+pub struct Virtual8086Mode;
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
+pub type Vm86StackContext = X86StackContextView<Virtual8086Mode>;
+
+impl X86StackContextView<Virtual8086Mode> {
     #[inline]
-    pub unsafe fn ss3_unchecked(&self) -> Selector {
-        self._ss3.sel()
+    pub fn as_user(&self) -> &X86StackContextView<UserMode> {
+        // Safety: Downcasting from `Virtual8086Mode` view to `UserMode` view is always valid
+        unsafe { transmute(self) }
     }
 
     #[inline]
-    pub fn ss3(&self) -> Option<Selector> {
-        if self.is_user() {
-            Some(self._ss3.sel())
-        } else {
-            None
-        }
-    }
-
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
-    #[inline]
-    pub unsafe fn set_ss3(&mut self, ss3: Selector) {
-        self._ss3 = AlignedSelector32::from(ss3);
+    pub fn as_user_mut(&mut self) -> &mut X86StackContextView<UserMode> {
+        // Safety: Downcasting from `Virtual8086Mode` view to `UserMode` view is always valid
+        unsafe { transmute(self) }
     }
 
     #[inline]
-    pub fn ss_esp3(&self) -> Option<(Selector, Pointer32)> {
-        if self.is_user() {
-            Some((self._ss3.sel(), self._esp3))
-        } else {
-            None
-        }
+    pub fn vmds(&self) -> Selector {
+        self.inner._vmds.sel()
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in user mode or virtual 8086 mode.
     #[inline]
-    pub unsafe fn ss_esp3_unchecked(&self) -> (Selector, Pointer32) {
-        (self._ss3.sel(), self._esp3)
+    pub fn vmes(&self) -> Selector {
+        self.inner._vmes.sel()
+    }
+
+    #[inline]
+    pub fn vmfs(&self) -> Selector {
+        self.inner._vmfs.sel()
+    }
+
+    #[inline]
+    pub fn vmgs(&self) -> Selector {
+        self.inner._vmgs.sel()
+    }
+
+    #[inline]
+    pub fn set_vmds(&mut self, vmds: Selector) {
+        self.inner._vmds = AlignedSelector32::from(vmds);
+    }
+
+    #[inline]
+    pub fn set_vmes(&mut self, vmes: Selector) {
+        self.inner._vmes = AlignedSelector32::from(vmes);
+    }
+
+    #[inline]
+    pub fn set_vmfs(&mut self, vmfs: Selector) {
+        self.inner._vmfs = AlignedSelector32::from(vmfs);
+    }
+
+    #[inline]
+    pub fn set_vmgs(&mut self, vmgs: Selector) {
+        self.inner._vmgs = AlignedSelector32::from(vmgs);
     }
 
     #[inline]
     pub fn vm_eflags(&self) -> Eflags {
-        let mut eflags = self.eflags.canonicalized();
+        let mut eflags = self._eflags.canonicalized();
         eflags.remove(Eflags::VM);
         eflags.clear_iopl();
         eflags
@@ -642,12 +684,12 @@ impl X86StackContext {
         let mut eflags = eflags.canonicalized();
         eflags.insert(Eflags::VM);
         eflags.set_iopl(VM86::IOPL_VM);
-        self.eflags = eflags;
+        self._eflags = eflags;
     }
 
     #[inline]
     pub fn adjust_vm_eflags(&mut self) {
-        self.set_vm_eflags(self.eflags);
+        self.set_vm_eflags(self._eflags);
     }
 
     #[inline]
@@ -655,27 +697,18 @@ impl X86StackContext {
         Far16Ptr::new(self.cs(), self.eip.offset16()).as_ptr()
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
-    pub unsafe fn vm_sssp_ptr16(&self) -> *mut u16 {
-        let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
+    pub fn vm_sssp_ptr16(&self) -> *mut u16 {
+        let (ss, esp) = self.ss_esp3();
         Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
-    pub unsafe fn vm_sssp_ptr32(&self) -> *mut u32 {
-        let (ss, esp) = unsafe { self.ss_esp3_unchecked() };
+    pub fn vm_sssp_ptr32(&self) -> *mut u32 {
+        let (ss, esp) = self.ss_esp3();
         Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_push16(&mut self, value: u16) {
         unsafe {
@@ -684,9 +717,6 @@ impl X86StackContext {
         }
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_pop16(&mut self) -> u16 {
         unsafe {
@@ -696,9 +726,6 @@ impl X86StackContext {
         }
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_push32(&mut self, value: u32) {
         unsafe {
@@ -707,9 +734,6 @@ impl X86StackContext {
         }
     }
 
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_pop32(&mut self) -> u32 {
         unsafe {
@@ -720,10 +744,6 @@ impl X86StackContext {
     }
 
     /// Simulates a far call in virtual 8086 mode.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_call_far(&mut self, target: Far16Ptr) {
         unsafe {
@@ -735,15 +755,11 @@ impl X86StackContext {
     }
 
     /// Redirect interrupts by adjusting the stack context in virtual 8086 mode.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure that the context is in virtual 8086 mode.
     #[inline]
     unsafe fn vm_redirect_interrupt(&mut self, int_vec: InterruptVector, is_external: bool) {
         unsafe {
             if is_external {
-                self.vm_push16(self.eflags.bits() as u16);
+                self.vm_push16(self._eflags.bits() as u16);
                 self.vm_push16(self.cs().as_u16());
                 self.vm_push16(self.eip.as_u16());
             } else {
@@ -764,7 +780,7 @@ impl X86StackContext {
                     }
                     _ => {}
                 }
-                self.vm_push16(self.eflags.bits() as u16);
+                self.vm_push16(self._eflags.bits() as u16);
                 self.vm_push16(self.cs().as_u16());
                 self.vm_push16((self.eip.as_u16()).wrapping_add(skip));
             }
@@ -787,7 +803,7 @@ impl<const V: u8> BiosCallVector<V> {
     }
 
     #[inline]
-    pub unsafe fn call(&self, ctx: &mut X86StackContext) {
+    pub unsafe fn call(&self, ctx: &mut Vm86StackContext) {
         unsafe {
             VM86::call_bios(InterruptVector(V), ctx);
         }

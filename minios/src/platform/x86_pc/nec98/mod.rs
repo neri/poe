@@ -20,7 +20,7 @@ mod bios {
 }
 
 use super::pic::Irq;
-use crate::arch::vm86::X86StackContext;
+use crate::arch::vm86::Vm86StackContext;
 use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
@@ -32,6 +32,8 @@ pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
 pub(super) unsafe fn init(_info: &SsblInfo) {
     unsafe {
         pc98_text::Pc98Text::init();
+
+        let is_8mhz_system = ((0x501 as *const u8).read_volatile() & 0x80) != 0;
 
         let _1mb = 0x0010_0000;
         let _15mb = 0x00f0_0000;
@@ -64,16 +66,21 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             0b0000_1001,
             0b0111_1111_0111_1110,
             [
-                0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
-                0x16, 0x17,
+                0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, //
+                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
             ],
         );
 
+        let timer_val = if is_8mhz_system {
+            19968 // 1.9968MHz
+        } else {
+            24576 // 2.4576MHz
+        };
         super::pit::Pit::init(
             0x0071,
             0x3fdb,
             0x0077,
-            2457,
+            timer_val,
             Irq(0),
             super::pit::Pit::advance_tick,
         );
@@ -118,7 +125,7 @@ impl BiosTextInput {
 impl SimpleTextInput for BiosTextInput {
     fn reset(&mut self) {
         unsafe {
-            let mut regs = X86StackContext::default();
+            let mut regs = Vm86StackContext::default();
             regs.eax = 0x0300.into();
             bios::INT18.call(&mut regs);
         }
@@ -126,7 +133,7 @@ impl SimpleTextInput for BiosTextInput {
 
     fn is_ready(&mut self) -> bool {
         unsafe {
-            let mut regs = X86StackContext::default();
+            let mut regs = Vm86StackContext::default();
             regs.eax = 0x0100.into();
             bios::INT18.call(&mut regs);
             regs.ebx.h() != 0
@@ -135,7 +142,7 @@ impl SimpleTextInput for BiosTextInput {
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
-            let mut regs = X86StackContext::default();
+            let mut regs = Vm86StackContext::default();
             regs.eax = 0x0100.into();
             bios::INT18.call(&mut regs);
             if regs.ebx.h() == 0 {
@@ -171,7 +178,7 @@ impl SimpleTextInput for BiosTextInput {
     }
 }
 
-// Keyboard scan code to HID usage table
+/// Keyboard scan code to HID usage table
 #[rustfmt::skip]
 static SCAN_TO_HID: [u8; 128] = [
     /*         -0    -1    -2    -3    -4    -5    -6    -7    -8    -9    -A    -B    -C    -D    -E    -F */

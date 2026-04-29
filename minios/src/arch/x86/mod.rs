@@ -1,6 +1,7 @@
 //! Arch for x86
 
 mod hal_x86;
+#[allow(unused_imports)]
 pub use hal_x86::*;
 
 pub mod bits;

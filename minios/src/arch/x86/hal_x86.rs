@@ -3,7 +3,6 @@
 use crate::*;
 use core::arch::asm;
 use core::fmt;
-use core::marker::PhantomData;
 use core::sync::atomic::{Ordering, compiler_fence};
 use x86::gpr::Flags;
 
@@ -54,65 +53,41 @@ impl HalCpu for CpuImpl {
     }
 
     #[inline]
-    unsafe fn is_interrupt_enabled(&self) -> bool {
-        unsafe { Flags::read().contains(Flags::IF) }
+    fn is_interrupt_enabled(&self) -> bool {
+        Flags::read().contains(Flags::IF)
     }
 
     #[cfg(target_arch = "x86")]
     #[inline]
     unsafe fn interrupt_guard(&self) -> InterruptGuard {
-        let mut flags: usize;
-        compiler_fence(Ordering::SeqCst);
         unsafe {
+            let mut flags: usize;
+            compiler_fence(Ordering::SeqCst);
             asm!(
                 "pushfd",
                 "cli",
                 "pop {0}",
                 lateout(reg) flags,
             );
-        }
-        compiler_fence(Ordering::SeqCst);
-        InterruptGuard {
-            flags,
-            _phatom: PhantomData,
+            compiler_fence(Ordering::SeqCst);
+            InterruptGuard::new(flags & Flags::IF.bits())
         }
     }
 
     #[cfg(target_arch = "x86_64")]
     #[inline]
     unsafe fn interrupt_guard(&self) -> InterruptGuard {
-        let mut flags: usize;
-        compiler_fence(Ordering::SeqCst);
         unsafe {
+            let mut flags: usize;
+            compiler_fence(Ordering::SeqCst);
             asm!(
                 "pushfq",
                 "cli",
                 "pop {0}",
                 lateout(reg) flags,
             );
-        }
-        compiler_fence(Ordering::SeqCst);
-        InterruptGuard {
-            flags,
-            _phatom: PhantomData,
-        }
-    }
-}
-
-#[must_use]
-pub struct InterruptGuard {
-    flags: usize,
-    _phatom: PhantomData<Rc<()>>,
-}
-
-impl Drop for InterruptGuard {
-    #[inline]
-    fn drop(&mut self) {
-        compiler_fence(Ordering::SeqCst);
-        if Flags::from_bits(self.flags).contains(Flags::IF) {
-            unsafe {
-                Hal::cpu().enable_interrupt();
-            }
+            compiler_fence(Ordering::SeqCst);
+            InterruptGuard::new(flags & Flags::IF.bits())
         }
     }
 }

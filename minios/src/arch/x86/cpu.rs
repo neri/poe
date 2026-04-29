@@ -1,6 +1,6 @@
 //! i386 cpu core logic
 
-use super::vm86::X86StackContext;
+use super::vm86::{UserMode, X86StackContextView};
 use core::arch::{asm, naked_asm};
 use core::mem::size_of;
 use core::sync::atomic::{Ordering, compiler_fence};
@@ -17,9 +17,9 @@ impl Cpu {
         }
     }
 
-    /// Enter to user mode with specified stack context
+    /// Jump to user mode with specified stack context
     #[inline(always)]
-    pub unsafe fn enter_to_user_mode(regs: &X86StackContext) -> ! {
+    pub unsafe fn jump_to_user_mode(regs: &X86StackContextView<UserMode>) -> ! {
         compiler_fence(Ordering::SeqCst);
         unsafe {
             Self::_iret_to_user_mode(regs, super::gdt::Gdt::shared().tss_mut());
@@ -29,7 +29,7 @@ impl Cpu {
     /// Perform an IRET instruction to return to user mode with the specified stack context.
     #[unsafe(naked)]
     unsafe extern "fastcall" fn _iret_to_user_mode(
-        regs: &X86StackContext,
+        regs: &X86StackContextView<UserMode>,
         tss: &mut TaskStateSegment32,
     ) -> ! {
         naked_asm!(
@@ -48,7 +48,7 @@ impl Cpu {
             "popad",
             "add esp, 8",
             "iretd",
-            size_regs = const size_of::<X86StackContext>(),
+            size_regs = const size_of::<X86StackContextView<UserMode>>(),
         );
     }
 
@@ -58,7 +58,7 @@ impl Cpu {
     ///
     /// # Safety
     ///
-    /// * The DF flag must be cleared before calling this function.
+    /// * The DF flag must be cleared before calling this function. (normally, it should be cleared by default)
     /// * Memory range safety must be guaranteed by the caller.
     #[inline(always)]
     pub unsafe fn rep_stosd(dst: *mut u32, value: u32, count: usize) -> *mut u32 {
@@ -80,7 +80,7 @@ impl Cpu {
     ///
     /// # Safety
     ///
-    /// * The DF flag must be cleared before calling this function.
+    /// * The DF flag must be cleared before calling this function. (normally, it should be cleared by default)
     /// * Memory range safety must be guaranteed by the caller.
     #[inline(always)]
     pub unsafe fn rep_movsd(

@@ -1,4 +1,4 @@
-.PHONY: love all default clean install iso full run test apps kernel update
+.PHONY: love all default clean install iso full run test apps kernel update doc
 
 default:
 
@@ -28,3 +28,6 @@ test:
 	(cd lib/smbios; cargo test)
 	(cd lib/uuid; cargo test)
 	(cd tools; cargo test --all-features)
+
+doc:
+	(cd minios/; cargo doc --no-deps -F device_tree)

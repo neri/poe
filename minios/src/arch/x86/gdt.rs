@@ -2,7 +2,7 @@
 
 use crate::arch::bits::BitArray;
 use crate::arch::cpu::SetDescriptorError;
-use core::arch::asm;
+use core::arch::{asm, naked_asm};
 use core::cell::UnsafeCell;
 use core::mem::offset_of;
 use core::ptr;
@@ -63,32 +63,38 @@ impl Gdt {
             gdt.tss.iopb_base = Offset16::new(iopb_base);
             let tss_base = Linear32::new(&gdt.tss as *const _ as u32);
             let tss_limit = Limit16::new(iopb_base + 8191);
-            gdt._set_item(SYSTEM_TSS, SegmentDescriptor::tss32(tss_base, tss_limit));
+            gdt._set_item(SYSTEM_TSS, SegmentDescriptor::tss32(tss_limit, tss_base));
 
             gdt.reload();
 
             // SSBL starts with a temporary GDT, so reload the selector based on our new GDT here
-            asm!(
-                "mov ss, {new_ss:e}",
-                "push {new_cs:e}",
-                // trampoline code to set new cs register
-                //      call _retf
-                //      jmp _next
-                // _retf:
-                //      retf
-                // _next:
-                ".byte 0xe8, 2, 0, 0, 0, 0xeb, 0x01, 0xcb",
-
-                "mov ds, {new_ss:e}",
-                "mov es, {new_ss:e}",
-                "mov fs, {new_ss:e}",
-                "mov gs, {new_ss:e}",
-                new_ss = in(reg) KERNEL_DSEL.as_usize(),
-                new_cs = in(reg) KERNEL_CSEL.as_usize(),
-            );
+            Self::_switch_segments(KERNEL_CSEL, KERNEL_DSEL);
 
             asm!("ltr {0:x}", in(reg) SYSTEM_TSS.0,);
         }
+    }
+
+    /// Switch code and data segments to the specified selectors.
+    ///
+    /// # SAFETY
+    ///
+    /// * If an invalid selector is specified, the system will crash.
+    #[unsafe(naked)]
+    unsafe extern "fastcall" fn _switch_segments(csel: Selector, dsel: Selector) {
+        naked_asm!(
+            "mov ss, edx",
+            "push ecx",
+            "call _retf",
+            "",
+            "mov ds, edx",
+            "mov es, edx",
+            "mov fs, edx",
+            "mov gs, edx",
+            "",
+            "ret",
+            "",
+            "_retf: retf",
+        );
     }
 
     #[inline]
@@ -120,7 +126,7 @@ impl Gdt {
         }
     }
 
-    /// Reload GDT
+    /// Reload the GDT
     unsafe fn reload(&self) {
         compiler_fence(Ordering::SeqCst);
         unsafe {
@@ -153,6 +159,7 @@ impl Gdt {
 
     #[inline]
     pub fn get_tss_esp0() -> Gpr32 {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             let tss = Self::shared().tss_mut();
             ptr::addr_of!(tss.esp0).read_volatile()

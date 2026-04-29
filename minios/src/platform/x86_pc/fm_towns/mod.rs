@@ -37,12 +37,19 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             0b0000_1001,
             0,
             [
-                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d,
-                0x4e, 0x4f,
+                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, //
+                0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
             ],
         );
 
-        super::pit::Pit::init(0x0040, 0x0044, 0x0046, 307, Irq(0), timer_irq_handler);
+        super::pit::Pit::init(
+            0x0040,
+            0x0044,
+            0x0046,
+            3072, // 307.2KHz
+            Irq(0),
+            _timer_irq_handler,
+        );
         LoIoPortWB::<0x60>::new().write(0x81);
         Hal::cpu().enable_interrupt();
 
@@ -66,7 +73,8 @@ pub(super) fn reset_system() -> ! {
     }
 }
 
-fn timer_irq_handler(irq: Irq) {
+/// Timer IRQ handler for FM TOWNS, which advances the PIT tick
+fn _timer_irq_handler(irq: Irq) {
     unsafe {
         super::pit::Pit::advance_tick(irq);
         let mut al = LoIoPortRB::<0x60>::new().read();

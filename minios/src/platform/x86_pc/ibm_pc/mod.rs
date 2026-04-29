@@ -24,7 +24,7 @@ mod bios {
 }
 
 use super::pic::Irq;
-use crate::arch::{lomem::LoMemoryManager, vm86::X86StackContext};
+use crate::arch::{lomem::LoMemoryManager, vm86::Vm86StackContext};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
 use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
@@ -121,8 +121,8 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             0b0000_0001,
             0b0111_1111_1111_1010,
             [
-                0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75,
-                0x76, 0x77,
+                0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, //
+                0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
             ],
         );
 
@@ -130,7 +130,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             0x0040,
             0x0042,
             0x0043,
-            1193,
+            11931, // 1.193_181_666MHz
             Irq(0),
             super::pit::Pit::advance_tick,
         );
@@ -141,7 +141,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
         let _1mb = 0x0010_0000;
         let mut smap_supported = false;
         let buf = LoMemoryManager::alloc_page();
-        let mut regs = X86StackContext::default();
+        let mut regs = Vm86StackContext::default();
         loop {
             regs.eax = 0xe820.into();
             regs.edx = 0x534d4150.into();
@@ -149,7 +149,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             regs.set_vmes(buf.sel());
             regs.edi.set_zero();
             bios::INT15.call(&mut regs);
-            if regs.eflags.contains(Eflags::CF) || regs.eax.d() != 0x534d4150 {
+            if regs.eflags().contains(Eflags::CF) || regs.eax.d() != 0x534d4150 {
                 break;
             }
             smap_supported = true;

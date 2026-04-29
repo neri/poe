@@ -53,6 +53,7 @@ impl Pc98Text {
         0xa0000 as *mut u8
     }
 
+    #[inline(never)]
     pub unsafe fn tgdc_command(command: u8, params: &[u8]) {
         unsafe {
             let mut guard = Hal::cpu().interrupt_guard();

@@ -1,26 +1,35 @@
 //! setjmp/longjmp
 
+use alloc::rc::Rc;
 use core::arch::naked_asm;
-use core::num::NonZeroUsize;
+use core::marker::PhantomData;
+use core::num::NonZero;
 use core::sync::atomic::{Ordering, compiler_fence};
 
-#[derive(Default)]
 #[allow(unused)]
-pub struct JmpBuf([usize; 8]);
+#[derive(Default)]
+pub struct JmpBuf {
+    data: [usize; 8],
 
-impl !Send for JmpBuf {}
-
-impl !Sync for JmpBuf {}
+    // To prevent `Send` and `Sync` auto traits
+    _phantom: PhantomData<Rc<()>>,
+}
 
 impl JmpBuf {
     #[inline]
     pub const fn new() -> Self {
-        Self([0; 8])
+        Self {
+            data: [0; 8],
+            _phantom: PhantomData,
+        }
     }
 
     #[inline]
     pub unsafe fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self {
+            data: self.data.clone(),
+            _phantom: PhantomData,
+        }
     }
 
     #[inline]
@@ -32,7 +41,7 @@ impl JmpBuf {
     }
 
     #[inline]
-    pub unsafe fn long_jmp(&mut self, value: NonZeroUsize) -> ! {
+    pub unsafe fn long_jmp(&mut self, value: NonZero<usize>) -> ! {
         compiler_fence(Ordering::SeqCst);
         unsafe { Self::_long_jmp(self, value) }
     }
@@ -53,7 +62,7 @@ impl JmpBuf {
     }
 
     #[unsafe(naked)]
-    unsafe extern "fastcall" fn _long_jmp(buf: &mut Self, value: NonZeroUsize) -> ! {
+    unsafe extern "fastcall" fn _long_jmp(buf: &mut Self, value: NonZero<usize>) -> ! {
         naked_asm!(
             "mov eax, edx",
             "mov esp, [ecx]",
@@ -73,7 +82,7 @@ impl JmpBuf {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetJmpResult {
     Returned,
-    LongJumped(NonZeroUsize),
+    LongJumped(NonZero<usize>),
 }
 
 #[allow(dead_code)]
@@ -89,10 +98,10 @@ impl SetJmpResult {
     }
 
     #[inline]
-    pub const fn long_jumped(&self) -> Option<NonZeroUsize> {
+    pub const fn long_jumped(self) -> Option<NonZero<usize>> {
         match self {
             Self::Returned => None,
-            Self::LongJumped(v) => Some(*v),
+            Self::LongJumped(v) => Some(v),
         }
     }
 }

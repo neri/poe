@@ -1,7 +1,7 @@
 //! Mini OS Library
 
 #![cfg_attr(not(test), no_std)]
-#![feature(negative_impls)]
+// #![feature(negative_impls)]
 
 extern crate alloc;
 
@@ -17,10 +17,8 @@ pub mod task;
 pub use crate::_prelude_::*;
 
 pub(crate) mod _prelude_ {
-    pub use crate::arch::InterruptGuard;
+    pub use crate::arch::hal::InterruptGuard;
     pub use crate::prelude::*;
-
-    pub use core::option::Option::{self, *};
 }
 
 pub mod prelude {

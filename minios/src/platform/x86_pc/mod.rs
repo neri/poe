@@ -1,3 +1,4 @@
+//! Platform modules for x86-pc
 pub mod fm_towns;
 pub mod ibm_pc;
 pub mod nec98;

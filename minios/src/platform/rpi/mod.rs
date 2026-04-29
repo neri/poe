@@ -1,7 +1,7 @@
 //! Platform dependent module for Raspberry Pi series
 
 use super::{Platform, PlatformTrait};
-use crate::{mem::MemoryManager, *};
+use crate::*;
 use core::{
     arch::asm,
     cell::UnsafeCell,
@@ -64,8 +64,7 @@ impl PlatformTrait for Platform {
             let _end: u64;
             asm!("ldr {}, =_end", out(reg)_end);
             let _end = PhysicalAddress::new(_end);
-            boot_info.start_conventional_memory =
-                _end.rounding_up(MemoryManager::PAGE_SIZE).as_repr() as u32;
+            boot_info.start_conventional_memory = _end.rounding_up_4k().as_repr() as u32;
             boot_info.conventional_memory_size = 0x40_0000;
 
             {

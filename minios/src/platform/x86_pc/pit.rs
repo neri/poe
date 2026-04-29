@@ -10,9 +10,10 @@ static mut PIT: UnsafeCell<Pit> = UnsafeCell::new(Pit::new());
 /// PIT: Programmable Interval Timer i8253/i8254
 pub struct Pit {
     monotonic: u64,
-    tmr_cnt0: u16,
-    beep_cnt0: u16,
-    tmr_ctl: u16,
+    port_timer: IoPortWB,
+    port_beep: IoPortWB,
+    port_control: IoPortWB,
+    timer_val: u16,
 }
 
 impl Pit {
@@ -22,33 +23,35 @@ impl Pit {
     const fn new() -> Self {
         Self {
             monotonic: 0,
-            tmr_cnt0: 0,
-            beep_cnt0: 0,
-            tmr_ctl: 0,
+            port_timer: IoPortWB(0),
+            port_beep: IoPortWB(0),
+            port_control: IoPortWB(0),
+            timer_val: 0,
         }
     }
 
     #[inline]
     pub(super) unsafe fn init(
-        tmr_cnt0: u16,
-        beep_cnt0: u16,
-        tmr_ctl: u16,
+        port_timer: u16,
+        port_beep: u16,
+        port_control: u16,
         timer_val: u16,
         irq: Irq,
         irq_handler: IrqHandler,
     ) {
         unsafe {
             let shared = Self::shared();
-            shared.tmr_cnt0 = tmr_cnt0;
-            shared.beep_cnt0 = beep_cnt0;
-            shared.tmr_ctl = tmr_ctl;
+            shared.port_timer = IoPortWB(port_timer);
+            shared.port_beep = IoPortWB(port_beep);
+            shared.port_control = IoPortWB(port_control);
+            shared.timer_val = timer_val;
 
             irq.register(irq_handler).unwrap();
-            IoPortWB(tmr_ctl).write(0b0011_0110u8);
+            shared.port_control.write(0b0011_0110u8);
 
-            let cnt = IoPortWB(tmr_cnt0);
-            cnt.write((timer_val & 0xff) as u8);
-            cnt.write((timer_val >> 8) as u8);
+            let port_timer = shared.port_timer;
+            port_timer.write((timer_val & 0xff) as u8);
+            port_timer.write((timer_val >> 8) as u8);
         }
     }
 
@@ -63,6 +66,8 @@ impl Pit {
             let shared = Self::shared();
             let p = &shared.monotonic as *const _ as *const u32;
 
+            // To read a 64-bit value atomically, we read the lower 32 bits, then the upper 32 bits, and check if the lower 32 bits have changed.
+            // If they have, we read again. This is a common technique to read a 64-bit value on a 32-bit system without locks.
             loop {
                 let lo = p.read_volatile();
                 let hi = p.add(1).read_volatile();

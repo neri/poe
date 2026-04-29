@@ -3,7 +3,6 @@
 use crate::*;
 use core::arch::asm;
 use core::fmt;
-use core::marker::PhantomData;
 use core::sync::atomic::{Ordering, compiler_fence};
 
 impl HalTrait for Hal {
@@ -55,7 +54,9 @@ impl HalCpu for CpuImpl {
     }
 
     #[inline]
-    unsafe fn is_interrupt_enabled(&self) -> bool {
+    fn is_interrupt_enabled(&self) -> bool {
+        compiler_fence(Ordering::SeqCst);
+
         todo!()
     }
 
@@ -71,28 +72,7 @@ impl HalCpu for CpuImpl {
                 options(nomem, nostack),
             );
             compiler_fence(Ordering::SeqCst);
-            InterruptGuard {
-                flags: old & 0x80,
-                _phatom: PhantomData,
-            }
-        }
-    }
-}
-
-#[must_use]
-pub struct InterruptGuard {
-    flags: usize,
-    _phatom: PhantomData<Rc<()>>,
-}
-
-impl Drop for InterruptGuard {
-    #[inline]
-    fn drop(&mut self) {
-        compiler_fence(Ordering::SeqCst);
-        if self.flags != 0 {
-            unsafe {
-                Hal::cpu().enable_interrupt();
-            }
+            InterruptGuard::new(old & 0x80)
         }
     }
 }

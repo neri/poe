@@ -57,9 +57,7 @@ impl PlatformTrait for Platform {
             boot_info.platform = Platform::Virt;
 
             let end = PhysicalAddress::new(&_end as *const _ as PhysicalAddressRepr);
-            boot_info.start_conventional_memory = end
-                .rounding_up(mem::MemoryManager::PAGE_SIZE as PhysicalAddressRepr)
-                .as_repr() as u32;
+            boot_info.start_conventional_memory = end.rounding_up_4k().as_repr() as u32;
             boot_info.conventional_memory_size = 0x40_0000;
 
             println!("Model: {}", dt.root().model());
@@ -122,81 +120,79 @@ impl PlatformTrait for Platform {
 #[unsafe(no_mangle)]
 unsafe extern "C" fn _arch_stvec() -> ! {
     naked_asm!(
-        "
-    csrw sscratch, sp
-
-    addi sp, sp, -{XLEN_BYTES} * 31
-    sw ra,  {XLEN_BYTES} * 0(sp)
-    sw gp,  {XLEN_BYTES} * 1(sp)
-    sw tp,  {XLEN_BYTES} * 2(sp)
-    sw t0,  {XLEN_BYTES} * 3(sp)
-    sw t1,  {XLEN_BYTES} * 4(sp)
-    sw t2,  {XLEN_BYTES} * 5(sp)
-    sw t3,  {XLEN_BYTES} * 6(sp)
-    sw t4,  {XLEN_BYTES} * 7(sp)
-    sw t5,  {XLEN_BYTES} * 8(sp)
-    sw t6,  {XLEN_BYTES} * 9(sp)
-    sw a0,  {XLEN_BYTES} * 10(sp)
-    sw a1,  {XLEN_BYTES} * 11(sp)
-    sw a2,  {XLEN_BYTES} * 12(sp)
-    sw a3,  {XLEN_BYTES} * 13(sp)
-    sw a4,  {XLEN_BYTES} * 14(sp)
-    sw a5,  {XLEN_BYTES} * 15(sp)
-    sw a6,  {XLEN_BYTES} * 16(sp)
-    sw a7,  {XLEN_BYTES} * 17(sp)
-    sw s0,  {XLEN_BYTES} * 18(sp)
-    sw s1,  {XLEN_BYTES} * 19(sp)
-    sw s2,  {XLEN_BYTES} * 20(sp)
-    sw s3,  {XLEN_BYTES} * 21(sp)
-    sw s4,  {XLEN_BYTES} * 22(sp)
-    sw s5,  {XLEN_BYTES} * 23(sp)
-    sw s6,  {XLEN_BYTES} * 24(sp)
-    sw s7,  {XLEN_BYTES} * 25(sp)
-    sw s8,  {XLEN_BYTES} * 26(sp)
-    sw s9,  {XLEN_BYTES} * 27(sp)
-    sw s10, {XLEN_BYTES} * 28(sp)
-    sw s11, {XLEN_BYTES} * 29(sp)
-
-    csrr a0, sscratch
-    sw a0, {XLEN_BYTES} * 30(sp)
-
-    mv a0, sp
-    call {arch_handle_trap}
-
-    lw ra,  {XLEN_BYTES} * 0(sp)
-    lw gp,  {XLEN_BYTES} * 1(sp)
-    lw tp,  {XLEN_BYTES} * 2(sp)
-    lw t0,  {XLEN_BYTES} * 3(sp)
-    lw t1,  {XLEN_BYTES} * 4(sp)
-    lw t2,  {XLEN_BYTES} * 5(sp)
-    lw t3,  {XLEN_BYTES} * 6(sp)
-    lw t4,  {XLEN_BYTES} * 7(sp)
-    lw t5,  {XLEN_BYTES} * 8(sp)
-    lw t6,  {XLEN_BYTES} * 9(sp)
-    lw a0,  {XLEN_BYTES} * 10(sp)
-    lw a1,  {XLEN_BYTES} * 11(sp)
-    lw a2,  {XLEN_BYTES} * 12(sp)
-    lw a3,  {XLEN_BYTES} * 13(sp)
-    lw a4,  {XLEN_BYTES} * 14(sp)
-    lw a5,  {XLEN_BYTES} * 15(sp)
-    lw a6,  {XLEN_BYTES} * 16(sp)
-    lw a7,  {XLEN_BYTES} * 17(sp)
-    lw s0,  {XLEN_BYTES} * 18(sp)
-    lw s1,  {XLEN_BYTES} * 19(sp)
-    lw s2,  {XLEN_BYTES} * 20(sp)
-    lw s3,  {XLEN_BYTES} * 21(sp)
-    lw s4,  {XLEN_BYTES} * 22(sp)
-    lw s5,  {XLEN_BYTES} * 23(sp)
-    lw s6,  {XLEN_BYTES} * 24(sp)
-    lw s7,  {XLEN_BYTES} * 25(sp)
-    lw s8,  {XLEN_BYTES} * 26(sp)
-    lw s9,  {XLEN_BYTES} * 27(sp)
-    lw s10, {XLEN_BYTES} * 28(sp)
-    lw s11, {XLEN_BYTES} * 29(sp)
-    lw sp,  {XLEN_BYTES} * 30(sp)
-
-    sret
-    ",
+        "csrw sscratch, sp",
+        "",
+        "addi sp, sp, -{XLEN_BYTES} * 31",
+        "sw ra,  {XLEN_BYTES} * 0(sp)",
+        "sw gp,  {XLEN_BYTES} * 1(sp)",
+        "sw tp,  {XLEN_BYTES} * 2(sp)",
+        "sw t0,  {XLEN_BYTES} * 3(sp)",
+        "sw t1,  {XLEN_BYTES} * 4(sp)",
+        "sw t2,  {XLEN_BYTES} * 5(sp)",
+        "sw t3,  {XLEN_BYTES} * 6(sp)",
+        "sw t4,  {XLEN_BYTES} * 7(sp)",
+        "sw t5,  {XLEN_BYTES} * 8(sp)",
+        "sw t6,  {XLEN_BYTES} * 9(sp)",
+        "sw a0,  {XLEN_BYTES} * 10(sp)",
+        "sw a1,  {XLEN_BYTES} * 11(sp)",
+        "sw a2,  {XLEN_BYTES} * 12(sp)",
+        "sw a3,  {XLEN_BYTES} * 13(sp)",
+        "sw a4,  {XLEN_BYTES} * 14(sp)",
+        "sw a5,  {XLEN_BYTES} * 15(sp)",
+        "sw a6,  {XLEN_BYTES} * 16(sp)",
+        "sw a7,  {XLEN_BYTES} * 17(sp)",
+        "sw s0,  {XLEN_BYTES} * 18(sp)",
+        "sw s1,  {XLEN_BYTES} * 19(sp)",
+        "sw s2,  {XLEN_BYTES} * 20(sp)",
+        "sw s3,  {XLEN_BYTES} * 21(sp)",
+        "sw s4,  {XLEN_BYTES} * 22(sp)",
+        "sw s5,  {XLEN_BYTES} * 23(sp)",
+        "sw s6,  {XLEN_BYTES} * 24(sp)",
+        "sw s7,  {XLEN_BYTES} * 25(sp)",
+        "sw s8,  {XLEN_BYTES} * 26(sp)",
+        "sw s9,  {XLEN_BYTES} * 27(sp)",
+        "sw s10, {XLEN_BYTES} * 28(sp)",
+        "sw s11, {XLEN_BYTES} * 29(sp)",
+        "",
+        "csrr a0, sscratch",
+        "sw a0, {XLEN_BYTES} * 30(sp)",
+        "",
+        "mv a0, sp",
+        "call {arch_handle_trap}",
+        "",
+        "lw ra,  {XLEN_BYTES} * 0(sp)",
+        "lw gp,  {XLEN_BYTES} * 1(sp)",
+        "lw tp,  {XLEN_BYTES} * 2(sp)",
+        "lw t0,  {XLEN_BYTES} * 3(sp)",
+        "lw t1,  {XLEN_BYTES} * 4(sp)",
+        "lw t2,  {XLEN_BYTES} * 5(sp)",
+        "lw t3,  {XLEN_BYTES} * 6(sp)",
+        "lw t4,  {XLEN_BYTES} * 7(sp)",
+        "lw t5,  {XLEN_BYTES} * 8(sp)",
+        "lw t6,  {XLEN_BYTES} * 9(sp)",
+        "lw a0,  {XLEN_BYTES} * 10(sp)",
+        "lw a1,  {XLEN_BYTES} * 11(sp)",
+        "lw a2,  {XLEN_BYTES} * 12(sp)",
+        "lw a3,  {XLEN_BYTES} * 13(sp)",
+        "lw a4,  {XLEN_BYTES} * 14(sp)",
+        "lw a5,  {XLEN_BYTES} * 15(sp)",
+        "lw a6,  {XLEN_BYTES} * 16(sp)",
+        "lw a7,  {XLEN_BYTES} * 17(sp)",
+        "lw s0,  {XLEN_BYTES} * 18(sp)",
+        "lw s1,  {XLEN_BYTES} * 19(sp)",
+        "lw s2,  {XLEN_BYTES} * 20(sp)",
+        "lw s3,  {XLEN_BYTES} * 21(sp)",
+        "lw s4,  {XLEN_BYTES} * 22(sp)",
+        "lw s5,  {XLEN_BYTES} * 23(sp)",
+        "lw s6,  {XLEN_BYTES} * 24(sp)",
+        "lw s7,  {XLEN_BYTES} * 25(sp)",
+        "lw s8,  {XLEN_BYTES} * 26(sp)",
+        "lw s9,  {XLEN_BYTES} * 27(sp)",
+        "lw s10, {XLEN_BYTES} * 28(sp)",
+        "lw s11, {XLEN_BYTES} * 29(sp)",
+        "lw sp,  {XLEN_BYTES} * 30(sp)",
+        "",
+        "sret",
         XLEN_BYTES = const cpu::XLEN_BYTES,
         arch_handle_trap = sym _arch_handle_trap,
     );

@@ -14,7 +14,7 @@ impl DescriptorEntry {
 
     pub const SEGMENT: u64 = 0x0000_1000_0000_0000;
 
-    pub const CODE_SEGMENT: u64 = 0x0000_1800_0000_0000;
+    pub const CODE_OR_DATA: u64 = 0x0000_0800_0000_0000;
 
     pub const READ_WRITE: u64 = 0x0000_0200_0000_0000;
 
@@ -39,7 +39,110 @@ impl DescriptorEntry {
 
     #[inline]
     pub const fn is_code_segment(&self) -> bool {
-        (self.0 & Self::CODE_SEGMENT) == Self::CODE_SEGMENT
+        const CODE_SEGMENT: u64 = 0x0000_1800_0000_0000;
+        (self.0 & CODE_SEGMENT) == CODE_SEGMENT
+    }
+
+    #[inline]
+    pub const fn is_data_segment(&self) -> bool {
+        const DATA_SEGMENT: u64 = 0x0000_1000_0000_0000;
+        (self.0 & DATA_SEGMENT) == DATA_SEGMENT
+    }
+
+    #[inline]
+    pub const fn code_segment(
+        limit: Limit32,
+        base: Linear32,
+        is_readable: bool,
+        dpl: DPL,
+        is_present: bool,
+        opr_size: DefaultOperandSize,
+    ) -> Self {
+        Self(
+            Self::SEGMENT
+                | Self::CODE_OR_DATA
+                | limit.as_descriptor_entry()
+                | base.as_segment_base()
+                | if is_readable { Self::READ_WRITE } else { 0 }
+                | dpl.as_descriptor_entry()
+                | if is_present { Self::PRESENT } else { 0 }
+                | opr_size.as_descriptor_entry(),
+        )
+    }
+
+    #[inline]
+    pub const fn data_segment(
+        limit: Limit32,
+        base: Linear32,
+        is_writable: bool,
+        dpl: DPL,
+        is_present: bool,
+        is_big_data: bool,
+    ) -> Self {
+        Self(
+            Self::SEGMENT
+                | limit.as_descriptor_entry()
+                | base.as_segment_base()
+                | if is_writable { Self::READ_WRITE } else { 0 }
+                | dpl.as_descriptor_entry()
+                | if is_present { Self::PRESENT } else { 0 }
+                | if is_big_data { Self::BIG_DATA } else { 0 },
+        )
+    }
+
+    #[inline]
+    pub const fn tss(limit: Limit16, base: Linear32, is_present: bool) -> Self {
+        Self(
+            DescriptorType::TSS.as_descriptor_entry()
+                | limit.as_descriptor_entry()
+                | base.as_segment_base()
+                | if is_present { Self::PRESENT } else { 0 },
+        )
+    }
+
+    #[inline]
+    pub const fn gate(
+        offset: Offset32,
+        sel: Selector,
+        ty: DescriptorType,
+        dpl: DPL,
+        is_present: bool,
+    ) -> Self {
+        Self(
+            offset.as_gate_offset()
+                | (sel.as_u16() as u64) << 16
+                | ty.as_descriptor_entry()
+                | dpl.as_descriptor_entry()
+                | if is_present { Self::PRESENT } else { 0 },
+        )
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline]
+    pub const fn gate64(
+        offset: Offset64,
+        sel: Selector,
+        ist: Option<InterruptStackTable>,
+        ty: DescriptorType,
+        dpl: DPL,
+        is_present: bool,
+    ) -> DescriptorPair {
+        let (offset_low, offset_high) = offset.as_gate_offset_pair();
+        let ist = match ist {
+            Some(ist) => ist.as_descriptor_entry(),
+            None => 0,
+        };
+        let low = Self(
+            offset_low
+                | (sel.as_u16() as u64) << 16
+                | ist
+                | ty.as_descriptor_entry()
+                | dpl.as_descriptor_entry()
+                | if is_present { Self::PRESENT } else { 0 },
+        );
+        let high = DescriptorEntry(offset_high);
+
+        DescriptorPair::new(low, high)
     }
 
     #[inline]
@@ -58,79 +161,54 @@ pub struct SegmentDescriptor;
 impl SegmentDescriptor {
     #[inline]
     pub const fn flat_code32(dpl: DPL) -> DescriptorEntry {
-        Self::code(Linear32(0), Limit32::MAX, dpl, USE32)
+        Self::code(Limit32::MAX, Linear32(0), dpl, USE32)
     }
 
     #[inline]
     pub const fn flat_code64(dpl: DPL) -> DescriptorEntry {
-        Self::code(Linear32(0), Limit32::MAX, dpl, USE64)
+        Self::code(Limit32::MAX, Linear32(0), dpl, USE64)
     }
 
     #[inline]
     pub const fn flat_data(dpl: DPL) -> DescriptorEntry {
-        Self::data(Linear32(0), Limit32::MAX, dpl, true)
+        Self::data(Limit32::MAX, Linear32(0), dpl, true)
     }
 
     #[inline]
     pub const fn code(
-        base: Linear32,
         limit: Limit32,
+        base: Linear32,
         dpl: DPL,
         opr_size: DefaultOperandSize,
     ) -> DescriptorEntry {
-        DescriptorEntry(
-            DescriptorEntry::CODE_SEGMENT
-                | DescriptorEntry::READ_WRITE
-                | dpl.as_descriptor_entry()
-                | DescriptorEntry::PRESENT
-                | base.as_segment_base()
-                | limit.as_descriptor_entry()
-                | opr_size.as_descriptor_entry(),
-        )
+        DescriptorEntry::code_segment(limit, base, true, dpl, true, opr_size)
     }
 
     #[inline]
     pub const fn data(
-        base: Linear32,
         limit: Limit32,
+        base: Linear32,
         dpl: DPL,
         is_big_data: bool,
     ) -> DescriptorEntry {
-        DescriptorEntry(
-            DescriptorEntry::SEGMENT
-                | DescriptorEntry::READ_WRITE
-                | dpl.as_descriptor_entry()
-                | DescriptorEntry::PRESENT
-                | base.as_segment_base()
-                | limit.as_descriptor_entry()
-                | if is_big_data {
-                    DescriptorEntry::BIG_DATA
-                } else {
-                    0
-                },
-        )
+        DescriptorEntry::data_segment(limit, base, true, dpl, true, is_big_data)
     }
 
     #[cfg(target_arch = "x86")]
     #[inline]
-    pub const fn tss32(base: Linear32, limit: Limit16) -> DescriptorEntry {
-        DescriptorEntry(
-            DescriptorType::TSS.as_descriptor_entry()
-                | DescriptorEntry::PRESENT
-                | base.as_segment_base()
-                | limit.as_descriptor_entry(),
-        )
+    pub const fn tss32(limit: Limit16, base: Linear32) -> DescriptorEntry {
+        DescriptorEntry::tss(limit, base, true)
     }
 
     #[cfg(target_arch = "x86_64")]
     #[inline]
-    pub const fn tss64(base: Linear64, limit: Limit16) -> DescriptorPair {
+    pub const fn tss64(limit: Limit16, base: Linear64) -> DescriptorPair {
         let (base_low, base_high) = base.as_segment_base_pair();
         let low = DescriptorEntry(
-            DescriptorType::TSS.as_descriptor_entry()
-                | DescriptorEntry::PRESENT
+            limit.as_descriptor_entry()
                 | base_low
-                | limit.as_descriptor_entry(),
+                | DescriptorType::TSS.as_descriptor_entry()
+                | DescriptorEntry::PRESENT,
         );
         let high = DescriptorEntry(base_high);
         DescriptorPair::new(low, high)
@@ -145,16 +223,10 @@ impl GateDescriptor {
     pub const fn new(
         offset: Offset32,
         sel: Selector,
-        dpl: DPL,
         ty: DescriptorType,
+        dpl: DPL,
     ) -> DescriptorEntry {
-        DescriptorEntry(
-            offset.as_gate_offset()
-                | (sel.as_u16() as u64) << 16
-                | dpl.as_descriptor_entry()
-                | ty.as_descriptor_entry()
-                | DescriptorEntry::PRESENT,
-        )
+        DescriptorEntry::gate(offset, sel, ty, dpl, true)
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -162,26 +234,11 @@ impl GateDescriptor {
     pub const fn new(
         offset: Offset64,
         sel: Selector,
-        dpl: DPL,
-        ty: DescriptorType,
         ist: Option<InterruptStackTable>,
+        ty: DescriptorType,
+        dpl: DPL,
     ) -> DescriptorPair {
-        let (offset_low, offset_high) = offset.as_gate_offset_pair();
-        let ist = match ist {
-            Some(ist) => ist.as_descriptor_entry(),
-            None => 0,
-        };
-        let low = DescriptorEntry(
-            ty.as_descriptor_entry()
-                | offset_low
-                | sel.as_descriptor_entry()
-                | ist
-                | dpl.as_descriptor_entry()
-                | DescriptorEntry::PRESENT,
-        );
-        let high = DescriptorEntry(offset_high);
-
-        DescriptorPair::new(low, high)
+        DescriptorEntry::gate64(offset, sel, ist, ty, dpl, true)
     }
 }
 
@@ -877,7 +934,7 @@ impl TaskStateSegment64 {
 
     #[inline]
     pub fn as_descriptor_pair(&self) -> DescriptorPair {
-        SegmentDescriptor::tss64(Linear64(self as *const _ as usize as u64), Self::LIMIT)
+        SegmentDescriptor::tss64(Self::LIMIT, Linear64(self as *const _ as usize as u64))
     }
 }
 

@@ -1,7 +1,7 @@
 //! Disk Bios Driver
 
 use super::{bios::INT13, *};
-use arch::vm86::X86StackContext;
+use arch::vm86::Vm86StackContext;
 use x86::{gpr::Flags, prot::Selector};
 
 pub(super) struct DiskBios {
@@ -13,7 +13,7 @@ impl DiskBios {
     pub unsafe fn init() {
         // let info = Environment::boot_info();
         // unsafe {
-        //     let mut regs = X86StackContext::default();
+        //     let mut regs = Vm86StackContext::default();
 
         //     println!("boot drive: {:02x}", info.bios_boot_drive.0);
         //     print_disk_type(info.bios_boot_drive.0, &mut regs);
@@ -38,7 +38,7 @@ impl DiskBios {
 }
 
 #[allow(dead_code)]
-fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
+fn print_disk_type(drive: u8, regs: &mut Vm86StackContext) {
     let drive_type: u8;
 
     regs.eax.set_d(0x15ff);
@@ -47,7 +47,7 @@ fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
     unsafe {
         INT13.call(regs);
     }
-    if regs.eflags.contains(Flags::CF) {
+    if regs.eflags().contains(Flags::CF) {
         println!("drive {:02x}: error {:02x}", drive, regs.eax.h());
         return;
     } else {
@@ -56,12 +56,12 @@ fn print_disk_type(drive: u8, regs: &mut X86StackContext) {
 
     regs.eax.set_d(0x0800);
     regs.edx.set_d(drive as u32);
-    unsafe { regs.set_vmes(Selector::NULL) };
+    regs.set_vmes(Selector::NULL);
     regs.edi.set_d(0);
     unsafe {
         INT13.call(regs);
     }
-    if regs.eflags.contains(Flags::CF) {
+    if regs.eflags().contains(Flags::CF) {
         println!("drive {:02x}: {:02x}", drive, drive_type);
         return;
     }

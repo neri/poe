@@ -1,9 +1,10 @@
 //! Hardware Abstraction Layer
 
-use super::InterruptGuard;
+use alloc::rc::Rc;
 use core::{
     ffi::c_void,
     fmt,
+    marker::PhantomData,
     ops::{Add, BitAnd, BitOr, Mul, Not, Sub},
     sync::atomic::{Ordering, compiler_fence},
 };
@@ -11,36 +12,41 @@ use core::{
 #[allow(unused_imports)]
 use core::num::{NonZeroU32, NonZeroU64};
 
-impl !Send for InterruptGuard {}
-
-impl !Sync for InterruptGuard {}
-
 pub struct Hal;
 
 #[allow(unused)]
 pub trait HalTrait {
+    /// Returns an implementation of the `HalCpu` trait, which provides CPU-specific functionality such as interrupt management and special instructions.
     fn cpu() -> impl HalCpu;
 }
 
 #[allow(unused)]
 pub trait HalCpu {
+    /// Executes a `no-op` instruction.
     fn no_op(&self);
 
+    /// Executes a `wait-for-interrupt` instruction, putting the CPU into a low-power state until an interrupt occurs.
     fn wait_for_interrupt(&self);
 
+    /// Executes an invalid instruction, causing the CPU to raise an exception.
     fn bad_instruction(&self) -> !;
 
+    /// Enables interrupts on the CPU, allowing it to respond to external events.
     unsafe fn enable_interrupt(&self);
 
+    /// Disables interrupts on the CPU, preventing it from responding to external events.
     unsafe fn disable_interrupt(&self);
 
-    unsafe fn is_interrupt_enabled(&self) -> bool;
+    /// Checks if interrupts are currently enabled on the CPU.
+    fn is_interrupt_enabled(&self) -> bool;
 
+    /// Checks if interrupts are currently disabled on the CPU.
     #[inline]
-    unsafe fn is_interrupt_disabled(&self) -> bool {
+    fn is_interrupt_disabled(&self) -> bool {
         unsafe { !self.is_interrupt_enabled() }
     }
 
+    /// Sets the interrupt enabled state of the CPU.
     #[inline]
     unsafe fn set_interrupt_enabled(&self, enabled: bool) {
         unsafe {
@@ -52,9 +58,11 @@ pub trait HalCpu {
         }
     }
 
+    /// Creates an interrupt guard that disables interrupts when created and re-enables them when dropped. This is useful for ensuring that interrupts are properly re-enabled after a critical section of code.
     #[must_use]
     unsafe fn interrupt_guard(&self) -> InterruptGuard;
 
+    /// Halts the CPU indefinitely. This is typically used in situations where the system cannot continue running, such as after a fatal error.
     #[inline]
     fn halt(&self) -> ! {
         compiler_fence(Ordering::SeqCst);
@@ -67,6 +75,7 @@ pub trait HalCpu {
     }
 }
 
+/// Executes a closure with interrupts disabled, ensuring that interrupts are properly re-enabled after the closure is executed.
 #[macro_export]
 macro_rules! without_interrupts {
     ( $f:expr ) => {{
@@ -140,10 +149,19 @@ impl PhysicalAddress {
         self.0 as usize
     }
 
+    /// Aligns the address up to the nearest multiple of `align`. `align` must be a power of two.
     #[inline]
     pub fn rounding_up(&self, align: PhysicalAddressRepr) -> Self {
         let mask = align - 1;
         Self((self.0 + mask) & !(mask))
+    }
+
+    /// Aligns the address up to the nearest multiple of 4 KiB.
+    ///
+    /// NOTE: 4 KiB is the common page size on many platforms.
+    #[inline]
+    pub fn rounding_up_4k(&self) -> Self {
+        self.rounding_up(0x1000)
     }
 }
 
@@ -315,5 +333,35 @@ impl From<NonNullPhysicalAddress> for PhysicalAddress {
     #[inline]
     fn from(val: NonNullPhysicalAddress) -> Self {
         val.get()
+    }
+}
+
+#[must_use = "InterruptGuard will re-enable interrupts when dropped, so it must be used to ensure interrupts are properly re-enabled."]
+pub struct InterruptGuard {
+    flags: usize,
+
+    // To prevent `Send` and `Sync` auto traits
+    _phantom: PhantomData<Rc<()>>,
+}
+
+impl Drop for InterruptGuard {
+    #[inline]
+    fn drop(&mut self) {
+        compiler_fence(Ordering::SeqCst);
+        if self.flags != 0 {
+            unsafe {
+                Hal::cpu().enable_interrupt();
+            }
+        }
+    }
+}
+
+impl InterruptGuard {
+    #[inline]
+    pub(super) const unsafe fn new(flags: usize) -> Self {
+        Self {
+            flags,
+            _phantom: PhantomData,
+        }
     }
 }

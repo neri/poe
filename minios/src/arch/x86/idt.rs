@@ -61,10 +61,10 @@ global_asm!(
     "pushad",
 
     // To avoid a bug in code generation that pushes segment registers
-    ".byte 0x06", // push es
-    ".byte 0x1e", // push ds
-    ".byte 0x0f, 0xa0", // push fs
     ".byte 0x0f, 0xa8", // push gs
+    ".byte 0x0f, 0xa0", // push fs
+    ".byte 0x1e", // push ds
+    ".byte 0x06", // push es
 
     "mov eax, {dsel}",
     "mov ds, eax",
@@ -76,10 +76,11 @@ global_asm!(
     "call {handler}",
     "mov esp, ebp",
 
-    ".byte 0x0f, 0xa9", // pop gs
-    ".byte 0x0f, 0xa1", // pop fs
-    ".byte 0x1f", // pop ds
     ".byte 0x07", // pop es
+    ".byte 0x1f", // pop ds
+    ".byte 0x0f, 0xa1", // pop fs
+    ".byte 0x0f, 0xa9", // pop gs
+
     "popad",
     "add esp, 8",
     "iretd",
@@ -163,12 +164,12 @@ impl Idt {
         let entry = GateDescriptor::new(
             Offset32::new(offset as u32),
             KERNEL_CSEL,
-            dpl,
             if is_inter {
                 DescriptorType::InterruptGate
             } else {
                 DescriptorType::TrapGate
             },
+            dpl,
         );
         unsafe {
             Self::shared().table[int_vec.0 as usize] = entry;
@@ -199,13 +200,15 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
     output.set_attribute(0x1f);
 
     let is_vm = ctx.is_vm();
+    let ctx_vm = ctx.try_as_vm();
+    let ctx_user = ctx.try_as_user();
 
-    let ss = ctx.ss3().unwrap_or(Selector::NULL);
-    let esp = ctx
-        .esp3()
-        .unwrap_or_else(|| Pointer32::from_u32(&ctx.esp3() as *const _ as u32));
-    let ds = ctx.vmds().unwrap_or(ctx.ds());
-    let es = ctx.vmes().unwrap_or(ctx.es());
+    let ss = ctx_user.map(|v| v.ss3()).unwrap_or(Selector::NULL);
+    let esp = ctx_user
+        .map(|v| v.esp3())
+        .unwrap_or_else(|| Pointer32::from_u32(ctx.esp3_ptr() as u32));
+    let ds = ctx_vm.map(|v| v.vmds()).unwrap_or(ctx.ds());
+    let es = ctx_vm.map(|v| v.vmes()).unwrap_or(ctx.es());
 
     let _ = writeln!(
         output,
@@ -248,7 +251,7 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
         ctx.ebp.d(),
         ds,
         es,
-        ctx.eflags,
+        ctx.eflags(),
     );
 
     Hal::cpu().halt();

@@ -222,9 +222,9 @@ impl System {
 
     /// Returns configuration table entries
     #[inline]
-    pub fn config_table<'a>() -> impl Iterator<Item = &'a ConfigurationTableEntry> {
+    pub fn config_table<'a>() -> &'a [ConfigurationTableEntry] {
         let shared = Self::shared();
-        shared.config_table.iter()
+        shared.config_table.as_slice()
     }
 
     /// Finds configuration table entry by GUID

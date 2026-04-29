@@ -1,7 +1,7 @@
 //! VESA BIOS Extensions (VBE) support
 
 use super::bios::INT10;
-use crate::arch::{lomem::LoMemoryManager, vm86::X86StackContext};
+use crate::arch::{lomem::LoMemoryManager, vm86::Vm86StackContext};
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
@@ -28,7 +28,7 @@ impl VesaBios {
         unsafe {
             let buffer = LoMemoryManager::alloc_page();
 
-            let mut regs = X86StackContext::default();
+            let mut regs = Vm86StackContext::default();
             regs.eax = 0x4f00.into();
             regs.set_vmes(buffer.sel());
             regs.edi.set_zero();
@@ -106,7 +106,7 @@ impl GraphicsOutputDevice for VesaBios {
             let info = *self.modes.get(mode.0 as usize).ok_or(())?;
 
             let buffer = LoMemoryManager::alloc_page();
-            let mut regs = X86StackContext::default();
+            let mut regs = Vm86StackContext::default();
             regs.eax = 0x4f01.into();
             regs.ecx = bios_mode.into();
             regs.set_vmes(buffer.sel());
@@ -148,7 +148,7 @@ impl GraphicsOutputDevice for VesaBios {
 
     fn detach(&mut self) {
         unsafe {
-            let mut regs = X86StackContext::default();
+            let mut regs = Vm86StackContext::default();
             regs.eax = 0x0003.into();
             INT10.call(&mut regs);
         }

@@ -1,6 +1,6 @@
 [tasks.run]
 description = "Run the application"
-run = "cd poe/rv32-virt; make install run"
+run = "cd poe/rv64-virt; make install run"
 
 [tasks.clean]
 confirm = "Are you sure?"
@@ -15,3 +15,7 @@ run = "make update"
 [tasks.test]
 description = "Run the tests"
 run = "make test"
+
+[tasks.doc]
+description = "Generate documentation"
+run = "make doc"
