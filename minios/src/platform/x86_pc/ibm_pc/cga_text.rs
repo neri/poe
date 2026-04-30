@@ -37,18 +37,18 @@ impl CgaText {
 
     pub(super) unsafe fn init() {
         unsafe {
-            let stdout = (&mut *(&raw mut CGA_TEXT)).get_mut();
+            let shared = (&mut *(&raw mut CGA_TEXT)).get_mut();
 
             let cols = (0x44a as *const u8).read_volatile();
-            stdout.mode.columns = cols;
+            shared.mode.columns = cols;
             let rows = (0x484 as *const u8).read_volatile();
             if rows > 0 {
-                stdout.mode.rows = rows + 1;
+                shared.mode.rows = rows + 1;
             }
-            stdout.max_scan_line = CRTC::MaxScanLine.read() & 0x1f;
+            shared.max_scan_line = CRTC::MaxScanLine.read() & 0x1f;
 
-            stdout.reset();
-            System::set_stdout(stdout);
+            shared.reset();
+            System::set_stdout(shared);
 
             // UNSAFE: aliasing mutable static
             let stderr = (&mut *(&raw mut CGA_TEXT)).get_mut();
@@ -58,21 +58,30 @@ impl CgaText {
 
     pub(super) unsafe fn init_late() {
         unsafe {
-            let stdout = (&mut *(&raw mut CGA_TEXT)).get_mut();
+            let shared = (&mut *(&raw mut CGA_TEXT)).get_mut();
 
             let mut regs = Vm86StackContext::default();
             regs.eax = 0x1a00.into();
             INT10.call(&mut regs);
             if regs.eax.b() == 0x1a {
                 // vga or later
-                stdout.is_vga = true;
-                stdout.attr_mask = 0xff;
+                shared.is_vga = true;
+                shared.attr_mask = 0xff;
 
                 // line graphics enable, blinking disable
                 AttributeController::Mode.write(0b0000_0101);
                 // Select 9-dot font
                 Sequencer::ClockingMode.write(0b0000_0001);
             }
+        }
+    }
+
+    /// Handover control to CGA text mode
+    pub(super) fn handover() {
+        unsafe {
+            let mut regs = Vm86StackContext::default();
+            regs.eax = 0x0003.into();
+            INT10.call(&mut regs);
         }
     }
 

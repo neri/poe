@@ -1,57 +1,54 @@
 //! **IA32_EFER**: Extended Feature Enables Register *(MSR C000_0080)*
 
 use crate::msr::MSR;
+use crate::view::{ControlRegisterReadonlyView, ControlRegisterView};
 
 /// **IA32_EFER**: Extended Feature Enables Register *(MSR C000_0080)*
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EFER(u64);
 
+#[allow(non_snake_case)]
 impl EFER {
     /// Enables the `syscall` and `sysret` instructions
-    pub const SYSCALL: Self = Self(1 << 0);
+    pub fn SYSCALL<'a>(&'a mut self) -> ControlRegisterView<'a, u64> {
+        ControlRegisterView::new(&mut self.0, 1 << 0)
+    }
+
     /// Activates long mode
-    pub const LME: Self = Self(1 << 8);
+    pub fn LME<'a>(&'a mut self) -> ControlRegisterView<'a, u64> {
+        ControlRegisterView::new(&mut self.0, 1 << 8)
+    }
+
     /// Indicates that long mode is active. THIS BIT CANNOT BE CHANGED MANUALLY.
-    pub const LMA: Self = Self(1 << 10);
+    pub fn LMA<'a>(&'a self) -> ControlRegisterReadonlyView<'a, u64> {
+        ControlRegisterReadonlyView::new(&self.0, 1 << 10)
+    }
+
     /// Enables the no-execute page-protection feature
-    pub const NXE: Self = Self(1 << 11);
-
-    #[inline]
-    pub const fn has(&self, other: Self) -> bool {
-        (self.0 & other.0) != self.0
+    pub fn NXE<'a>(&'a mut self) -> ControlRegisterView<'a, u64> {
+        ControlRegisterView::new(&mut self.0, 1 << 11)
     }
 
     #[inline]
-    pub unsafe fn enable(&self) {
+    pub fn fetch() -> Self {
+        unsafe { Self(MSR::IA32_EFER.read()) }
+    }
+
+    #[inline]
+    pub unsafe fn update(&self) {
         unsafe {
-            MSR::IA32_EFER.bit_set(self.0);
+            MSR::IA32_EFER.write(self.0);
         }
     }
 
     #[inline]
-    pub unsafe fn disable(&self) {
-        unsafe {
-            MSR::IA32_EFER.bit_clear(self.0);
-        }
-    }
-
-    #[inline]
-    pub unsafe fn is_enabled(&self) -> bool {
-        unsafe { (MSR::IA32_EFER.read() & self.0) != 0 }
-    }
-
-    #[inline]
-    pub unsafe fn is_disabled(&self) -> bool {
-        unsafe { !self.is_enabled() }
-    }
-
-    #[inline]
-    pub unsafe fn set(&self, value: bool) {
-        if value {
-            unsafe { self.enable() }
-        } else {
-            unsafe { self.disable() }
-        }
+    pub fn fetch_update<F>(f: F)
+    where
+        F: FnOnce(&mut Self),
+    {
+        let mut efer = Self::fetch();
+        f(&mut efer);
+        unsafe { efer.update() };
     }
 }

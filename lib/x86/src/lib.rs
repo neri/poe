@@ -10,3 +10,4 @@ pub mod isolated_io;
 pub mod msr;
 pub mod prot;
 pub mod real;
+pub mod view;

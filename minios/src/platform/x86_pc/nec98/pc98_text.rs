@@ -2,7 +2,9 @@
 
 use super::PORT_5F;
 use crate::arch::cpu::Cpu;
+use crate::arch::vm86::Vm86StackContext;
 use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
+use crate::platform::x86_pc::nec98::bios::INT18;
 use crate::*;
 use core::cell::UnsafeCell;
 use tui::prelude::box_drawing;
@@ -45,6 +47,18 @@ impl Pc98Text {
             // UNSAFE: aliasing mutable static
             let stderr = (&mut *(&raw mut PC98_TEXT)).get_mut();
             System::set_stderr(stderr);
+        }
+    }
+
+    /// Handover control to PC-98 text mode
+    pub(super) fn handover() {
+        unsafe {
+            let mut regs = Vm86StackContext::default();
+            regs.eax = 0x4100.into();
+            INT18.call(&mut regs);
+
+            regs.eax = 0x0c00.into();
+            INT18.call(&mut regs);
         }
     }
 

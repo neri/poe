@@ -8,7 +8,6 @@ description = "Clean the build artifacts"
 run = "make clean"
 
 [tasks.update]
-confirm = "Are you sure?"
 description = "Update the dependencies"
 run = "make update"
 

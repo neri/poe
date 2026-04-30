@@ -1,6 +1,7 @@
 //! PC-9821 640x480 Graphics Mode Driver
 
 use super::bios::INT18;
+use super::pc98_text::Pc98Text;
 use crate::arch::vm86::Vm86StackContext;
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
@@ -89,20 +90,6 @@ impl GraphicsOutputDevice for PegcBios {
     }
 
     fn detach(&mut self) {
-        unsafe {
-            let mut regs = Vm86StackContext::default();
-            regs.eax = 0x4100.into();
-            INT18.call(&mut regs);
-
-            // regs.eax = 0x3008.into();
-            // regs.ebx = 0x2200.into();
-            // INT18.call(&mut regs);
-            // regs.eax = 0x4d00.into();
-            // regs.ecx = 0x0000.into();
-            // INT18.call(&mut regs);
-
-            regs.eax = 0x0c00.into();
-            INT18.call(&mut regs);
-        }
+        Pc98Text::handover();
     }
 }

@@ -200,7 +200,6 @@ impl Flags {
     /// Resume flag
     pub const RF: Self = Self(0x0001_0000);
     /// Virtual 8086 mode flag
-    #[cfg(target_arch = "x86")]
     pub const VM: Self = Self(0x0002_0000);
     /// Alignment check
     pub const AC: Self = Self(0x0004_0000);

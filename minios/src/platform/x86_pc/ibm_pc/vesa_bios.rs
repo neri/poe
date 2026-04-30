@@ -1,6 +1,7 @@
 //! VESA BIOS Extensions (VBE) support
 
 use super::bios::INT10;
+use super::cga_text::CgaText;
 use crate::arch::{lomem::LoMemoryManager, vm86::Vm86StackContext};
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
@@ -147,11 +148,7 @@ impl GraphicsOutputDevice for VesaBios {
     }
 
     fn detach(&mut self) {
-        unsafe {
-            let mut regs = Vm86StackContext::default();
-            regs.eax = 0x0003.into();
-            INT10.call(&mut regs);
-        }
+        CgaText::handover();
     }
 }
 

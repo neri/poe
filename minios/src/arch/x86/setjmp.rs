@@ -17,7 +17,7 @@ pub struct JmpBuf {
 
 impl JmpBuf {
     #[inline]
-    pub const fn new() -> Self {
+    pub const fn zeroed() -> Self {
         Self {
             data: [0; 8],
             _phantom: PhantomData,

@@ -52,6 +52,12 @@ impl Cpu {
         );
     }
 
+    /// Fill memory with zeros using `rep stosd`.
+    #[inline(always)]
+    pub unsafe fn zero_memory32(dst: *mut u32, count: usize) -> *mut u32 {
+        unsafe { Self::rep_stosd(dst, 0, count) }
+    }
+
     /// Fill memory with a 32-bit value using `rep stosd`.
     ///
     /// Returns the destination pointer after filling.

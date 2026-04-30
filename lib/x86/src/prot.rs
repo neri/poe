@@ -1,5 +1,9 @@
 //! protected mode structures
 
+use crate::gpr::Flags;
+#[cfg(target_arch = "x86")]
+use crate::gpr::Gpr32;
+use crate::real::Offset16;
 use core::convert::TryFrom;
 use core::fmt::LowerHex;
 use core::mem::transmute;
@@ -967,7 +971,8 @@ impl DefaultOperandSize {
                 (false, false) => Some(USE16),
                 (true, false) => Some(USE32),
                 (false, true) => Some(USE64),
-                _ => None,
+                // Undefined
+                (true, true) => None,
             }
         } else {
             None
@@ -1098,8 +1103,3 @@ mod ist {
 
 #[cfg(target_arch = "x86_64")]
 pub use ist::*;
-
-use crate::gpr::Flags;
-#[cfg(target_arch = "x86")]
-use crate::gpr::Gpr32;
-use crate::real::Offset16;

@@ -151,15 +151,16 @@ _puts_nec98:
     mov ax, 0xa000
     mov es, ax
     xor di, di
-    mov cl, [si - 1]
-    xor ch, ch
     xor ah, ah
 .loop:
     lodsb
+    or al, al
+    jz .end
     stosw
     mov al, 0xe1
     mov [es:di + 0x1ffe], ax
-    loop .loop
+    jmp .loop
+.end:
     pop es
     ret
 

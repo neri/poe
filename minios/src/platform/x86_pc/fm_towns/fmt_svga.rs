@@ -70,9 +70,8 @@ impl GraphicsOutputDevice for FmtSvga {
                 IoPortWB(0xfd94).write((color >> 16) as u8);
             }
 
-            Cpu::rep_stosd(
+            Cpu::zero_memory32(
                 self.current_mode.fb.as_usize() as *mut u32,
-                0,
                 self.current_mode.fb_size / 4,
             );
 
@@ -81,8 +80,6 @@ impl GraphicsOutputDevice for FmtSvga {
     }
 
     fn detach(&mut self) {
-        unsafe {
-            FmtText::hw_set_mode();
-        }
+        FmtText::handover();
     }
 }

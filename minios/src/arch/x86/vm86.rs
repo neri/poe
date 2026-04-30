@@ -37,7 +37,7 @@ impl VM86 {
         Self {
             vmbp: Linear32::ZERO,
             vm_stack: None,
-            jmp_buf: JmpBuf::new(),
+            jmp_buf: JmpBuf::zeroed(),
             context: null_mut(),
         }
     }
@@ -97,7 +97,7 @@ impl VM86 {
     pub unsafe fn call_far(target: Far16Ptr, ctx: &mut Vm86StackContext) {
         unsafe {
             Self::invoke(ctx, |ctx| {
-                ctx.vm_call_far(target);
+                ctx.vm_simulate_call_far(target);
             });
         }
     }
@@ -360,13 +360,39 @@ pub struct X86StackContext {
     _vmgs: AlignedSelector32,
 }
 
+impl From<X86StackContext> for X86StackContextView<KernelMode> {
+    #[inline]
+    fn from(ctx: X86StackContext) -> Self {
+        Self {
+            inner: ctx,
+            _phantom: PhantomData,
+        }
+    }
+}
+
 #[derive(Debug)]
-pub struct X86StackContextView<VIEW> {
+pub struct X86StackContextView<VIEW: ContextViewMode> {
     inner: X86StackContext,
     _phantom: PhantomData<VIEW>,
 }
 
-impl<VIEW> Clone for X86StackContextView<VIEW> {
+pub trait ContextViewMode {}
+
+pub struct KernelMode;
+
+impl ContextViewMode for KernelMode {}
+
+pub struct UserMode;
+
+impl ContextViewMode for UserMode {}
+
+pub struct Virtual8086Mode;
+
+impl ContextViewMode for Virtual8086Mode {}
+
+pub type Vm86StackContext = X86StackContextView<Virtual8086Mode>;
+
+impl<VIEW: ContextViewMode> Clone for X86StackContextView<VIEW> {
     #[inline]
     fn clone(&self) -> Self {
         Self {
@@ -521,7 +547,7 @@ impl X86StackContext {
     }
 
     #[inline]
-    pub fn try_as_user(&self) -> Option<&X86StackContextView<UserMode>> {
+    pub fn try_as_user<'a>(&'a self) -> Option<&'a X86StackContextView<UserMode>> {
         if self.is_user() {
             Some(unsafe { transmute(self) })
         } else {
@@ -530,7 +556,7 @@ impl X86StackContext {
     }
 
     #[inline]
-    pub fn try_as_user_mut(&mut self) -> Option<&mut X86StackContextView<UserMode>> {
+    pub fn try_as_user_mut<'a>(&'a mut self) -> Option<&'a mut X86StackContextView<UserMode>> {
         if self.is_user() {
             Some(unsafe { transmute(self) })
         } else {
@@ -539,7 +565,7 @@ impl X86StackContext {
     }
 
     #[inline]
-    pub fn try_as_vm(&self) -> Option<&X86StackContextView<Virtual8086Mode>> {
+    pub fn try_as_vm<'a>(&'a self) -> Option<&'a X86StackContextView<Virtual8086Mode>> {
         if self.is_vm() {
             Some(unsafe { transmute(self) })
         } else {
@@ -548,7 +574,7 @@ impl X86StackContext {
     }
 
     #[inline]
-    pub fn try_as_vm_mut(&mut self) -> Option<&mut X86StackContextView<Virtual8086Mode>> {
+    pub fn try_as_vm_mut<'a>(&'a mut self) -> Option<&'a mut X86StackContextView<Virtual8086Mode>> {
         if self.is_vm() {
             Some(unsafe { transmute(self) })
         } else {
@@ -559,17 +585,12 @@ impl X86StackContext {
     #[inline]
     pub fn try_into_vm(self) -> Option<X86StackContextView<Virtual8086Mode>> {
         if self.is_vm() {
-            Some(X86StackContextView {
-                inner: self,
-                _phantom: PhantomData,
-            })
+            Some(unsafe { transmute(self) })
         } else {
             None
         }
     }
 }
-
-pub struct UserMode;
 
 impl X86StackContextView<UserMode> {
     #[inline]
@@ -614,63 +635,70 @@ impl X86StackContextView<UserMode> {
     }
 }
 
-pub struct Virtual8086Mode;
-
-pub type Vm86StackContext = X86StackContextView<Virtual8086Mode>;
-
 impl X86StackContextView<Virtual8086Mode> {
+    /// Returns the context as a user mode view.
     #[inline]
-    pub fn as_user(&self) -> &X86StackContextView<UserMode> {
+    pub fn as_user<'a>(&'a self) -> &'a X86StackContextView<UserMode> {
         // Safety: Downcasting from `Virtual8086Mode` view to `UserMode` view is always valid
         unsafe { transmute(self) }
     }
 
+    /// Returns the context as a mutable user mode view.
     #[inline]
-    pub fn as_user_mut(&mut self) -> &mut X86StackContextView<UserMode> {
+    pub fn as_user_mut<'a>(&'a mut self) -> &'a mut X86StackContextView<UserMode> {
         // Safety: Downcasting from `Virtual8086Mode` view to `UserMode` view is always valid
         unsafe { transmute(self) }
     }
 
+    /// Returns the selector of `ds` segment for virtual 8086 mode.
     #[inline]
     pub fn vmds(&self) -> Selector {
         self.inner._vmds.sel()
     }
 
+    /// Returns the selector of `es` segment for virtual 8086 mode.
     #[inline]
     pub fn vmes(&self) -> Selector {
         self.inner._vmes.sel()
     }
 
+    /// Returns the selector of `fs` segment for virtual 8086 mode.
     #[inline]
     pub fn vmfs(&self) -> Selector {
         self.inner._vmfs.sel()
     }
 
+    /// Returns the selector of `gs` segment for virtual 8086 mode.
     #[inline]
     pub fn vmgs(&self) -> Selector {
         self.inner._vmgs.sel()
     }
 
+    /// Sets the selector of `ds` segment for virtual 8086 mode.
     #[inline]
     pub fn set_vmds(&mut self, vmds: Selector) {
         self.inner._vmds = AlignedSelector32::from(vmds);
     }
 
+    /// Sets the selector of `es` segment for virtual 8086 mode.
     #[inline]
     pub fn set_vmes(&mut self, vmes: Selector) {
         self.inner._vmes = AlignedSelector32::from(vmes);
     }
 
+    /// Sets the selector of `fs` segment for virtual 8086 mode.
     #[inline]
     pub fn set_vmfs(&mut self, vmfs: Selector) {
         self.inner._vmfs = AlignedSelector32::from(vmfs);
     }
 
+    /// Sets the selector of `gs` segment for virtual 8086 mode.
     #[inline]
     pub fn set_vmgs(&mut self, vmgs: Selector) {
         self.inner._vmgs = AlignedSelector32::from(vmgs);
     }
 
+    /// Returns the EFLAGS for virtual 8086 mode by removing the VM flag and clearing IOPL bits.
     #[inline]
     pub fn vm_eflags(&self) -> Eflags {
         let mut eflags = self._eflags.canonicalized();
@@ -679,6 +707,7 @@ impl X86StackContextView<Virtual8086Mode> {
         eflags
     }
 
+    /// Sets the EFLAGS for virtual 8086 mode by inserting the VM flag and setting IOPL bits to `IOPL_VM`.
     #[inline]
     pub fn set_vm_eflags(&mut self, eflags: Eflags) {
         let mut eflags = eflags.canonicalized();
@@ -687,28 +716,33 @@ impl X86StackContextView<Virtual8086Mode> {
         self._eflags = eflags;
     }
 
+    /// Adjusts the EFLAGS for virtual 8086 mode by reapplying the VM flag and IOPL bits to the current EFLAGS.
     #[inline]
     pub fn adjust_vm_eflags(&mut self) {
         self.set_vm_eflags(self._eflags);
     }
 
+    /// Returns a pointer to the current instruction in virtual 8086 mode.
     #[inline]
     pub fn vm_csip_ptr(&self) -> *const u8 {
         Far16Ptr::new(self.cs(), self.eip.offset16()).as_ptr()
     }
 
+    /// Returns a pointer to the current stack top in virtual 8086 mode.
     #[inline]
     pub fn vm_sssp_ptr16(&self) -> *mut u16 {
         let (ss, esp) = self.ss_esp3();
         Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
+    /// Returns a pointer to the current stack top in virtual 8086 mode.
     #[inline]
     pub fn vm_sssp_ptr32(&self) -> *mut u32 {
         let (ss, esp) = self.ss_esp3();
         Far16Ptr::new(ss, esp.offset16()).as_ptr()
     }
 
+    /// Pushes a 16-bit value onto the stack in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_push16(&mut self, value: u16) {
         unsafe {
@@ -717,6 +751,7 @@ impl X86StackContextView<Virtual8086Mode> {
         }
     }
 
+    /// Pops a 16-bit value from the stack in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_pop16(&mut self) -> u16 {
         unsafe {
@@ -726,6 +761,7 @@ impl X86StackContextView<Virtual8086Mode> {
         }
     }
 
+    /// Pushes a 32-bit value onto the stack in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_push32(&mut self, value: u32) {
         unsafe {
@@ -734,6 +770,7 @@ impl X86StackContextView<Virtual8086Mode> {
         }
     }
 
+    /// Pops a 32-bit value from the stack in virtual 8086 mode.
     #[inline]
     pub unsafe fn vm_pop32(&mut self) -> u32 {
         unsafe {
@@ -745,7 +782,7 @@ impl X86StackContextView<Virtual8086Mode> {
 
     /// Simulates a far call in virtual 8086 mode.
     #[inline]
-    pub unsafe fn vm_call_far(&mut self, target: Far16Ptr) {
+    pub unsafe fn vm_simulate_call_far(&mut self, target: Far16Ptr) {
         unsafe {
             self.vm_push16(self.cs().as_u16());
             self.vm_push16(self.eip.offset16().as_u16());
@@ -755,6 +792,10 @@ impl X86StackContextView<Virtual8086Mode> {
     }
 
     /// Redirect interrupts by adjusting the stack context in virtual 8086 mode.
+    ///
+    /// Parameters:
+    /// - `int_vec`: The interrupt vector to redirect to.
+    /// - `is_external`: Whether the interrupt is an external interrupt or not.
     #[inline]
     unsafe fn vm_redirect_interrupt(&mut self, int_vec: InterruptVector, is_external: bool) {
         unsafe {

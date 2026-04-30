@@ -87,7 +87,7 @@ impl FmtText {
             // Clear GVRAM
             let p = 0xc_ff81 as *mut u8;
             p.write_volatile(0x0f);
-            Cpu::rep_stosd(0xc_0000 as *mut u32, 0, 80 * 400 / 4);
+            Cpu::zero_memory32(0xc_0000 as *mut u32, 80 * 400 / 4);
 
             let stdout = (&mut *(&raw mut FMT_TEXT)).get_mut();
             Self::hw_set_mode();
@@ -97,6 +97,13 @@ impl FmtText {
             // UNSAFE: aliasing mutable static
             let stderr = (&mut *(&raw mut FMT_TEXT)).get_mut();
             System::set_stderr(stderr);
+        }
+    }
+
+    /// Handover control to FMR compatible text mode
+    pub(super) fn handover() {
+        unsafe {
+            FmtText::hw_set_mode();
         }
     }
 
