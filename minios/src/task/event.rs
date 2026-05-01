@@ -1,5 +1,8 @@
 // use super::*;
-use crate::*;
+use crate::{
+    platform::{Platform, PlatformTrait},
+    *,
+};
 use core::time::Duration;
 
 // pub type EventCallback = *const fn(usize);
@@ -11,6 +14,7 @@ pub struct Event<'a> {
 }
 
 impl<'a> Event<'a> {
+    /// Create an event with the specified polling event.
     #[inline]
     pub fn with_polling(poll: impl PollingEvent + 'a) -> Self {
         let poll = Box::new(poll);
@@ -22,6 +26,13 @@ impl<'a> Event<'a> {
         }
     }
 
+    /// Create an event that will be signaled after the specified duration.
+    #[inline]
+    pub fn with_timeout(duration: Duration) -> Self {
+        Self::with_timer(TimerEvent::with_timeout(duration))
+    }
+
+    /// Create an event with the specified timer event.
     #[inline]
     pub fn with_timer(timer_event: TimerEvent) -> Self {
         let poller = TimerPoller { timer_event };
@@ -77,8 +88,25 @@ struct TimerPoller {
 
 impl PollingEvent for TimerPoller {
     fn poll(&mut self) -> PollResult {
-        // TODO: implement
-        PollResult::Pending
+        match self.timer_event {
+            TimerEvent::Timeout(deadline) => {
+                let result = Platform::monotonic().wrapping_sub(deadline) as i64;
+                if result >= 0 {
+                    PollResult::Ready
+                } else {
+                    PollResult::Pending
+                }
+            }
+            TimerEvent::Periodic(interval) => {
+                let now = Platform::monotonic();
+                if now >= interval {
+                    self.timer_event = TimerEvent::Periodic(now + interval);
+                    PollResult::Ready
+                } else {
+                    PollResult::Pending
+                }
+            }
+        }
     }
 }
 
@@ -89,11 +117,21 @@ pub enum TimerEvent {
 }
 
 impl TimerEvent {
-    pub fn with_timeout(_duration: Duration) -> Self {
-        todo!()
+    /// Create a timer event that will be signaled as soon as possible.
+    #[inline]
+    pub fn epsilon() -> Self {
+        Self::Timeout(1)
+    }
+
+    /// Create a timer event that will be signaled after the specified duration.
+    #[inline]
+    pub fn with_timeout(duration: Duration) -> Self {
+        let ticks = Platform::duration_to_ticks(duration);
+        Self::Timeout(Platform::monotonic() + ticks)
     }
 }
 
+/// Null event that is always ready.
 pub struct NullEvent;
 
 impl PollingEvent for NullEvent {

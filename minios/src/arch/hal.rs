@@ -26,6 +26,8 @@ pub trait HalCpu {
     fn no_op(&self);
 
     /// Executes a `wait-for-interrupt` instruction, putting the CPU into a low-power state until an interrupt occurs.
+    ///
+    /// NOTE: This function does not guarantee that the CPU will actually enter a low-power state
     fn wait_for_interrupt(&self);
 
     /// Executes an invalid instruction, causing the CPU to raise an exception.
@@ -58,11 +60,13 @@ pub trait HalCpu {
         }
     }
 
-    /// Creates an interrupt guard that disables interrupts when created and re-enables them when dropped. This is useful for ensuring that interrupts are properly re-enabled after a critical section of code.
+    /// Creates an interrupt guard that disables interrupts when created and re-enables them when dropped.
+    /// This is useful for ensuring that interrupts are properly re-enabled after a critical section of code.
     #[must_use]
     unsafe fn interrupt_guard(&self) -> InterruptGuard;
 
-    /// Halts the CPU indefinitely. This is typically used in situations where the system cannot continue running, such as after a fatal error.
+    /// Halts the CPU indefinitely.
+    /// This is typically used in situations where the system cannot continue running, such as after a fatal error.
     #[inline]
     fn halt(&self) -> ! {
         compiler_fence(Ordering::SeqCst);
@@ -71,6 +75,28 @@ pub trait HalCpu {
                 self.disable_interrupt();
                 self.wait_for_interrupt();
             }
+        }
+    }
+
+    /// Atomically loads a 64-bit counter value from the given pointer.
+    #[inline]
+    fn atomic_u64_load(&self, p: &u64) -> u64 {
+        if cfg!(target_pointer_width = "32") {
+            unsafe {
+                let p = p as *const u64 as *const u32;
+                let mut hi = p.add(1).read_volatile();
+                let mut lo = p.read_volatile();
+                loop {
+                    let hi2 = p.add(1).read_volatile();
+                    if hi == hi2 {
+                        return (hi as u64) << 32 | (lo as u64);
+                    }
+                    hi = hi2;
+                    lo = p.read_volatile();
+                }
+            }
+        } else {
+            unsafe { core::ptr::read_volatile(p) }
         }
     }
 }

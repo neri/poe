@@ -1,9 +1,10 @@
 //! PIT: Programmable Interval Timer i8253/i8254
 
 use super::pic::{Irq, IrqHandler};
+use crate::*;
 use core::cell::UnsafeCell;
+use core::time::Duration;
 use x86::isolated_io::IoPortWB;
-// use core::time::Duration;
 
 static mut PIT: UnsafeCell<Pit> = UnsafeCell::new(Pit::new());
 
@@ -17,7 +18,7 @@ pub struct Pit {
 }
 
 impl Pit {
-    const TIMER_RES: u64 = 1;
+    const NANOS_PER_TICK: u32 = 10_000_000;
 
     #[inline]
     const fn new() -> Self {
@@ -64,18 +65,14 @@ impl Pit {
     pub fn monotonic() -> u64 {
         unsafe {
             let shared = Self::shared();
-            let p = &shared.monotonic as *const _ as *const u32;
-
-            // To read a 64-bit value atomically, we read the lower 32 bits, then the upper 32 bits, and check if the lower 32 bits have changed.
-            // If they have, we read again. This is a common technique to read a 64-bit value on a 32-bit system without locks.
-            loop {
-                let lo = p.read_volatile();
-                let hi = p.add(1).read_volatile();
-                if lo == p.read_volatile() {
-                    return ((hi as u64) << 32) | (lo as u64);
-                }
-            }
+            Hal::cpu().atomic_u64_load(&shared.monotonic)
         }
+    }
+
+    /// Convert a duration to timer ticks.
+    #[inline]
+    pub fn duration_to_ticks(duration: Duration) -> u64 {
+        System::duration_to_ticks_helper32(duration, Self::NANOS_PER_TICK)
     }
 
     /// Advance monotonic timer by one tick.
@@ -87,6 +84,6 @@ impl Pit {
     #[allow(dead_code)]
     pub(super) unsafe fn advance_tick(_irq: Irq) {
         let shared = unsafe { Self::shared() };
-        shared.monotonic += Self::TIMER_RES;
+        shared.monotonic += 1;
     }
 }

@@ -93,7 +93,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
 }
 
 pub(super) unsafe fn exit() {
-    // TODO:
+    // to do nothing for now
 }
 
 pub(super) fn reset_system() -> ! {

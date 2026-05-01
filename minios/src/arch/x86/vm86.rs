@@ -210,7 +210,7 @@ impl VM86 {
         }
     }
 
-    /// In virtual 86 mode, some instructions need to be simulated.
+    /// In virtual 8086 mode, some instructions need to be simulated.
     ///
     /// - parameter `ctx`: Stack context
     /// - returns: `true` if the instruction was successfully processed.

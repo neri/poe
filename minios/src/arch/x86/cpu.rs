@@ -34,19 +34,21 @@ impl Cpu {
     ) -> ! {
         naked_asm!(
             "mov [edx + 4], esp",
-
+            "",
             "mov esi, ecx",
             "sub esp, {size_regs}",
             "mov edi, esp",
             "mov ecx, {size_regs} / 4",
             "rep movsd",
-
+            "",
             ".byte 0x0f, 0xa9", // pop gs
             ".byte 0x0f, 0xa1", // pop fs
             ".byte 0x1f", // pop ds
             ".byte 0x07", // pop es
+            "",
             "popad",
             "add esp, 8",
+            "",
             "iretd",
             size_regs = const size_of::<X86StackContextView<UserMode>>(),
         );

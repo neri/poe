@@ -52,11 +52,11 @@ $ make all
 
 ### bin/bootfd.img
 
-* generic bootable floppy image
+* generic bootable floppy image (about 1.4mb)
 
 ### bin/bootfd.hdm
 
-* floppy image optimized for PC98 and FM TOWNS
+* floppy image optimized for PC98 and FM TOWNS (about 1.2mb)
 
 ### bin/bootcd.iso
 

@@ -54,7 +54,6 @@ impl Uart0 {
         unsafe { &mut *(&raw mut SHARED) }.get_mut()
     }
 
-    #[inline(never)]
     pub fn init() -> Result<&'static mut Self, ()> {
         unsafe {
             // Disable UART0.

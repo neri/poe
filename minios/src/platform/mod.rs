@@ -23,6 +23,7 @@ pub use rv_virt as current;
 
 use crate::*;
 use core::fmt;
+use core::time::Duration;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -69,20 +70,27 @@ impl fmt::Display for Platform {
 }
 
 pub trait PlatformTrait {
+    /// Initialize platform with device tree and other early initialization.
     #[cfg(feature = "device_tree")]
     unsafe fn init_dt_early(dt: &fdt::DeviceTree, arg: usize);
 
+    /// Initialize platform
     unsafe fn init(arg: usize);
 
+    /// Exit platform
     unsafe fn exit();
 
+    /// Reset the system. This function never returns.
     fn reset_system() -> !;
 
+    /// Halt the system. This function never returns.
     fn halt() -> ! {
         Hal::cpu().halt();
     }
-}
 
-pub trait PlatformTimer {
-    // todo
+    /// Get monotonic timer value.
+    fn monotonic() -> u64;
+
+    /// Convert a duration to timer ticks.
+    fn duration_to_ticks(duration: Duration) -> u64;
 }

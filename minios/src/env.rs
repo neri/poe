@@ -16,6 +16,7 @@ use core::mem::MaybeUninit;
 use core::ops::Range;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
+use core::time::Duration;
 use guid::Guid;
 
 static mut SYSTEM: MaybeUninit<System> = MaybeUninit::zeroed();
@@ -140,7 +141,7 @@ impl System {
         }
     }
 
-    /// Returns platform type
+    /// Returns current platform
     #[inline]
     pub fn platform() -> Platform {
         Self::boot_info().platform
@@ -203,6 +204,7 @@ impl System {
     }
 
     /// Wait for any of the events to be signaled and returns the signaled event.
+    #[inline(never)]
     pub fn wait_for_events<'a, 'b, 'c>(
         events: &'a mut [&'b mut Event<'c>],
     ) -> &'a mut &'b mut Event<'c> {
@@ -281,6 +283,26 @@ impl System {
             let shared = Self::shared_mut();
             shared.stderr = NonNull::new_unchecked(stderr);
         }
+    }
+
+    /// Helper function to convert a duration to timer ticks.
+    pub fn duration_to_ticks_helper32(duration: Duration, nanos_per_tick: u32) -> u64 {
+        let nanos = duration.subsec_nanos();
+        let ticks_nanos = if nanos == 0 {
+            0
+        } else {
+            (nanos / nanos_per_tick).max(1)
+        };
+
+        let ticks_per_sec = (1_000_000_000 / nanos_per_tick) as u64;
+        let secs = duration.as_secs();
+        let ticks_secs = if secs == 0 {
+            0
+        } else {
+            secs.saturating_mul(ticks_per_sec)
+        };
+
+        ticks_secs.saturating_add(ticks_nanos as u64)
     }
 }
 

@@ -36,13 +36,38 @@ impl CSR {
     /// SRW `scontext` Supervisor-mode context register.
     pub const SCONTEXT: CsrReg<0x5A8> = CsrReg;
 
-    pub fn rdtime() -> usize {
+    #[cfg(target_arch = "riscv64")]
+    pub fn rdtime() -> u64 {
         compiler_fence(Ordering::SeqCst);
-        let result: usize;
+        let result: u64;
         unsafe {
             asm!("rdtime {0}", lateout(reg) result,);
         }
         result
+    }
+
+    #[cfg(target_arch = "riscv32")]
+    pub fn rdtime() -> u64 {
+        compiler_fence(Ordering::SeqCst);
+        let mut lo: u32;
+        let mut hi: u32;
+        let mut check: u32;
+        unsafe {
+            loop {
+                asm!(
+                    "rdtimeh {0}",
+                    "rdtime {1}",
+                    "rdtimeh {2}",
+                    lateout(reg) hi,
+                    lateout(reg) lo,
+                    lateout(reg) check,
+                );
+                if hi == check {
+                    break;
+                }
+            }
+        }
+        ((hi as u64) << 32) | (lo as u64)
     }
 
     /// Set the supervisor trap handler base address and mode.

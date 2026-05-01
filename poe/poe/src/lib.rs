@@ -3,6 +3,9 @@
 #![no_main]
 
 extern crate alloc;
+
+#[allow(unused_imports)]
+use core::time::Duration;
 use minios::io::tui;
 #[allow(unused_imports)]
 use minios::mem::MemoryManager;
@@ -58,6 +61,22 @@ pub fn main() {
         println!("");
         println!("");
     }
+
+    // loop {
+    //     // let duration = Duration::from_millis(500);
+    //     let duration = Duration::from_millis(500);
+
+    //     let mut timer = Event::with_timeout(duration);
+    //     timer.wait();
+
+    //     // print!(".");
+    //     println!(
+    //         "Monotonic: {}, {}, {}",
+    //         Platform::monotonic(),
+    //         duration.subsec_nanos(),
+    //         Platform::duration_to_ticks(duration),
+    //     );
+    // }
 
     // Hal::cpu().bad_instruction();
     // #[allow(unreachable_code)]

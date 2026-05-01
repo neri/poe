@@ -26,6 +26,8 @@ pub mod prelude {
         arch::hal::*,
         env::*,
         io::{media::*, tty::*},
+        platform::{Platform, PlatformTrait},
+        task::event::*,
     };
     pub use crate::{print, println};
     pub use alloc::{

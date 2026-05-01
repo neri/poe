@@ -4,12 +4,13 @@ use super::*;
 use crate::arch::cpu;
 use crate::arch::csr::{CSR, VectorMode};
 use crate::*;
-use core::{arch::naked_asm, ffi::c_void};
+use core::{arch::naked_asm, ffi::c_void, time::Duration};
 
 #[cfg(feature = "sbi")]
 mod sbi_console;
 
 pub mod syscon;
+pub mod timer;
 pub mod uart;
 
 unsafe extern "C" {
@@ -66,11 +67,8 @@ impl PlatformTrait for Platform {
             }
 
             CSR::set_stvec(VectorMode::Direct, _arch_stvec as *const () as usize);
-            // CSR::SIE.set(1 << 5);
-            #[cfg(feature = "sbi")]
-            {
-                sbi::legacy::set_timer(1);
-            }
+
+            timer::PlatformTimer::init(dt);
         }
     }
 
@@ -83,7 +81,12 @@ impl PlatformTrait for Platform {
             //     Hal::cpu().halt();
             // }
             // Hal::cpu().bad_instruction();
-            // Hal::cpu().enable_interrupt();
+
+            if cfg!(feature = "sbi") {
+                Hal::cpu().enable_interrupt();
+            } else {
+                // TODO: currently interrupts are not working
+            }
         }
     }
 
@@ -114,8 +117,19 @@ impl PlatformTrait for Platform {
             Hal::cpu().halt();
         }
     }
+
+    #[inline]
+    fn monotonic() -> u64 {
+        timer::PlatformTimer::monotonic()
+    }
+
+    #[inline]
+    fn duration_to_ticks(duration: Duration) -> u64 {
+        timer::PlatformTimer::duration_to_ticks(duration)
+    }
 }
 
+#[cfg(target_arch = "riscv32")]
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
 unsafe extern "C" fn _arch_stvec() -> ! {
@@ -198,15 +212,108 @@ unsafe extern "C" fn _arch_stvec() -> ! {
     );
 }
 
+#[cfg(target_arch = "riscv64")]
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
+unsafe extern "C" fn _arch_stvec() -> ! {
+    naked_asm!(
+        "csrw sscratch, sp",
+        "",
+        "addi sp, sp, -{XLEN_BYTES} * 31",
+        "sd ra,  {XLEN_BYTES} * 0(sp)",
+        "sd gp,  {XLEN_BYTES} * 1(sp)",
+        "sd tp,  {XLEN_BYTES} * 2(sp)",
+        "sd t0,  {XLEN_BYTES} * 3(sp)",
+        "sd t1,  {XLEN_BYTES} * 4(sp)",
+        "sd t2,  {XLEN_BYTES} * 5(sp)",
+        "sd t3,  {XLEN_BYTES} * 6(sp)",
+        "sd t4,  {XLEN_BYTES} * 7(sp)",
+        "sd t5,  {XLEN_BYTES} * 8(sp)",
+        "sd t6,  {XLEN_BYTES} * 9(sp)",
+        "sd a0,  {XLEN_BYTES} * 10(sp)",
+        "sd a1,  {XLEN_BYTES} * 11(sp)",
+        "sd a2,  {XLEN_BYTES} * 12(sp)",
+        "sd a3,  {XLEN_BYTES} * 13(sp)",
+        "sd a4,  {XLEN_BYTES} * 14(sp)",
+        "sd a5,  {XLEN_BYTES} * 15(sp)",
+        "sd a6,  {XLEN_BYTES} * 16(sp)",
+        "sd a7,  {XLEN_BYTES} * 17(sp)",
+        "sd s0,  {XLEN_BYTES} * 18(sp)",
+        "sd s1,  {XLEN_BYTES} * 19(sp)",
+        "sd s2,  {XLEN_BYTES} * 20(sp)",
+        "sd s3,  {XLEN_BYTES} * 21(sp)",
+        "sd s4,  {XLEN_BYTES} * 22(sp)",
+        "sd s5,  {XLEN_BYTES} * 23(sp)",
+        "sd s6,  {XLEN_BYTES} * 24(sp)",
+        "sd s7,  {XLEN_BYTES} * 25(sp)",
+        "sd s8,  {XLEN_BYTES} * 26(sp)",
+        "sd s9,  {XLEN_BYTES} * 27(sp)",
+        "sd s10, {XLEN_BYTES} * 28(sp)",
+        "sd s11, {XLEN_BYTES} * 29(sp)",
+        "",
+        "csrr a0, sscratch",
+        "sd a0, {XLEN_BYTES} * 30(sp)",
+        "",
+        "mv a0, sp",
+        "call {arch_handle_trap}",
+        "",
+        "ld ra,  {XLEN_BYTES} * 0(sp)",
+        "ld gp,  {XLEN_BYTES} * 1(sp)",
+        "ld tp,  {XLEN_BYTES} * 2(sp)",
+        "ld t0,  {XLEN_BYTES} * 3(sp)",
+        "ld t1,  {XLEN_BYTES} * 4(sp)",
+        "ld t2,  {XLEN_BYTES} * 5(sp)",
+        "ld t3,  {XLEN_BYTES} * 6(sp)",
+        "ld t4,  {XLEN_BYTES} * 7(sp)",
+        "ld t5,  {XLEN_BYTES} * 8(sp)",
+        "ld t6,  {XLEN_BYTES} * 9(sp)",
+        "ld a0,  {XLEN_BYTES} * 10(sp)",
+        "ld a1,  {XLEN_BYTES} * 11(sp)",
+        "ld a2,  {XLEN_BYTES} * 12(sp)",
+        "ld a3,  {XLEN_BYTES} * 13(sp)",
+        "ld a4,  {XLEN_BYTES} * 14(sp)",
+        "ld a5,  {XLEN_BYTES} * 15(sp)",
+        "ld a6,  {XLEN_BYTES} * 16(sp)",
+        "ld a7,  {XLEN_BYTES} * 17(sp)",
+        "ld s0,  {XLEN_BYTES} * 18(sp)",
+        "ld s1,  {XLEN_BYTES} * 19(sp)",
+        "ld s2,  {XLEN_BYTES} * 20(sp)",
+        "ld s3,  {XLEN_BYTES} * 21(sp)",
+        "ld s4,  {XLEN_BYTES} * 22(sp)",
+        "ld s5,  {XLEN_BYTES} * 23(sp)",
+        "ld s6,  {XLEN_BYTES} * 24(sp)",
+        "ld s7,  {XLEN_BYTES} * 25(sp)",
+        "ld s8,  {XLEN_BYTES} * 26(sp)",
+        "ld s9,  {XLEN_BYTES} * 27(sp)",
+        "ld s10, {XLEN_BYTES} * 28(sp)",
+        "ld s11, {XLEN_BYTES} * 29(sp)",
+        "ld sp,  {XLEN_BYTES} * 30(sp)",
+        "",
+        "sret",
+        XLEN_BYTES = const cpu::XLEN_BYTES,
+        arch_handle_trap = sym _arch_handle_trap,
+    );
+}
+
 unsafe fn _arch_handle_trap(ctx: &ExceptionContext) {
     unsafe {
         let scause = CSR::SCAUSE.read();
+        if (scause as isize) < 0 {
+            match scause & 0x7fff_ffff {
+                0x0000_0005 => {
+                    // supervisor timer
+                    timer::PlatformTimer::advance_tick();
+                    return;
+                }
+                _ => {}
+            }
+        }
+
         let stval = CSR::STVAL.read();
         let user_pc = CSR::SEPC.read();
 
-        println!("\n\x1b[0;30;101m#### UNHANDLED EXCEPTION ####");
         println!(
-            "scause={:08x}, stval={:08x}, sepc={:016x}",
+            "\n\x1b[0;30;101m#### UNHANDLED EXCEPTION {:08x}, stval={:08x}, sepc={:016x}",
             scause, stval, user_pc,
         );
         println!(

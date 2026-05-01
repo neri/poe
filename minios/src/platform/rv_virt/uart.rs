@@ -30,18 +30,16 @@ enum Register {
     SCRATCH = 7,
 }
 
+#[allow(unused)]
 impl Register {
-    #[allow(unused)]
     /// Divisor Latch Low Byte (same address as DATA, but when DLAB=1)
-    const DLL: Self = Self::DATA;
+    pub const DLL: Self = Self::DATA;
 
-    #[allow(unused)]
     /// Divisor Latch High Byte (same address as IER, but when DLAB=1)
-    const DLM: Self = Self::IER;
+    pub const DLM: Self = Self::IER;
 
-    #[allow(unused)]
     /// FIFO Control Register (same address as IIR, but write-only)
-    const FCR: Self = Self::IIR;
+    pub const FCR: Self = Self::IIR;
 }
 
 impl Uart16550 {
