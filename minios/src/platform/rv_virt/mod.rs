@@ -1,17 +1,13 @@
 //! Platform dependent module for RISC-V virt machine
 
 use super::*;
-use crate::arch::cpu;
 use crate::arch::csr::{CSR, VectorMode};
 use crate::*;
 use core::{arch::naked_asm, ffi::c_void, time::Duration};
+use riscv::XLEN_BYTES;
 
-#[cfg(feature = "sbi")]
 mod sbi_console;
-
-pub mod syscon;
 pub mod timer;
-pub mod uart;
 
 unsafe extern "C" {
     unsafe static _end: c_void;
@@ -21,36 +17,28 @@ impl PlatformTrait for Platform {
     unsafe fn init_dt_early(dt: &fdt::DeviceTree, arg: usize) {
         let hart_id = arg;
         unsafe {
-            #[cfg(feature = "sbi")]
+            #[cfg(feature = "minisbi")]
             {
-                sbi_console::SbiConsole::init();
-                System::set_stdin(sbi_console::SbiConsole::shared());
-                System::set_stdout(sbi_console::SbiConsole::shared());
-                System::set_stderr(sbi_console::SbiConsole::shared());
+                minisbi::init();
             }
-            #[cfg(not(feature = "sbi"))]
-            {
-                uart::Uart16550::init(0x1000_0000);
-                System::set_stdin(uart::Uart16550::shared());
-                System::set_stdout(uart::Uart16550::shared());
-                System::set_stderr(uart::Uart16550::shared());
-            }
+
+            sbi_console::SbiConsole::init();
+            System::set_stdin(sbi_console::SbiConsole::shared());
+            System::set_stdout(sbi_console::SbiConsole::shared());
+            System::set_stderr(sbi_console::SbiConsole::shared());
 
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
 
-            #[cfg(feature = "sbi")]
-            {
-                let spec_ver = sbi::base::get_spec_version();
-                let impl_id = sbi::base::get_impl_id().unwrap();
-                let impl_ver = sbi::base::get_impl_version().unwrap();
-                println!(
-                    "SBI version {}.{} impl {:?} version {:x}",
-                    spec_ver.major(),
-                    spec_ver.minor(),
-                    impl_id,
-                    impl_ver
-                );
-            }
+            let spec_ver = sbi::base::get_spec_version();
+            let impl_id = sbi::base::get_impl_id().unwrap();
+            let impl_ver = sbi::base::get_impl_version().unwrap();
+            println!(
+                "SBI version {}.{} impl {:?} version {:x}",
+                spec_ver.major(),
+                spec_ver.minor(),
+                impl_id,
+                impl_ver
+            );
 
             println!("Hart ID: {}", hart_id);
 
@@ -73,20 +61,10 @@ impl PlatformTrait for Platform {
     }
 
     unsafe fn init(_arg: usize) {
-        #[allow(unused_unsafe)]
         unsafe {
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
 
-            // loop {
-            //     Hal::cpu().halt();
-            // }
-            // Hal::cpu().bad_instruction();
-
-            if cfg!(feature = "sbi") {
-                Hal::cpu().enable_interrupt();
-            } else {
-                // TODO: currently interrupts are not working
-            }
+            Hal::cpu().enable_interrupt();
         }
     }
 
@@ -95,27 +73,11 @@ impl PlatformTrait for Platform {
     }
 
     fn reset_system() -> ! {
-        #[cfg(feature = "sbi")]
-        {
-            sbi::legacy::shutdown();
-        }
-        #[cfg(not(feature = "sbi"))]
-        {
-            syscon::Syscon::Reboot.write();
-            Hal::cpu().halt();
-        }
+        sbi::legacy::shutdown();
     }
 
     fn halt() -> ! {
-        #[cfg(feature = "sbi")]
-        {
-            sbi::legacy::shutdown()
-        }
-        #[cfg(not(feature = "sbi"))]
-        {
-            syscon::Syscon::PowerOff.write();
-            Hal::cpu().halt();
-        }
+        sbi::legacy::shutdown()
     }
 
     #[inline]
@@ -207,7 +169,7 @@ unsafe extern "C" fn _arch_stvec() -> ! {
         "lw sp,  {XLEN_BYTES} * 30(sp)",
         "",
         "sret",
-        XLEN_BYTES = const cpu::XLEN_BYTES,
+        XLEN_BYTES = const XLEN_BYTES,
         arch_handle_trap = sym _arch_handle_trap,
     );
 }
@@ -290,7 +252,7 @@ unsafe extern "C" fn _arch_stvec() -> ! {
         "ld sp,  {XLEN_BYTES} * 30(sp)",
         "",
         "sret",
-        XLEN_BYTES = const cpu::XLEN_BYTES,
+        XLEN_BYTES = const XLEN_BYTES,
         arch_handle_trap = sym _arch_handle_trap,
     );
 }
@@ -313,7 +275,7 @@ unsafe fn _arch_handle_trap(ctx: &ExceptionContext) {
         let user_pc = CSR::SEPC.read();
 
         println!(
-            "\n\x1b[0;30;101m#### UNHANDLED EXCEPTION {:08x}, stval={:08x}, sepc={:016x}",
+            "\n\x1b[0;30;101m#### UNHANDLED EXCEPTION {:08x}, stval={:08x}, sepc={:08x}",
             scause, stval, user_pc,
         );
         println!(

@@ -330,8 +330,8 @@ pub struct Node<'a> {
     header: &'a Header,
     index: usize,
     name: NodeName<'a>,
-    address_cells: u32,
-    size_cells: u32,
+    address_cells: AddressCells,
+    size_cells: SizeCells,
 }
 
 impl<'a> Node<'a> {
@@ -339,8 +339,8 @@ impl<'a> Node<'a> {
     const fn new(
         iter: FdtTokens<'a>,
         name: NodeName<'a>,
-        address_cells: u32,
-        size_cells: u32,
+        address_cells: AddressCells,
+        size_cells: SizeCells,
     ) -> Node<'a> {
         Self {
             header: iter.header,
@@ -353,8 +353,8 @@ impl<'a> Node<'a> {
 
     #[inline]
     pub fn children(&self) -> FdtChildNodes<'a> {
-        let address_cells = self.address_cells().unwrap_or(0);
-        let size_cells = self.size_cells().unwrap_or(0);
+        let address_cells = self.address_cells().unwrap_or(AddressCells(0));
+        let size_cells = self.size_cells().unwrap_or(SizeCells(0));
         FdtChildNodes::new(self.tokens(), address_cells, size_cells)
     }
 
@@ -402,8 +402,8 @@ impl<'a> Node<'a> {
             match token {
                 Token::BeginNode(name) => {
                     if level == 0 && name.without_unit() == prefix {
-                        let address_cells = self.address_cells().unwrap_or(0);
-                        let size_cells = self.size_cells().unwrap_or(0);
+                        let address_cells = self.address_cells().unwrap_or(AddressCells(0));
+                        let size_cells = self.size_cells().unwrap_or(SizeCells(0));
                         return Some(Node::new(iter, name, address_cells, size_cells));
                     }
                     level += 1;
@@ -427,8 +427,8 @@ impl<'a> Node<'a> {
             match token {
                 Token::BeginNode(name) => {
                     if level == 0 && name == node_name {
-                        let address_cells = self.address_cells().unwrap_or(0);
-                        let size_cells = self.size_cells().unwrap_or(0);
+                        let address_cells = self.address_cells().unwrap_or(AddressCells(0));
+                        let size_cells = self.size_cells().unwrap_or(SizeCells(0));
                         return Some(Node::new(iter, name, address_cells, size_cells));
                     }
                     level += 1;
@@ -453,14 +453,14 @@ impl<'a> Node<'a> {
 
     /// Well-known property name `#address-cells`
     #[inline]
-    pub fn address_cells(&self) -> Option<u32> {
-        self.get_prop_u32(PropName::ADDRESS_CELLS)
+    pub fn address_cells(&self) -> Option<AddressCells> {
+        self.get_prop_u32(PropName::ADDRESS_CELLS).map(AddressCells)
     }
 
     /// Well-known property name `#size-cells`
     #[inline]
-    pub fn size_cells(&self) -> Option<u32> {
-        self.get_prop_u32(PropName::SIZE_CELLS)
+    pub fn size_cells(&self) -> Option<SizeCells> {
+        self.get_prop_u32(PropName::SIZE_CELLS).map(SizeCells)
     }
 
     /// Well-known property name `compatible`
@@ -521,16 +521,16 @@ impl<'a> Node<'a> {
 
 pub struct RootNode<'a> {
     node: Node<'a>,
-    address_cells: u32,
-    size_cells: u32,
+    address_cells: AddressCells,
+    size_cells: SizeCells,
 }
 
 impl<'a> RootNode<'a> {
     #[inline]
     fn new(iter: FdtTokens<'a>) -> Self {
-        let node = Node::new(iter, NodeName::ROOT, 0, 0);
-        let address_cells = node.address_cells().unwrap_or(2);
-        let size_cells = node.size_cells().unwrap_or(1);
+        let node = Node::new(iter, NodeName::ROOT, AddressCells(0), SizeCells(0));
+        let address_cells = node.address_cells().unwrap_or(AddressCells(2));
+        let size_cells = node.size_cells().unwrap_or(SizeCells(1));
         Self {
             node,
             address_cells,
@@ -541,12 +541,12 @@ impl<'a> RootNode<'a> {
 
 impl RootNode<'_> {
     #[inline]
-    pub fn address_cells(&self) -> u32 {
+    pub fn address_cells(&self) -> AddressCells {
         self.address_cells
     }
 
     #[inline]
-    pub fn size_cells(&self) -> u32 {
+    pub fn size_cells(&self) -> SizeCells {
         self.size_cells
     }
 
@@ -789,12 +789,16 @@ impl fmt::Display for PropName<'_> {
 pub struct FdtChildNodes<'a> {
     tokens: FdtTokens<'a>,
     level: isize,
-    address_cells: u32,
-    size_cells: u32,
+    address_cells: AddressCells,
+    size_cells: SizeCells,
 }
 
 impl<'a> FdtChildNodes<'a> {
-    fn new(tokens: FdtTokens<'a>, address_cells: u32, size_cells: u32) -> FdtChildNodes<'a> {
+    fn new(
+        tokens: FdtTokens<'a>,
+        address_cells: AddressCells,
+        size_cells: SizeCells,
+    ) -> FdtChildNodes<'a> {
         Self {
             level: 0,
             tokens,
@@ -940,13 +944,13 @@ impl Iterator for FdtRsvMapIter<'_> {
 
 struct AddressAndSizeIter<'a> {
     iter: Iter<'a, BeU32>,
-    address_cells: u32,
-    size_cells: u32,
+    address_cells: AddressCells,
+    size_cells: SizeCells,
 }
 
 impl<'a> AddressAndSizeIter<'a> {
     #[inline]
-    fn new(slice: &'a [BeU32], address_cells: u32, size_cells: u32) -> Self {
+    fn new(slice: &'a [BeU32], address_cells: AddressCells, size_cells: SizeCells) -> Self {
         let iter = slice.into_iter();
         Self {
             iter,
@@ -1037,9 +1041,9 @@ pub struct RangeTriple {
 
 struct RangeTripleIter<'a> {
     iter: Iter<'a, BeU32>,
-    child_address_cells: u32,
-    parent_address_cells: u32,
-    size_cells: u32,
+    child_address_cells: AddressCells,
+    parent_address_cells: AddressCells,
+    size_cells: SizeCells,
 }
 
 impl Iterator for RangeTripleIter<'_> {
@@ -1053,19 +1057,66 @@ impl Iterator for RangeTripleIter<'_> {
     }
 }
 
-fn fdt_get_reg_val(iter: &mut Iter<BeU32>, cell_size: u32) -> Result<u64, ()> {
+fn fdt_get_reg_val<CELLS>(iter: &mut Iter<BeU32>, cells: CELLS) -> Result<u64, ()>
+where
+    CELLS: TryInto<Cells, Error = ()>,
+{
+    let cell_size = cells.try_into()?;
     match cell_size {
-        0 => Ok(0),
-        1 => Ok(iter.next().ok_or(())?.as_u32() as u64),
-        2 => {
+        Cells::Zero => Ok(0),
+        Cells::One => Ok(iter.next().ok_or(())?.as_u32() as u64),
+        Cells::Two => {
             let hi = iter.next().ok_or(())?.as_u32() as u64;
             let lo = iter.next().ok_or(())?.as_u32() as u64;
             Ok((hi << 32) + lo)
         }
-        _ => Err(()),
     }
 }
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PHandle(pub u32);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AddressCells(pub u32);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SizeCells(pub u32);
+
+pub enum Cells {
+    Zero,
+    One,
+    Two,
+}
+
+impl Cells {
+    #[inline]
+    pub const fn from_u32(val: u32) -> Option<Self> {
+        match val {
+            0 => Some(Self::Zero),
+            1 => Some(Self::One),
+            2 => Some(Self::Two),
+            _ => None,
+        }
+    }
+}
+
+impl TryFrom<AddressCells> for Cells {
+    type Error = ();
+
+    #[inline]
+    fn try_from(value: AddressCells) -> Result<Self, Self::Error> {
+        Self::from_u32(value.0).ok_or(())
+    }
+}
+
+impl TryFrom<SizeCells> for Cells {
+    type Error = ();
+
+    #[inline]
+    fn try_from(value: SizeCells) -> Result<Self, Self::Error> {
+        Self::from_u32(value.0).ok_or(())
+    }
+}

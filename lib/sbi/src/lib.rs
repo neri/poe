@@ -8,16 +8,32 @@ use minilib::unknown_enum::*;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct SbiRet {
-    error: Unknown<SbiError, isize>,
-    value: usize,
+    pub error: Unknown<SbiError, isize>,
+    pub value: usize,
 }
 
 impl SbiRet {
     #[inline]
-    fn new(a0: isize, a1: usize) -> Self {
+    pub fn from_raw(a0: isize, a1: usize) -> Self {
         Self {
             error: Unknown::unknown(a0),
             value: a1,
+        }
+    }
+
+    #[inline]
+    pub fn ok(value: usize) -> Self {
+        Self {
+            error: Unknown::known(SbiError::Success),
+            value,
+        }
+    }
+
+    #[inline]
+    pub fn err(error: SbiError, additional: usize) -> Self {
+        Self {
+            error: Unknown::known(error),
+            value: additional,
         }
     }
 }
@@ -135,7 +151,7 @@ impl Eid {
     /// Debug Triggers Extension (EID #0x44425452 "DBTR")
     pub const DEBUG_TRIGGERS: Self = Self(0x44425452);
 
-    /// Message Proxy Extension (EID #0x4D505859 “MPXY”)
+    /// Message Proxy Extension (EID #0x4D505859 "MPXY")
     pub const MESSAGE_PROXY: Self = Self(0x4D505859);
 
     /// Experimental SBI Extension Space (EIDs #0x08000000 - #0x08FFFFFF)
@@ -212,7 +228,7 @@ impl EidFid {
     pub const SEND_IPI: Self = Self::new(Eid::IPI, Fid(0));
 
     /// `struct sbiret sbi_system_reset(uint32_t reset_type, uint32_t reset_reason)`
-    pub const SYSTENM_RESET: Self = Self::new(Eid::SYSTEM_RESET, Fid(0));
+    pub const SYSTEM_RESET: Self = Self::new(Eid::SYSTEM_RESET, Fid(0));
 }
 
 unknown_enum! {
@@ -276,7 +292,7 @@ pub unsafe fn _call_sbi(eid_fid: EidFid, args: &[usize]) -> Result<SbiRet, SbiRe
                     lateout("a0") a0,
                     lateout("a1") a1,
                 );
-                SbiRet::new(a0, a1)
+                SbiRet::from_raw(a0, a1)
             }
             1 => {
                 let a0: isize;
@@ -288,7 +304,7 @@ pub unsafe fn _call_sbi(eid_fid: EidFid, args: &[usize]) -> Result<SbiRet, SbiRe
                     lateout("a0") a0,
                     lateout("a1") a1,
                 );
-                SbiRet::new(a0, a1)
+                SbiRet::from_raw(a0, a1)
             }
             2 => {
                 let a0: isize;
@@ -301,7 +317,7 @@ pub unsafe fn _call_sbi(eid_fid: EidFid, args: &[usize]) -> Result<SbiRet, SbiRe
                     lateout("a0") a0,
                     lateout("a1") a1,
                 );
-                SbiRet::new(a0, a1)
+                SbiRet::from_raw(a0, a1)
             }
             3 => {
                 let a0: isize;
@@ -315,7 +331,7 @@ pub unsafe fn _call_sbi(eid_fid: EidFid, args: &[usize]) -> Result<SbiRet, SbiRe
                     lateout("a0") a0,
                     lateout("a1") a1,
                 );
-                SbiRet::new(a0, a1)
+                SbiRet::from_raw(a0, a1)
             }
             4 => {
                 let a0: isize;
@@ -330,7 +346,7 @@ pub unsafe fn _call_sbi(eid_fid: EidFid, args: &[usize]) -> Result<SbiRet, SbiRe
                     lateout("a0") a0,
                     lateout("a1") a1,
                 );
-                SbiRet::new(a0, a1)
+                SbiRet::from_raw(a0, a1)
             }
             5 => {
                 let a0: isize;
@@ -346,7 +362,7 @@ pub unsafe fn _call_sbi(eid_fid: EidFid, args: &[usize]) -> Result<SbiRet, SbiRe
                     lateout("a0") a0,
                     lateout("a1") a1,
                 );
-                SbiRet::new(a0, a1)
+                SbiRet::from_raw(a0, a1)
             }
             6 => {
                 let a0: isize;
@@ -363,7 +379,7 @@ pub unsafe fn _call_sbi(eid_fid: EidFid, args: &[usize]) -> Result<SbiRet, SbiRe
                     lateout("a0") a0,
                     lateout("a1") a1,
                 );
-                SbiRet::new(a0, a1)
+                SbiRet::from_raw(a0, a1)
             }
             _ => todo!(),
         }

@@ -76,6 +76,7 @@ impl PlatformTrait for Platform {
                 asm!(
                     "ldr {0}, =_vector_table",
                     "msr vbar_el1, {0}",
+                    "isb",
                     out(reg) _,
                 );
 
@@ -160,6 +161,9 @@ unsafe extern "C" fn _vector_table_nkf() {
     naked_asm!(
         ".align 11",
         "_vector_table:",
+        "",
+        ".skip 0x200",
+        "",
         "    // synchronous",
         "    sub sp, sp, #256",
         "    stp x0, x1, [sp, #16 * 0]",
@@ -214,4 +218,41 @@ unsafe extern "C" fn _vector_table_nkf() {
         "    add sp, sp, #256",
         "    eret",
     );
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct ExceptionContext {
+    x0: u64,
+    x1: u64,
+    x2: u64,
+    x3: u64,
+    x4: u64,
+    x5: u64,
+    x6: u64,
+    x7: u64,
+    x8: u64,
+    x9: u64,
+    x10: u64,
+    x11: u64,
+    x12: u64,
+    x13: u64,
+    x14: u64,
+    x15: u64,
+    x16: u64,
+    x17: u64,
+    x18: u64,
+    x19: u64,
+    x20: u64,
+    x21: u64,
+    x22: u64,
+    x23: u64,
+    x24: u64,
+    x25: u64,
+    x26: u64,
+    x27: u64,
+    x28: u64,
+    x29: u64,
+    x30: u64,
+    zr: u64,
 }

@@ -1,10 +1,8 @@
 //! Generic Uart driver
-use crate::{vt100::VT100, *};
+use crate::*;
 use core::cell::UnsafeCell;
 
 static mut RAW: UnsafeCell<Uart16550> = UnsafeCell::new(Uart16550::new());
-
-static mut SHARED: UnsafeCell<VT100> = UnsafeCell::new(VT100::new(Uart16550::shared_raw()));
 
 pub struct Uart16550 {
     base_address: usize,
@@ -50,7 +48,7 @@ impl Uart16550 {
 
     #[inline]
     pub unsafe fn init(base_address: usize) {
-        let uart = Self::shared_raw();
+        let uart = Self::shared();
         uart.base_address = base_address;
 
         uart._write(Register::IER, 0x00);
@@ -66,13 +64,8 @@ impl Uart16550 {
     }
 
     #[inline]
-    pub const fn shared_raw() -> &'static mut Uart16550 {
+    pub const fn shared() -> &'static mut Self {
         unsafe { (&mut *(&raw mut RAW)).get_mut() }
-    }
-
-    #[inline]
-    pub fn shared() -> &'static mut VT100<'static> {
-        unsafe { (&mut *(&raw mut SHARED)).get_mut() }
     }
 
     #[inline]
@@ -93,32 +86,25 @@ impl Uart16550 {
     }
 
     #[inline]
-    fn is_ready_to_write(&mut self) -> bool {
+    pub fn is_ready_to_write(&mut self) -> bool {
         self._read(Register::LSR) & 0x20 != 0
     }
-}
-
-impl SerialIo for Uart16550 {
-    #[inline]
-    fn reset(&mut self) {
-        //
-    }
 
     #[inline]
-    fn write_byte(&mut self, byte: u8) {
+    pub fn write_byte(&mut self, byte: u8) {
         while !self.is_ready_to_write() {
-            Hal::cpu().no_op();
+            no_op();
         }
         self._write(Register::DATA, byte);
     }
 
     #[inline]
-    fn is_ready_to_read(&mut self) -> bool {
+    pub fn is_ready_to_read(&mut self) -> bool {
         self._read(Register::LSR) & 0x01 != 0
     }
 
     #[inline]
-    fn read_byte(&mut self) -> Option<u8> {
+    pub fn read_byte(&mut self) -> Option<u8> {
         if self.is_ready_to_read() {
             Some(self._read(Register::DATA))
         } else {

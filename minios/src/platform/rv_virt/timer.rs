@@ -48,17 +48,8 @@ impl PlatformTimer {
     #[inline]
     fn _set_next_timer() {
         unsafe {
-            #[allow(unused)]
             let shared = Self::shared();
-
-            #[cfg(feature = "sbi")]
-            {
-                sbi::legacy::set_timer(CSR::rdtime() + shared.timer_tick);
-            }
-            #[cfg(not(feature = "sbi"))]
-            {
-                // TODO: currently timer is not working
-            }
+            sbi::legacy::set_timer(CSR::rdtime() + shared.timer_tick);
         }
     }
 

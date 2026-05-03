@@ -10,7 +10,6 @@ default = []
 device_tree = ["fdt"]
 pc = []
 rpi = ["device_tree"]
-sbi = ["device_tree"]
 virt = []
 
 [dependencies]

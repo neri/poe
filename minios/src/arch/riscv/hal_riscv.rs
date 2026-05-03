@@ -1,6 +1,6 @@
 //! Hardware Abstraction Layer for riscv
 
-use crate::arch::csr::CSR;
+use crate::arch::riscv::csr::CSR;
 use crate::*;
 use core::arch::asm;
 use core::fmt;
@@ -37,12 +37,7 @@ impl HalCpu for CpuImpl {
     fn wait_for_interrupt(&self) {
         compiler_fence(Ordering::SeqCst);
         unsafe {
-            if cfg!(feature = "sbi") {
-                asm!("wfi", options(nomem, nostack));
-            } else {
-                // TODO: currently wfi is not working
-                asm!("nop", options(nomem, nostack));
-            }
+            asm!("wfi", options(nomem, nostack));
         }
     }
 

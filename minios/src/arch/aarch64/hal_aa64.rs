@@ -56,8 +56,15 @@ impl HalCpu for CpuImpl {
     #[inline]
     fn is_interrupt_enabled(&self) -> bool {
         compiler_fence(Ordering::SeqCst);
-
-        todo!()
+        unsafe {
+            let daif: usize;
+            asm!(
+                "mrs {0}, daif",
+                out(reg)daif,
+                options(nomem, nostack),
+            );
+            (daif & 0x80) == 0
+        }
     }
 
     #[inline]
@@ -72,7 +79,7 @@ impl HalCpu for CpuImpl {
                 options(nomem, nostack),
             );
             compiler_fence(Ordering::SeqCst);
-            InterruptGuard::new(old & 0x80)
+            InterruptGuard::new(((old & 0x80) == 0) as usize)
         }
     }
 }

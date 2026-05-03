@@ -11,6 +11,8 @@ members = [
     "hid",
     "mar",
     "minilib",
+    "minisbi",
+    "riscv",
     "sbi",
     "simple_font",
     "smbios",

@@ -42,6 +42,27 @@ pub fn main() {
         {
             use tui::prelude::*;
 
+            let scr_size = (
+                stdout.current_mode().columns as i32,
+                stdout.current_mode().rows as i32,
+            );
+
+            let mut title_bar = TuiWindowBufferAscii::new(
+                Rect::new(Point::new(0, 0), Size::new(scr_size.0, 1)),
+                Inset::default(),
+                TuiAttribute(0xf0),
+            );
+            title_bar.put_string_at(Point::new(1, 0), "hageOS", title_bar.default_attr);
+            title_bar.draw_to(stdout);
+
+            let mut status_bar = TuiWindowBufferAscii::new(
+                Rect::new(Point::new(0, scr_size.1 - 1), Size::new(scr_size.0, 1)),
+                Inset::default(),
+                TuiAttribute(0xf0),
+            );
+            status_bar.put_string_at(Point::new(1, 0), " Status: 2323 ", status_bar.default_attr);
+            status_bar.draw_to(stdout);
+
             let mut window = TuiWindowBufferAscii::new(
                 Rect::new(Point::new(2, 2), Size::new(20, 10)),
                 Inset::new(2, 2, 2, 2),
