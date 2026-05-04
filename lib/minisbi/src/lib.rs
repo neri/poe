@@ -2,15 +2,14 @@
 //!
 #![cfg_attr(not(test), no_std)]
 
-use crate::pmp::{PmpConfig, PmpIndex};
 use crate::syscon::Syscon;
 use crate::uart::Uart16550;
 use core::arch::{asm, naked_asm};
 use core::sync::atomic::{Ordering, compiler_fence};
 use riscv::XLEN;
+use riscv::csr::pmp::{PmpAddressMode, PmpConfig, PmpIndex};
 use riscv::csr::{CSR, VectorMode};
 
-pub mod pmp;
 pub mod sbi_ecall;
 pub mod syscon;
 pub mod timer;
@@ -64,7 +63,7 @@ pub unsafe fn init() {
         println!("");
 
         PmpIndex::Pmp0.write(
-            PmpConfig::new(true, true, true, pmp::PmpAddressMode::Tor, false),
+            PmpConfig::new(true, true, true, PmpAddressMode::Tor, false),
             0x4000_0000,
         );
 

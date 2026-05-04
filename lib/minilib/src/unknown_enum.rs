@@ -43,18 +43,18 @@ macro_rules! unknown_enum {
     };
 }
 
-pub struct Unknown<KnownType, RawType> {
+pub struct Unknown<KnownType, RawType: Copy> {
     raw: RawType,
     _phantom: PhantomData<(RawType, KnownType)>,
 }
 
-impl<KnownType, RawType> Unknown<KnownType, RawType>
+impl<KnownType, RawType: Copy> Unknown<KnownType, RawType>
 where
     RawType: From<KnownType>,
     KnownType: TryFrom<RawType, Error = RawType>,
 {
     #[inline]
-    pub fn unknown(value: RawType) -> Self {
+    pub const fn unknown(value: RawType) -> Self {
         Self {
             raw: value,
             _phantom: PhantomData,
@@ -70,15 +70,12 @@ where
     }
 
     #[inline]
-    pub fn into_raw(self) -> RawType {
+    pub const fn into_raw(self) -> RawType {
         self.raw
     }
 
     #[inline]
-    pub fn as_raw(&self) -> RawType
-    where
-        RawType: Copy,
-    {
+    pub const fn as_raw(&self) -> RawType {
         self.into_raw()
     }
 
@@ -88,23 +85,17 @@ where
     }
 
     #[inline]
-    pub fn known_value(&self) -> Result<KnownType, RawType>
-    where
-        RawType: Copy,
-    {
+    pub fn known_value(&self) -> Result<KnownType, RawType> {
         self.into_known_value()
     }
 
     #[inline]
-    pub fn has_known_value(&self) -> bool
-    where
-        RawType: Copy,
-    {
+    pub fn has_known_value(&self) -> bool {
         matches!(self.known_value(), Ok(_))
     }
 }
 
-impl<KnownType, RawType: Clone> Clone for Unknown<KnownType, RawType> {
+impl<KnownType, RawType: Copy + Clone> Clone for Unknown<KnownType, RawType> {
     #[inline]
     fn clone(&self) -> Self {
         Self {
@@ -116,9 +107,9 @@ impl<KnownType, RawType: Clone> Clone for Unknown<KnownType, RawType> {
 
 impl<KnownType, RawType: Copy + Clone> Copy for Unknown<KnownType, RawType> {}
 
-impl<KnownType, RawType> core::fmt::Debug for Unknown<KnownType, RawType>
+impl<KnownType, RawType: Copy> core::fmt::Debug for Unknown<KnownType, RawType>
 where
-    RawType: From<KnownType> + core::fmt::Debug + Copy,
+    RawType: From<KnownType> + core::fmt::Debug,
     KnownType: TryFrom<RawType, Error = RawType> + core::fmt::Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -129,23 +120,23 @@ where
     }
 }
 
-impl<KnownType: PartialEq, RawType: PartialEq> PartialEq for Unknown<KnownType, RawType> {
+impl<KnownType: PartialEq, RawType: PartialEq + Copy> PartialEq for Unknown<KnownType, RawType> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.raw == other.raw
     }
 }
 
-impl<KnownType: PartialOrd, RawType: PartialOrd> PartialOrd for Unknown<KnownType, RawType> {
+impl<KnownType: PartialOrd, RawType: PartialOrd + Copy> PartialOrd for Unknown<KnownType, RawType> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         self.raw.partial_cmp(&other.raw)
     }
 }
 
-impl<KnownType: Eq, RawType: Eq> Eq for Unknown<KnownType, RawType> {}
+impl<KnownType: Eq, RawType: Eq + Copy> Eq for Unknown<KnownType, RawType> {}
 
-impl<KnownType: Ord, RawType: Ord> Ord for Unknown<KnownType, RawType> {
+impl<KnownType: Ord, RawType: Ord + Copy> Ord for Unknown<KnownType, RawType> {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.raw.cmp(&other.raw)

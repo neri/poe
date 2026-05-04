@@ -222,6 +222,7 @@ dependencies = [
 name = "minisbi"
 version = "0.1.0"
 dependencies = [
+ "minilib",
  "riscv",
  "sbi",
 ]

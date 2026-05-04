@@ -10,9 +10,24 @@ pub(crate) unsafe fn init() {
     }
 }
 
+#[unsafe(naked)]
+unsafe extern "C" fn _pmp_exists() -> bool {
+    naked_asm!(
+        "    ldr t0, 100f",
+        "    csrw mepc, t0",
+        "    csrr t0, mpmpaddr0",
+        "    li a0, 1",
+        "    ret",
+        "",
+        ".align 2",
+        "100:",
+        "    li a0, 0",
+        "    ret",
+    );
+}
+
 #[cfg(target_arch = "riscv32")]
 #[unsafe(naked)]
-#[unsafe(no_mangle)]
 unsafe extern "C" fn _mtvec() -> ! {
     use riscv::XLEN_BYTES;
 

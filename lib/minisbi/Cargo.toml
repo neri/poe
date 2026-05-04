@@ -8,3 +8,4 @@ version = "0.1.0"
 [dependencies]
 riscv = { path = "../riscv" }
 sbi = { path = "../sbi" }
+minilib = { path = "../minilib" }

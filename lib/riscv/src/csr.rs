@@ -5,6 +5,8 @@ use core::{
     sync::atomic::{Ordering, compiler_fence},
 };
 
+pub mod pmp;
+
 /// Control and Status Registers
 #[derive(Debug, Clone, Copy)]
 pub struct CSR;
@@ -145,6 +147,38 @@ impl CSR {
     pub const PMPADDR14: CsrReg<0x3BE> = CsrReg;
     /// MRW `pmpaddr15` PMP address register 15.
     pub const PMPADDR15: CsrReg<0x3BF> = CsrReg;
+    /// MRW `pmpaddr16` PMP address register 16.
+    pub const PMPADDR16: CsrReg<0x3C0> = CsrReg;
+    /// MRW `pmpaddr17` PMP address register 17.
+    pub const PMPADDR17: CsrReg<0x3C1> = CsrReg;
+    /// MRW `pmpaddr18` PMP address register 18.
+    pub const PMPADDR18: CsrReg<0x3C2> = CsrReg;
+    /// MRW `pmpaddr19` PMP address register 19.
+    pub const PMPADDR19: CsrReg<0x3C3> = CsrReg;
+    /// MRW `pmpaddr20` PMP address register 20.
+    pub const PMPADDR20: CsrReg<0x3C4> = CsrReg;
+    /// MRW `pmpaddr21` PMP address register 21.
+    pub const PMPADDR21: CsrReg<0x3C5> = CsrReg;
+    /// MRW `pmpaddr22` PMP address register 22.
+    pub const PMPADDR22: CsrReg<0x3C6> = CsrReg;
+    /// MRW `pmpaddr23` PMP address register 23.
+    pub const PMPADDR23: CsrReg<0x3C7> = CsrReg;
+    /// MRW `pmpaddr24` PMP address register 24.
+    pub const PMPADDR24: CsrReg<0x3C8> = CsrReg;
+    /// MRW `pmpaddr25` PMP address register 25.
+    pub const PMPADDR25: CsrReg<0x3C9> = CsrReg;
+    /// MRW `pmpaddr26` PMP address register 26.
+    pub const PMPADDR26: CsrReg<0x3CA> = CsrReg;
+    /// MRW `pmpaddr27` PMP address register 27.
+    pub const PMPADDR27: CsrReg<0x3CB> = CsrReg;
+    /// MRW `pmpaddr28` PMP address register 28.
+    pub const PMPADDR28: CsrReg<0x3CC> = CsrReg;
+    /// MRW `pmpaddr29` PMP address register 29.
+    pub const PMPADDR29: CsrReg<0x3CD> = CsrReg;
+    /// MRW `pmpaddr30` PMP address register 30.
+    pub const PMPADDR30: CsrReg<0x3CE> = CsrReg;
+    /// MRW `pmpaddr31` PMP address register 31.
+    pub const PMPADDR31: CsrReg<0x3CF> = CsrReg;
 
     pub fn rdtime() -> u64 {
         compiler_fence(Ordering::SeqCst);

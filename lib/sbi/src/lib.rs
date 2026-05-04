@@ -30,10 +30,10 @@ impl SbiRet {
     }
 
     #[inline]
-    pub fn err(error: SbiError, additional: usize) -> Self {
+    pub fn err(error: SbiError, extra: usize) -> Self {
         Self {
             error: Unknown::known(error),
-            value: additional,
+            value: extra,
         }
     }
 }
@@ -159,8 +159,8 @@ impl Eid {
 
     /// Experimental SBI Extension Space (EIDs #0x08000000 - #0x08FFFFFF)
     #[inline]
-    pub const fn experimental(n: usize) -> Self {
-        Self(Self::EXPERIMENTAL_BASE.0 + n)
+    pub const fn experimental(val: usize) -> Self {
+        Self(Self::EXPERIMENTAL_BASE.0 + (val & 0x00ff_ffff))
     }
 
     /// Vendor-Specific SBI Extension Space (EIDs #0x09000000 - #0x09FFFFFF)
@@ -168,8 +168,8 @@ impl Eid {
 
     /// Vendor-Specific SBI Extension Space (EIDs #0x09000000 - #0x09FFFFFF)
     #[inline]
-    pub const fn vendor(n: usize) -> Self {
-        Self(Self::VENDOR_SPECIFIC_BASE.0 + n)
+    pub const fn vendor(val: usize) -> Self {
+        Self(Self::VENDOR_SPECIFIC_BASE.0 + (val & 0x00ff_ffff))
     }
 
     /// Firmware Specific SBI Extension Space (EIDs #0x0A000000 - #0x0AFFFFFF)
@@ -177,8 +177,8 @@ impl Eid {
 
     /// Firmware Specific SBI Extension Space (EIDs #0x0A000000 - #0x0AFFFFFF)
     #[inline]
-    pub const fn firmware(n: usize) -> Self {
-        Self(Self::FIRMWARE_SPECIFIC_BASE.0 + n)
+    pub const fn firmware(val: usize) -> Self {
+        Self(Self::FIRMWARE_SPECIFIC_BASE.0 + (val & 0x00ff_ffff))
     }
 }
 
@@ -607,27 +607,33 @@ pub mod base {
     #[doc(alias = "sbi_get_spec_version")]
     pub fn get_spec_version() -> SpecVersion {
         unsafe {
-            let result: u32;
+            let result: usize;
             asm!("ecall",
                 in("a7") EidFid::GET_SPEC_VERSION.eid.0,
                 in("a6") EidFid::GET_SPEC_VERSION.fid.0,
                 lateout("a0") _,
                 lateout("a1") result,
             );
-            SpecVersion(result as u32)
+            SpecVersion(result)
         }
     }
 
-    pub struct SpecVersion(pub u32);
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct SpecVersion(pub usize);
 
     impl SpecVersion {
         #[inline]
-        pub const fn major(&self) -> u32 {
+        pub const fn new(major: u8, minor: u32) -> Self {
+            Self(((major as usize) << 24) | (minor as usize & 0xffffff))
+        }
+
+        #[inline]
+        pub const fn major(&self) -> usize {
             (self.0 >> 24) & 0x7f
         }
 
         #[inline]
-        pub const fn minor(&self) -> u32 {
+        pub const fn minor(&self) -> usize {
             self.0 & 0xffffff
         }
     }
@@ -656,5 +662,14 @@ pub mod base {
                 .map(|v| v.value)
                 .map_err(|v| v.error)
         }
+    }
+}
+
+unknown_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum ResetType (usize) {
+        ColdReset = 0,
+        WarmReset = 1,
+        Shutdown = 2,
     }
 }
