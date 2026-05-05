@@ -33,7 +33,7 @@ update: clean
 	(cd $(POE_SRC) && cargo update)
 
 run:
-	qemu-system-riscv64 -M virt \
+	qemu-system-riscv64 -M virt -smp 4\
 		-nographic \
 		-kernel $(POE_BIN) \
 		-serial mon:stdio

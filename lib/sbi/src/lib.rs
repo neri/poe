@@ -8,7 +8,7 @@ use minilib::unknown_enum::*;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct SbiRet {
-    pub error: Unknown<SbiError, isize>,
+    pub error: UnknownSbiError,
     pub value: usize,
 }
 
@@ -56,7 +56,7 @@ unknown_enum! {
         /// Already available
         AlreadyAvailable = -6,
         /// Already started
-        AlreadtStarted = -7,
+        AlreadyStarted = -7,
         /// Already stopped
         AlreadyStopped = -8,
         /// Shared memory not available
@@ -71,6 +71,8 @@ unknown_enum! {
         Io = -13,
     }
 }
+
+pub type UnknownSbiError = Unknown<SbiError, isize>;
 
 /// SBI extension ID
 #[repr(transparent)]
@@ -624,7 +626,7 @@ pub mod base {
     impl SpecVersion {
         #[inline]
         pub const fn new(major: u8, minor: u32) -> Self {
-            Self(((major as usize) << 24) | (minor as usize & 0xffffff))
+            Self(((major as usize) << 24) | (minor as usize & 0x00ff_ffff))
         }
 
         #[inline]
@@ -634,7 +636,7 @@ pub mod base {
 
         #[inline]
         pub const fn minor(&self) -> usize {
-            self.0 & 0xffffff
+            self.0 & 0x00ff_ffff
         }
     }
 
@@ -643,7 +645,7 @@ pub mod base {
     /// This SBI call returns the SBI implementation ID.
     #[inline]
     #[doc(alias = "sbi_get_impl_id")]
-    pub fn get_impl_id() -> Result<Unknown<ImplementationID, usize>, Unknown<SbiError, isize>> {
+    pub fn get_impl_id() -> Result<Unknown<ImplementationID, usize>, UnknownSbiError> {
         unsafe {
             call_sbi!(EidFid::GET_IMPL_ID)
                 .map(|v| Unknown::unknown(v.value))
@@ -656,9 +658,61 @@ pub mod base {
     /// This SBI call returns the SBI implementation version.
     #[inline]
     #[doc(alias = "sbi_get_impl_version")]
-    pub fn get_impl_version() -> Result<usize, Unknown<SbiError, isize>> {
+    pub fn get_impl_version() -> Result<usize, UnknownSbiError> {
         unsafe {
             call_sbi!(EidFid::GET_IMPL_VERSION)
+                .map(|v| v.value)
+                .map_err(|v| v.error)
+        }
+    }
+
+    /// Probe an SBI extension.
+    ///
+    /// This SBI call checks if a specific SBI extension is available.
+    #[inline]
+    #[doc(alias = "sbi_probe_extension")]
+    pub fn probe_extension(eid: Eid) -> Result<bool, UnknownSbiError> {
+        unsafe {
+            call_sbi!(EidFid::PROBE_EXTENSION, eid.0)
+                .map(|v| v.value != 0)
+                .map_err(|v| v.error)
+        }
+    }
+
+    /// Get the value of `mvendorid` CSR.
+    ///
+    /// This SBI call returns the value of `mvendorid` CSR.
+    #[inline]
+    #[doc(alias = "sbi_get_mvendorid")]
+    pub fn get_mvendorid() -> Result<usize, UnknownSbiError> {
+        unsafe {
+            call_sbi!(EidFid::GET_MVENDORID)
+                .map(|v| v.value)
+                .map_err(|v| v.error)
+        }
+    }
+
+    /// Get the value of `marchid` CSR.
+    ///
+    /// This SBI call returns the value of `marchid` CSR.
+    #[inline]
+    #[doc(alias = "sbi_get_marchid")]
+    pub fn get_marchid() -> Result<usize, UnknownSbiError> {
+        unsafe {
+            call_sbi!(EidFid::GET_MARCHID)
+                .map(|v| v.value)
+                .map_err(|v| v.error)
+        }
+    }
+
+    /// Get the value of `mimpid` CSR.
+    ///
+    /// This SBI call returns the value of `mimpid` CSR.
+    #[inline]
+    #[doc(alias = "sbi_get_mimpid")]
+    pub fn get_mimpid() -> Result<usize, UnknownSbiError> {
+        unsafe {
+            call_sbi!(EidFid::GET_MIMPID)
                 .map(|v| v.value)
                 .map_err(|v| v.error)
         }
@@ -668,8 +722,40 @@ pub mod base {
 unknown_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum ResetType (usize) {
-        ColdReset = 0,
-        WarmReset = 1,
-        Shutdown = 2,
+        Shutdown = 0,
+        ColdReset = 1,
+        WarmReset = 2,
     }
+}
+
+unknown_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum ResetReason (usize) {
+        NoReason = 0,
+        SystemFailure = 1,
+    }
+}
+
+#[doc(alias = "sbi_system_reset")]
+pub fn system_reset(
+    reset_type: Unknown<ResetType, usize>,
+    reset_reason: Unknown<ResetReason, usize>,
+) -> Result<(), UnknownSbiError> {
+    unsafe {
+        call_sbi!(
+            EidFid::SYSTEM_RESET,
+            reset_type.as_raw(),
+            reset_reason.as_raw()
+        )
+        .map(|_| ())
+        .map_err(|v| v.error)
+    }
+}
+
+#[inline]
+pub fn system_reset_no_reason(reset_type: ResetType) -> Result<(), UnknownSbiError> {
+    system_reset(
+        Unknown::known(reset_type),
+        Unknown::known(ResetReason::NoReason),
+    )
 }

@@ -28,6 +28,8 @@ pub unsafe extern "C" fn _arch_riscv_start(hart_id: usize, dtb: usize) -> ! {
         let count = ebss as usize - bss as usize;
         bss.write_bytes(0, count);
 
+        minisbi::init(hart_id);
+
         System::init_dt(dtb, hart_id, poe::main);
     }
 }

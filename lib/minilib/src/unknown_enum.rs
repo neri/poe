@@ -48,23 +48,11 @@ pub struct Unknown<KnownType, RawType: Copy> {
     _phantom: PhantomData<(RawType, KnownType)>,
 }
 
-impl<KnownType, RawType: Copy> Unknown<KnownType, RawType>
-where
-    RawType: From<KnownType>,
-    KnownType: TryFrom<RawType, Error = RawType>,
-{
+impl<KnownType, RawType: Copy> Unknown<KnownType, RawType> {
     #[inline]
     pub const fn unknown(value: RawType) -> Self {
         Self {
             raw: value,
-            _phantom: PhantomData,
-        }
-    }
-
-    #[inline]
-    pub fn known(value: KnownType) -> Self {
-        Self {
-            raw: value.into(),
             _phantom: PhantomData,
         }
     }
@@ -78,7 +66,25 @@ where
     pub const fn as_raw(&self) -> RawType {
         self.into_raw()
     }
+}
 
+impl<KnownType, RawType: Copy> Unknown<KnownType, RawType>
+where
+    RawType: From<KnownType>,
+{
+    #[inline]
+    pub fn known(value: KnownType) -> Self {
+        Self {
+            raw: value.into(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<KnownType, RawType: Copy> Unknown<KnownType, RawType>
+where
+    KnownType: TryFrom<RawType, Error = RawType>,
+{
     #[inline]
     pub fn into_known_value(self) -> Result<KnownType, RawType> {
         KnownType::try_from(self.raw)
@@ -109,7 +115,7 @@ impl<KnownType, RawType: Copy + Clone> Copy for Unknown<KnownType, RawType> {}
 
 impl<KnownType, RawType: Copy> core::fmt::Debug for Unknown<KnownType, RawType>
 where
-    RawType: From<KnownType> + core::fmt::Debug,
+    RawType: core::fmt::Debug,
     KnownType: TryFrom<RawType, Error = RawType> + core::fmt::Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -140,5 +146,15 @@ impl<KnownType: Ord, RawType: Ord + Copy> Ord for Unknown<KnownType, RawType> {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.raw.cmp(&other.raw)
+    }
+}
+
+impl<KnownType, RawType: Copy> From<KnownType> for Unknown<KnownType, RawType>
+where
+    RawType: From<KnownType>,
+{
+    #[inline]
+    fn from(value: KnownType) -> Self {
+        Self::known(value)
     }
 }

@@ -28,6 +28,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     fn bad_instruction(&self) -> ! {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("unimp", options(nomem, nostack, noreturn));
         }

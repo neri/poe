@@ -6,8 +6,8 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-poe = { path = "../../poe/", features = ["virt", "device_tree"] }
-minios = { path = "../../../minios/", features = ["virt", "device_tree"] }
+poe = { path = "../../poe/", features = ["sbi", "device_tree"] }
+minios = { path = "../../../minios/", features = ["sbi", "device_tree"] }
 
 [profile.release]
 lto = true

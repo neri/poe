@@ -1,93 +1,12 @@
-//! Platform dependent module for RISC-V virt machine
-
-use super::*;
+// use super::*;
 use crate::arch::csr::{CSR, VectorMode};
 use crate::*;
-use core::{arch::naked_asm, ffi::c_void, time::Duration};
+use core::arch::naked_asm;
 use riscv::XLEN_BYTES;
 
-mod sbi_console;
-pub mod timer;
-
-unsafe extern "C" {
-    unsafe static _end: c_void;
-}
-
-impl PlatformTrait for Platform {
-    unsafe fn init_dt_early(dt: &fdt::DeviceTree, arg: usize) {
-        let hart_id = arg;
-        unsafe {
-            #[cfg(feature = "minisbi")]
-            {
-                minisbi::init();
-            }
-
-            sbi_console::SbiConsole::init();
-            System::set_stdin(sbi_console::SbiConsole::shared());
-            System::set_stdout(sbi_console::SbiConsole::shared());
-            System::set_stderr(sbi_console::SbiConsole::shared());
-
-            println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
-
-            let spec_ver = sbi::base::get_spec_version();
-            let impl_id = sbi::base::get_impl_id().unwrap();
-            let impl_ver = sbi::base::get_impl_version().unwrap();
-            println!(
-                "SBI version {}.{} impl {:?} version {:x}",
-                spec_ver.major(),
-                spec_ver.minor(),
-                impl_id,
-                impl_ver
-            );
-
-            println!("Hart ID: {}", hart_id);
-
-            let boot_info = System::boot_info_mut();
-            boot_info.platform = Platform::Virt;
-
-            let end = PhysicalAddress::new(&_end as *const _ as PhysicalAddressRepr);
-            boot_info.start_conventional_memory = end.rounding_up_4k().as_repr() as u32;
-            boot_info.conventional_memory_size = 0x40_0000;
-
-            println!("Model: {}", dt.root().model());
-            for item in dt.root().compatible().unwrap() {
-                println!("compatible: {}", item);
-            }
-
-            CSR::set_stvec(VectorMode::Direct, _arch_stvec as *const () as usize);
-
-            timer::PlatformTimer::init(dt);
-        }
-    }
-
-    unsafe fn init(_arg: usize) {
-        unsafe {
-            println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
-
-            Hal::cpu().enable_interrupt();
-        }
-    }
-
-    unsafe fn exit() {
-        // Nothing to do
-    }
-
-    fn reset_system() -> ! {
-        sbi::legacy::shutdown();
-    }
-
-    fn halt() -> ! {
-        sbi::legacy::shutdown()
-    }
-
-    #[inline]
-    fn monotonic() -> u64 {
-        timer::PlatformTimer::monotonic()
-    }
-
-    #[inline]
-    fn duration_to_ticks(duration: Duration) -> u64 {
-        timer::PlatformTimer::duration_to_ticks(duration)
+pub(crate) unsafe fn init() {
+    unsafe {
+        CSR::set_stvec(VectorMode::Direct, _arch_stvec as *const () as usize);
     }
 }
 
@@ -264,7 +183,7 @@ unsafe fn _arch_handle_trap(ctx: &ExceptionContext) {
             match scause & 0x7fff_ffff {
                 0x0000_0005 => {
                     // supervisor timer
-                    timer::PlatformTimer::advance_tick();
+                    super::timer::PlatformTimer::advance_tick();
                     return;
                 }
                 _ => {}

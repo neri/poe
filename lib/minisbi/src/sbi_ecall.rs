@@ -8,7 +8,7 @@ use sbi::{Eid, EidFid, Fid, ImplementationID, ResetType, SbiRet, base::SpecVersi
 pub const CURRENT_SPEC_VERSION: SpecVersion = SpecVersion::new(0, 2);
 
 /// The current SBI implementation ID.
-pub const CURRENT_IMPL_ID: Unknown<ImplementationID, usize> = Unknown::unknown(0x0000_0001);
+pub const CURRENT_IMPL_ID: Unknown<ImplementationID, usize> = Unknown::unknown(12345678);
 
 /// The current SBI implementation version.
 pub const CURRENT_IMPL_VERSION: usize = 0x0000_0001;
@@ -140,7 +140,7 @@ pub unsafe fn ecall(ctx: &mut ExceptionContext) {
                             sbi_shutdown();
                         }
                         None => {
-                            sbi_ret_not_supported(ctx);
+                            sbi_ret(ctx, SbiRet::err(sbi::SbiError::InvalidParam, 0));
                         }
                     }
                 }

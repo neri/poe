@@ -1,3 +1,5 @@
+//! Event subsystem
+
 // use super::*;
 use crate::{
     platform::{Platform, PlatformTrait},
@@ -97,15 +99,6 @@ impl PollingEvent for TimerPoller {
                     PollResult::Pending
                 }
             }
-            TimerEvent::Periodic(interval) => {
-                let now = Platform::monotonic();
-                if now >= interval {
-                    self.timer_event = TimerEvent::Periodic(now + interval);
-                    PollResult::Ready
-                } else {
-                    PollResult::Pending
-                }
-            }
         }
     }
 }
@@ -113,7 +106,6 @@ impl PollingEvent for TimerPoller {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimerEvent {
     Timeout(u64),
-    Periodic(u64),
 }
 
 impl TimerEvent {

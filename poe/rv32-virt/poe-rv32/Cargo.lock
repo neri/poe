@@ -206,7 +206,6 @@ dependencies = [
  "heapless",
  "libhid",
  "minilib",
- "minisbi",
  "num",
  "paste",
  "riscv",
@@ -340,6 +339,7 @@ name = "poe-rv32"
 version = "0.1.0"
 dependencies = [
  "minios",
+ "minisbi",
  "poe",
 ]
 

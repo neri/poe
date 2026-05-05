@@ -11,7 +11,7 @@ device_tree = []
 pc = []
 rpi = ["device_tree"]
 # sbi = ["device_tree"]
-virt = []
+sbi = []
 
 [dependencies]
 paste = { version = "1.0" }
@@ -35,7 +35,6 @@ tui = { path = "../lib/tui/" }
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
 riscv = { path = "../lib/riscv/" }
 sbi = { path = "../lib/sbi/" }
-minisbi = { path = "../lib/minisbi/", optional = true }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 x86 = { path = "../lib/x86/" }

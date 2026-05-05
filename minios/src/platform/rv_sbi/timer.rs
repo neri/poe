@@ -41,6 +41,7 @@ impl PlatformTimer {
             shared.timer_tick = timer_tick as u64;
 
             CSR::SIE.set(1 << 5);
+
             Self::_set_next_timer();
         }
     }

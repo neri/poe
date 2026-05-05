@@ -100,8 +100,8 @@ pub fn main() {
     // }
 
     // Hal::cpu().bad_instruction();
-    // #[allow(unreachable_code)]
-    // {}
+    #[allow(unreachable_code)]
+    {}
 
     //-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-//-
 

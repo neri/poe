@@ -1,5 +1,6 @@
 //! Minimal SBI implementation for minios
 //!
+//! This is a minimal SBI implementation that provides only the necessary functions for minios to run on RISC-V virt machine.
 #![cfg_attr(not(test), no_std)]
 
 use crate::syscon::Syscon;
@@ -35,9 +36,16 @@ macro_rules! println {
 }
 
 /// Initialize the MiniSBI.
-#[inline(never)]
-pub unsafe fn init() {
+pub unsafe fn init(hart_id: usize) {
     unsafe {
+        if hart_id != 0 {
+            // TODO: support multiple harts
+            CSR::MSTATUS.write(0);
+            loop {
+                asm!("wfi", options(nomem, nostack));
+            }
+        }
+
         Uart16550::init(0x1000_0000);
 
         trap::init();

@@ -25,6 +25,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     fn bad_instruction(&self) -> ! {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("udf #0", options(nomem, nostack, noreturn));
         }
@@ -32,6 +33,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     fn wait_for_interrupt(&self) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             // TODO: currentry wfi is not working
             asm!("sevl", "wfe", options(nomem, nostack));
@@ -41,6 +43,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     unsafe fn enable_interrupt(&self) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("msr daifclr, #2", options(nomem, nostack));
         }
@@ -48,6 +51,7 @@ impl HalCpu for CpuImpl {
 
     #[inline]
     unsafe fn disable_interrupt(&self) {
+        compiler_fence(Ordering::SeqCst);
         unsafe {
             asm!("msr daifset, #2", options(nomem, nostack));
         }

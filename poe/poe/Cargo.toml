@@ -10,7 +10,7 @@ default = []
 device_tree = ["fdt"]
 pc = []
 rpi = ["device_tree"]
-virt = []
+sbi = []
 
 [dependencies]
 minios = { path = "../../minios/" }

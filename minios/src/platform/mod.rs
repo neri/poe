@@ -10,16 +10,10 @@ pub mod rpi;
 #[cfg(feature = "rpi")]
 pub use rpi as current;
 
-#[cfg(all(
-    any(target_arch = "riscv32", target_arch = "riscv64"),
-    feature = "virt"
-))]
-pub mod rv_virt;
-#[cfg(all(
-    any(target_arch = "riscv32", target_arch = "riscv64"),
-    feature = "virt"
-))]
-pub use rv_virt as current;
+#[cfg(all(feature = "sbi"))]
+pub mod rv_sbi;
+#[cfg(all(feature = "sbi"))]
+pub use rv_sbi as current;
 
 use crate::*;
 use core::fmt;
@@ -43,8 +37,8 @@ pub enum Platform {
     DeviceTree = 6,
     /// Raspberry Pi
     RaspberryPi = 7,
-    /// Virt Machine (e.g. QEMU virt)
-    Virt = 8,
+    /// RISC-V with SBI
+    Sbi = 8,
 }
 
 impl Platform {
@@ -58,7 +52,7 @@ impl Platform {
             Self::UefiBridged => "UEFI (Bridged)",
             Self::DeviceTree => "Device Tree",
             Self::RaspberryPi => "Raspberry Pi",
-            Self::Virt => "Virt Machine",
+            Self::Sbi => "RISC-V with SBI",
         }
     }
 }
