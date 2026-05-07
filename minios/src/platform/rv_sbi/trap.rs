@@ -192,10 +192,14 @@ unsafe fn _arch_handle_trap(ctx: &ExceptionContext) {
 
         let stval = CSR::STVAL.read();
         let user_pc = CSR::SEPC.read();
+        let sstatus = CSR::SSTATUS.read();
+
+        let output = System::stdout();
+        output.set_attribute(0x40);
 
         println!(
-            "\n\x1b[0;30;101m#### UNHANDLED EXCEPTION {:08x}, stval={:08x}, sepc={:08x}",
-            scause, stval, user_pc,
+            "\n#### UNHANDLED EXCEPTION {:08x}, stval={:08x}, sepc={:08x}, sstatus={:08x}",
+            scause, stval, user_pc, sstatus,
         );
         println!(
             "ra {:016x} gp {:016x} tp {:016x} t0 {:016x}",

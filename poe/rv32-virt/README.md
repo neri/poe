@@ -3,7 +3,7 @@
 ## Requirements
 
 * risc-v rv32imac
-* qemu (qemu-system-riscv64 -M virt)
+* qemu (qemu-system-riscv32 -M virt)
 
 ## Build Environment
 

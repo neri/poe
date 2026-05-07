@@ -5,5 +5,3 @@ mod hal_riscv;
 pub use hal_riscv::*;
 
 pub use riscv::*;
-
-// pub mod cpu;

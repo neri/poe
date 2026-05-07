@@ -1,8 +1,54 @@
 //! Physical Memory Protection (PMP) implementation for RISC-V.
 
 use super::*;
+use core::arch::naked_asm;
 
+/// Physical Memory Protection (PMP)
 pub struct Pmp;
+
+/// PMP implementations may implement zero, 16, or 64 PMP entries.
+/// This enum is used to identify the PMP implementation.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PmpImpl {
+    /// No PMP support
+    Zero = 0,
+    /// PMP has 16 entries
+    Pmp16 = 1,
+    /// PMP has 64 entries
+    Pmp64 = 2,
+}
+
+impl PmpImpl {
+    /// Identify the PMP implementation
+    ///
+    /// # SAFETY
+    ///
+    /// * This function overwrites `mtvec` CSR.
+    #[unsafe(naked)]
+    pub unsafe extern "C" fn identify() -> PmpImpl {
+        naked_asm!(
+            "  la t0, 100f",
+            "  csrw mtvec, t0",
+            "  csrr t1, pmpaddr15",
+            "  la t0, 200f",
+            "  csrw mtvec, t0",
+            "  csrr t1, pmpaddr63",
+            "  li a0, 2",
+            "  ret",
+            "",
+            ".align 4",
+            "100:",
+            "  li a0, 0",
+            "  ret",
+            "",
+            ".align 4",
+            "200:",
+            "  li a0, 1",
+            "  ret",
+        );
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PmpIndex {

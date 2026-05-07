@@ -13,7 +13,6 @@ use core::{
 pub mod fb;
 pub mod gpio;
 pub mod mbox;
-pub mod timer;
 pub mod trap;
 pub mod uart0;
 pub mod uart1;
@@ -58,7 +57,8 @@ impl PlatformTrait for Platform {
             System::set_stdin(uart0::Uart0::shared());
             System::set_stdout(uart0::Uart0::shared());
             System::set_stderr(uart0::Uart0::shared());
-            println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
+
+            trap::init();
 
             let boot_info = System::boot_info_mut();
             boot_info.platform = Platform::RaspberryPi;
@@ -69,8 +69,10 @@ impl PlatformTrait for Platform {
             boot_info.start_conventional_memory = _end.rounding_up_4k().as_repr() as u32;
             boot_info.conventional_memory_size = 0x40_0000;
 
-            trap::init();
+            arch::timer::GenericTimer::init();
+            (0x4000_0040 as *mut u32).write_volatile(0b1000); // enable timer interrupt
 
+            println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
             {
                 let currentel: usize;
                 asm!("mrs {}, currentel", out(reg)currentel);
@@ -90,30 +92,31 @@ impl PlatformTrait for Platform {
     }
 
     unsafe fn init(_arg: usize) {
-        // TODO:
         println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
 
         unsafe {
             fb::Fb::init();
+
+            Hal::cpu().enable_interrupt();
         }
     }
 
     unsafe fn exit() {
-        // Nothing to do
+        // to do nothing for now
     }
 
     fn reset_system() -> ! {
         todo!()
     }
 
+    #[inline]
     fn monotonic() -> u64 {
-        // TODO: implement
-        0
+        arch::timer::GenericTimer::monotonic()
     }
 
-    fn duration_to_ticks(_duration: Duration) -> u64 {
-        // TODO: implement
-        0
+    #[inline]
+    fn duration_to_ticks(duration: Duration) -> u64 {
+        arch::timer::GenericTimer::duration_to_ticks(duration)
     }
 }
 
