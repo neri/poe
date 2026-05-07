@@ -75,7 +75,7 @@ impl PlatformTrait for Platform {
                 }
                 MachineType::RaspberryPi4 => {
                     arch::gic::Gic::init(0xff84_2000, 0xff84_1000);
-                    arch::gic::Gic::enable(arch::gic::Irq(27));
+                    arch::gic::Gic::enable(arch::gic::IRQ_CNTV);
                 }
                 _ => unreachable!(),
             }
@@ -141,7 +141,7 @@ pub unsafe fn timer_eoi() {
                 // to do nothing for now
             }
             MachineType::RaspberryPi4 => {
-                arch::gic::Gic::eoi(arch::gic::Irq(27));
+                arch::gic::Gic::eoi(arch::gic::IRQ_CNTV);
             }
             _ => unreachable!(),
         }
