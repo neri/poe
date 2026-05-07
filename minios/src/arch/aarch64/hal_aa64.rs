@@ -35,9 +35,7 @@ impl HalCpu for CpuImpl {
     fn wait_for_interrupt(&self) {
         compiler_fence(Ordering::SeqCst);
         unsafe {
-            // TODO: currentry wfi is not working
-            asm!("sevl", "wfe", options(nomem, nostack));
-            // asm!("wfi", options(nomem, nostack));
+            asm!("wfi", options(nomem, nostack));
         }
     }
 

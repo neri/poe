@@ -69,8 +69,17 @@ impl PlatformTrait for Platform {
             boot_info.start_conventional_memory = _end.rounding_up_4k().as_repr() as u32;
             boot_info.conventional_memory_size = 0x40_0000;
 
+            match current_machine_type() {
+                MachineType::RaspberryPi3 => {
+                    (0x4000_0040 as *mut u32).write_volatile(0b1000); // enable timer interrupt
+                }
+                MachineType::RaspberryPi4 => {
+                    arch::gic::Gic::init(0xff84_2000, 0xff84_1000);
+                    arch::gic::Gic::enable(arch::gic::Irq(27));
+                }
+                _ => unreachable!(),
+            }
             arch::timer::GenericTimer::init();
-            (0x4000_0040 as *mut u32).write_volatile(0b1000); // enable timer interrupt
 
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
             {
@@ -123,6 +132,20 @@ impl PlatformTrait for Platform {
 #[inline]
 pub fn current_machine_type() -> MachineType {
     unsafe { CURRENT_MACHINE_TYPE.assume_init() }
+}
+
+pub unsafe fn timer_eoi() {
+    unsafe {
+        match current_machine_type() {
+            MachineType::RaspberryPi3 => {
+                // to do nothing for now
+            }
+            MachineType::RaspberryPi4 => {
+                arch::gic::Gic::eoi(arch::gic::Irq(27));
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 static mut CURRENT_MACHINE_TYPE: MaybeUninit<MachineType> = MaybeUninit::zeroed();

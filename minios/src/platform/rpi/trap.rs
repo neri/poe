@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{platform::rpi::timer_eoi, *};
 use core::arch::{asm, naked_asm};
 
 pub(super) unsafe fn init() {
@@ -117,6 +117,7 @@ fn _handle_irq(_ctx: &mut ExceptionContext) {
         asm!("mrs {}, cntv_ctl_el0", out(reg) cntv_ctl_el0);
         if (cntv_ctl_el0 & 1) != 0 {
             arch::timer::GenericTimer::advance_tick();
+            timer_eoi();
         } else {
             println!("unknown interrupt!");
         }
