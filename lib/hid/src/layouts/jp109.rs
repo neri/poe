@@ -75,7 +75,7 @@ const CHAR_TO_KEYSTROKE: [(Usage, Modifier); 128] = [
     (Usage::KEY_E, Modifier::LEFT_CTRL),       // 0x05
     (Usage::KEY_F, Modifier::LEFT_CTRL),       // 0x06
     (Usage::KEY_G, Modifier::LEFT_CTRL),       // 0x07
-    (Usage::KEY_BASKSPACE, Modifier::empty()), // 0x08 (BACKSPACE)
+    (Usage::KEY_BACKSPACE, Modifier::empty()), // 0x08 (BACKSPACE)
     (Usage::KEY_TAB, Modifier::empty()),       // 0x09 (HTAB)
     (Usage::KEY_J, Modifier::LEFT_CTRL),       // 0x0A
     (Usage::KEY_K, Modifier::LEFT_CTRL),       // 0x0B
@@ -194,7 +194,7 @@ const CHAR_TO_KEYSTROKE: [(Usage, Modifier); 128] = [
     (Usage(0x89), Modifier::LEFT_SHIFT),       // 0x7c
     (Usage(0x31), Modifier::LEFT_SHIFT),       // 0x7d
     (Usage(0x2e), Modifier::LEFT_SHIFT),       // 0x7e
-    (Usage::DELETE, Modifier::empty()),        // 0x7f
+    (Usage::KEY_DELETE, Modifier::empty()),    // 0x7f
 ];
 
 #[test]

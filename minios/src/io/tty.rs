@@ -9,14 +9,18 @@ use core::num::NonZero;
 use libhid::{Modifier, Usage};
 
 pub trait SimpleTextInput {
+    /// Resets the input state
     fn reset(&mut self);
 
+    /// Reads a keystroke from the input buffer, if available.
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey>;
 
+    /// Returns `true` if there is a keystroke available to read.
     fn is_ready(&mut self) -> bool;
 }
 
 impl<'a> dyn SimpleTextInput + 'a {
+    /// Creates an event that becomes ready when a keystroke is available to read.
     pub fn event_for_key<'b>(&'b mut self) -> Event<'b> {
         Event::with_polling(SimpleTextInputPoller(self))
     }
@@ -53,6 +57,7 @@ pub struct InputKey {
 }
 
 impl InputKey {
+    /// Creates a new InputKey with the given KeyStroke and Unicode character.
     #[inline]
     pub fn new(key_stroke: KeyStroke, unicode_char: u16) -> Self {
         Self {
@@ -61,6 +66,7 @@ impl InputKey {
         }
     }
 
+    /// Creates a new InputKey from a KeyStroke by translating it to a Unicode character using the current HID layout.
     #[inline]
     pub fn from_key_stroke(key_stroke: KeyStroke) -> Self {
         let unicode_char = HidManager::translate(key_stroke)
@@ -75,6 +81,7 @@ impl InputKey {
         char::from_u32(self.unicode_char as u32)
     }
 
+    /// Returns the KeyStroke associated with this InputKey.
     #[inline]
     pub const fn key_stroke(&self) -> KeyStroke {
         self.key_stroke
@@ -92,6 +99,7 @@ impl InputKey {
 pub struct NonZeroInputKey(NonZero<u32>);
 
 impl NonZeroInputKey {
+    /// Creates a NonZeroInputKey from an InputKey, returning None if the InputKey is invalid (i.e., has a usage of 0).
     #[inline]
     pub fn from_input_key(key: InputKey) -> Option<Self> {
         if key.key_stroke.usage == Usage::NONE {
@@ -104,6 +112,7 @@ impl NonZeroInputKey {
         Some(Self(unsafe { NonZero::new_unchecked(raw_value) }))
     }
 
+    /// Returns the InputKey represented by this NonZeroInputKey.
     #[inline]
     pub fn get(self) -> InputKey {
         let raw_value = self.0.get();
@@ -125,16 +134,22 @@ impl From<InputKey> for Option<NonZeroInputKey> {
 }
 
 pub trait SimpleTextOutput: core::fmt::Write {
+    /// Resets the output state
     fn reset(&mut self);
 
+    /// Sets the text attribute
     fn set_attribute(&mut self, attribute: u8);
 
+    /// Clears the screen and resets the cursor position to the top-left corner.
     fn clear_screen(&mut self);
 
+    /// Sets the cursor position to the specified column and row.
     fn set_cursor_position(&mut self, col: u32, row: u32);
 
+    /// Enables or disables the cursor visibility, and returns previous visibility state.
     fn enable_cursor(&mut self, visible: bool) -> bool;
 
+    /// Returns the current mode of the text output
     fn current_mode(&mut self) -> SimpleTextOutputMode;
 }
 
@@ -158,11 +173,13 @@ pub struct SimpleTextOutputMode {
 }
 
 impl SimpleTextOutputMode {
+    /// Creates a new SimpleTextOutputMode with default dimensions (80 columns and 24 rows) and default settings.
     #[inline]
     pub const fn new() -> Self {
         Self::from_dims(80, 24)
     }
 
+    /// Creates a new SimpleTextOutputMode with the specified dimensions and default settings.
     #[inline]
     pub const fn from_dims(columns: u8, rows: u8) -> Self {
         Self {
@@ -175,11 +192,13 @@ impl SimpleTextOutputMode {
         }
     }
 
+    /// Returns if the cursor is currently visible.
     #[inline]
     pub const fn is_cursor_visible(&self) -> bool {
         self.cursor_visible != 0
     }
 
+    /// Sets the cursor visibility.
     #[inline]
     pub fn set_cursor_visible(&mut self, visible: bool) {
         self.cursor_visible = visible as u8;
@@ -187,26 +206,33 @@ impl SimpleTextOutputMode {
 }
 
 pub trait SerialIo {
+    /// Resets the serial I/O state.
     fn reset(&mut self);
 
+    /// Writes a single byte to the serial output.
     fn write_byte(&mut self, byte: u8);
 
+    /// Reads a single byte from the serial input, if available.
     fn read_byte(&mut self) -> Option<u8>;
 
+    /// Returns `true` if there is a byte available to read from the serial input.
     fn is_ready_to_read(&mut self) -> bool;
 
+    /// Writes a slice of bytes to the serial output.
     fn write_bytes(&mut self, bytes: &[u8]) {
         for &b in bytes {
             self.write_byte(b);
         }
     }
 
+    /// Flushes the serial input buffer.
     fn flush_input(&mut self) {
         while self.read_byte().is_some() {}
     }
 }
 
 impl<'a> dyn SerialIo + 'a {
+    /// Creates an event that becomes ready when a byte is available to read from the serial input.
     pub fn event_for_read<'b>(&'b mut self) -> Event<'b> {
         Event::with_polling(SerialPoller(self))
     }

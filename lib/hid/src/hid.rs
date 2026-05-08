@@ -392,7 +392,7 @@ impl Usage {
     pub const KEY_0: Self = Self(0x27);
     pub const KEY_ENTER: Self = Self(0x28);
     pub const KEY_ESCAPE: Self = Self(0x29);
-    pub const KEY_BASKSPACE: Self = Self(0x2A);
+    pub const KEY_BACKSPACE: Self = Self(0x2A);
     pub const KEY_TAB: Self = Self(0x2B);
     pub const KEY_SPACE: Self = Self(0x2C);
 
@@ -408,7 +408,16 @@ impl Usage {
     pub const KEY_F10: Self = Self(0x43);
     pub const KEY_F11: Self = Self(0x44);
     pub const KEY_F12: Self = Self(0x45);
-    pub const DELETE: Self = Self(0x4C);
+
+    pub const KEY_PRINT_SCREEN: Self = Self(0x46);
+    pub const KEY_SCROLL_LOCK: Self = Self(0x47);
+    pub const KEY_PAUSE: Self = Self(0x48);
+    pub const KEY_INSERT: Self = Self(0x49);
+    pub const KEY_HOME: Self = Self(0x4A);
+    pub const KEY_PAGE_UP: Self = Self(0x4B);
+    pub const KEY_DELETE: Self = Self(0x4C);
+    pub const KEY_END: Self = Self(0x4D);
+    pub const KEY_PAGE_DOWN: Self = Self(0x4E);
     pub const KEY_RIGHT_ARROW: Self = Self(0x4F);
     pub const KEY_LEFT_ARROW: Self = Self(0x50);
     pub const KEY_DOWN_ARROW: Self = Self(0x51);

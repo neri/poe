@@ -12,6 +12,9 @@ use minios::mem::MemoryManager;
 use minios::prelude::*;
 
 #[allow(unused_imports)]
+use tui::prelude::*;
+
+#[allow(unused_imports)]
 use minios::io::graphics::PixelFormat;
 
 pub use minios::prelude;
@@ -36,8 +39,6 @@ pub fn main() {
         let stdout = System::stdout();
         stdout.reset();
         stdout.enable_cursor(false);
-
-        use tui::prelude::*;
 
         let scr_size = Size::new(
             stdout.current_mode().columns as i32,
@@ -79,12 +80,15 @@ pub fn main() {
             timer.wait();
         }
 
-        let window = TuiWindowBufferAscii::new(
-            Rect::new(Point::new(0, 0), scr_size),
-            Inset::new(2, 2, 2, 2),
-            TuiAttribute(0xb7),
-        );
-        window.draw_to(stdout);
+        // let window = TuiWindowBufferAscii::new(
+        //     Rect::new(Point::new(0, 0), scr_size),
+        //     Inset::new(2, 2, 2, 2),
+        //     TuiAttribute(0xb7),
+        // );
+        // window.draw_to(stdout);
+
+        stdout.set_attribute(0xb7);
+        stdout.clear_screen();
     }
 
     if true {
@@ -95,8 +99,6 @@ pub fn main() {
         // stdout.clear_screen();
 
         {
-            use tui::prelude::*;
-
             let scr_size = (
                 stdout.current_mode().columns as i32,
                 stdout.current_mode().rows as i32,

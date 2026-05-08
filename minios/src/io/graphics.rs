@@ -6,6 +6,7 @@ pub mod fbcon;
 
 use crate::PhysicalAddress;
 
+/// Graphics output device trait
 pub trait GraphicsOutputDevice {
     /// Returns the list of supported video modes.
     fn modes(&self) -> &[ModeInfo];
@@ -142,5 +143,11 @@ impl PixelFormat {
             PixelFormat::Indexed8 => 1,
             PixelFormat::BGRX8888 | PixelFormat::RGBX8888 => 4,
         }
+    }
+
+    /// Checks if the pixel format is compatible with UEFI GOP.
+    #[inline]
+    pub const fn is_uefi_gop_compatible(&self) -> bool {
+        matches!(self, PixelFormat::BGRX8888)
     }
 }

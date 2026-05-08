@@ -3,6 +3,7 @@ use super::*;
 pub mod jp109;
 pub mod us101;
 
+/// Represents a keystroke, consisting of a HID usage and modifier state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyStroke {
     pub usage: Usage,
@@ -10,9 +11,16 @@ pub struct KeyStroke {
 }
 
 impl KeyStroke {
+    /// Creates a new KeyStroke with the given usage and modifier.
     #[inline]
-    pub fn new(usage: Usage, modifier: Modifier) -> Self {
+    pub const fn new(usage: Usage, modifier: Modifier) -> Self {
         Self { usage, modifier }
+    }
+
+    /// Creates a new KeyStroke with the given usage and empty modifier.
+    #[inline]
+    pub const fn from_usage(usage: Usage) -> Self {
+        Self::new(usage, Modifier::empty())
     }
 }
 

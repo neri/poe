@@ -2,9 +2,14 @@
 
 use super::*;
 use crate::*;
+use core::time::Duration;
 use tui::prelude::box_drawing::AsciiExt;
 
+/// Color mapping from 3-bit color attributes to VT100 color codes.
 const COLOR_TABLE: [u8; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
+
+/// Timeout duration for waiting for key input from the terminal.
+const KEY_TIMEOUT: Duration = Duration::from_millis(50);
 
 /// VT100 Serial Terminal Output Driver
 pub struct VT100Out<'a> {
@@ -14,9 +19,7 @@ pub struct VT100Out<'a> {
     charset: CharsetMode,
 }
 
-/// Inner Serial Device Wrapper
-struct InnerSerial<'a>(&'a mut dyn SerialIo);
-
+/// Character Set Mode for VT100 Terminal
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum CharsetMode {
     /// Terminal supports box drawing characters via VT100 charset switching.
@@ -28,44 +31,57 @@ pub enum CharsetMode {
 }
 
 impl<'a> VT100Out<'a> {
+    /// Create a new instance with the default charset mode.
     #[inline]
     pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
         Self {
-            inner: InnerSerial(inner),
+            inner: InnerSerial::new(inner),
             mode: SimpleTextOutputMode::new(),
             is_shifted_out: false,
             charset: CharsetMode::AsciiBoxChar,
         }
     }
 
+    /// Create a new instance with the specified charset mode.
     #[inline]
     pub const fn with_charset(inner: &'a mut dyn SerialIo, charset: CharsetMode) -> Self {
         Self {
-            inner: InnerSerial(inner),
+            inner: InnerSerial::new(inner),
             mode: SimpleTextOutputMode::new(),
             is_shifted_out: false,
             charset,
         }
     }
 
+    /// Wait for a byte to be available and read it.
     pub fn wait_byte(&mut self) -> Option<u8> {
-        loop {
-            self.inner.0.event_for_read().wait();
-            if let Some(ch) = self.inner.0.read_byte() {
-                return Some(ch);
-            }
+        {
+            let mut sio_event = self.inner.0.event_for_read();
+            let mut timer = Event::with_timeout(KEY_TIMEOUT);
+            System::wait_for_events(&mut [&mut sio_event, &mut timer]);
         }
+        self.inner.0.read_byte()
     }
 }
 
 impl VT100Out<'_> {
+    /// Reset the terminal and set the charset mode.
     #[inline]
     pub fn reset_with_charset(&mut self, charset: CharsetMode) {
         self.charset = charset;
         (self as &mut dyn SimpleTextOutput).reset();
     }
 
+    /// Wait for a response of the form `ESC [ rows ; cols response_type` and parse the coordinates.
     pub fn wait_coords(&mut self, response_type: u8) -> Option<(u8, u8)> {
+        let b = self.wait_byte()?;
+        if b != 0x1b {
+            return None;
+        }
+        let b = self.wait_byte()?;
+        if b != b'[' {
+            return None;
+        }
         let mut buf = [0u8; 16];
         let mut i = 0;
         while i < buf.len() {
@@ -76,36 +92,39 @@ impl VT100Out<'_> {
                 break;
             }
         }
-        if i < 6 || buf[0] != 0x1b || buf[1] != b'[' || buf[i - 1] != response_type {
+        if i < 4 || buf[i - 1] != response_type {
             return None;
         }
         let mut semicolon_index = None;
-        for j in 2..i - 1 {
+        for j in 0..i - 1 {
             if buf[j] == b';' {
                 semicolon_index = Some(j);
                 break;
             }
         }
         let semicolon_index = semicolon_index?;
-        let rows = core::str::from_utf8(&buf[2..semicolon_index]).ok()?;
+        let rows = core::str::from_utf8(&buf[0..semicolon_index]).ok()?;
         let cols = core::str::from_utf8(&buf[semicolon_index + 1..i - 1]).ok()?;
         let rows: u8 = rows.parse().ok()?;
         let cols: u8 = cols.parse().ok()?;
         Some((cols, rows))
     }
 
+    /// Get the terminal size by querying the terminal.
     pub fn get_terminal_size(&mut self) -> Option<(u8, u8)> {
         self.inner.0.flush_input();
         let _ = self.inner.write_str("\x1b[18t");
         self.wait_coords(b't')
     }
 
+    /// Get the current cursor position by querying the terminal.
     pub fn get_cursor_position(&mut self) -> Option<(u8, u8)> {
         self.inner.0.flush_input();
         let _ = self.inner.write_str("\x1b[6n");
         self.wait_coords(b'R').map(|(col, row)| (col - 1, row - 1))
     }
 
+    /// Update the cursor position in the mode by querying the terminal.
     #[inline]
     pub fn update_cursor_position(&mut self) {
         if let Some((col, row)) = self.get_cursor_position() {
@@ -256,10 +275,20 @@ pub struct VT100<'a> {
 }
 
 impl<'a> VT100<'a> {
+    /// Create a new instance with the default charset mode.
     #[inline]
     pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
         Self {
             inner: VT100Out::new(inner),
+            key_buffer: heapless::Vec::new(),
+        }
+    }
+
+    /// Create a new instance with the specified charset mode.
+    #[inline]
+    pub const fn with_charset(inner: &'a mut dyn SerialIo, charset: CharsetMode) -> Self {
+        Self {
+            inner: VT100Out::with_charset(inner, charset),
             key_buffer: heapless::Vec::new(),
         }
     }
@@ -305,25 +334,102 @@ impl SimpleTextOutput for VT100<'_> {
 }
 
 impl VT100<'_> {
+    /// Refill the key buffer by reading from the terminal.
     fn refill(&mut self) {
         if !self.key_buffer.is_empty() {
             return;
         }
 
-        let ch = self.inner.inner.0.read_byte();
-        // TODO: handle escape sequences
+        match self.inner.inner.0.read_byte() {
+            None => {}
+            Some(b'\x1b') => {
+                match self.inner.wait_byte() {
+                    None | Some(b'\x1b') => {
+                        // treat as ESC key
+                        let key_stroke = KeyStroke::from_usage(Usage::KEY_ESCAPE);
+                        let key = InputKey::new(key_stroke, '\x1b' as u16);
+                        NonZeroInputKey::from_input_key(key).map(|v| {
+                            let _ = self.key_buffer.push(v);
+                        });
+                    }
+                    Some(ch) => {
+                        // decode escape sequences
+                        let key_stroke = match ch {
+                            b'A' => Some(KeyStroke::from_usage(Usage::KEY_UP_ARROW)),
+                            b'B' => Some(KeyStroke::from_usage(Usage::KEY_DOWN_ARROW)),
+                            b'C' => Some(KeyStroke::from_usage(Usage::KEY_RIGHT_ARROW)),
+                            b'D' => Some(KeyStroke::from_usage(Usage::KEY_LEFT_ARROW)),
+                            b'O' => {
+                                // function keys F1-F4
+                                match self.inner.wait_byte() {
+                                    Some(b'P') => Some(KeyStroke::from_usage(Usage::KEY_F1)),
+                                    Some(b'Q') => Some(KeyStroke::from_usage(Usage::KEY_F2)),
+                                    Some(b'R') => Some(KeyStroke::from_usage(Usage::KEY_F3)),
+                                    Some(b'S') => Some(KeyStroke::from_usage(Usage::KEY_F4)),
+                                    _ => None,
+                                }
+                            }
+                            b'[' => {
+                                // extended escape sequences
+                                let mut seq_buf = [0u8; 16];
+                                let mut i = 0;
+                                while i < seq_buf.len() {
+                                    match self.inner.wait_byte() {
+                                        Some(b) => {
+                                            seq_buf[i] = b;
+                                            i += 1;
+                                            if (b'A'..=b'Z').contains(&b)
+                                                || (b'a'..=b'z').contains(&b)
+                                            {
+                                                break;
+                                            }
+                                        }
+                                        None => break,
+                                    }
+                                }
+                                if i == 0 {
+                                    None
+                                } else {
+                                    let last_byte = seq_buf[i - 1];
+                                    match last_byte {
+                                        b'A' => Some(KeyStroke::from_usage(Usage::KEY_UP_ARROW)),
+                                        b'B' => Some(KeyStroke::from_usage(Usage::KEY_DOWN_ARROW)),
+                                        b'C' => Some(KeyStroke::from_usage(Usage::KEY_RIGHT_ARROW)),
+                                        b'D' => Some(KeyStroke::from_usage(Usage::KEY_LEFT_ARROW)),
+                                        b'H' => Some(KeyStroke::from_usage(Usage::KEY_HOME)),
+                                        b'F' => Some(KeyStroke::from_usage(Usage::KEY_END)),
+                                        _ => None,
+                                    }
+                                }
+                            }
+                            _ => None,
+                        };
 
-        if let Some(ch) = ch {
-            let ch = ch as char;
-            let key_stroke = HidManager::estimate_key_stroke_from_char(ch).unwrap_or(KeyStroke {
-                usage: Usage::ERR_ROLL_OVER,
-                modifier: Modifier::empty(),
-            });
-            let key = InputKey::new(key_stroke, ch as u16);
-            NonZeroInputKey::from_input_key(key).map(|v| {
-                let _ = self.key_buffer.push(v);
-            });
+                        if let Some(key_stroke) = key_stroke {
+                            let key = InputKey::new(key_stroke, 0);
+                            NonZeroInputKey::from_input_key(key).map(|v| {
+                                let _ = self.key_buffer.push(v);
+                            });
+                        } else {
+                            self.push_char(ch as char);
+                        }
+                    }
+                }
+            }
+            Some(ch) => {
+                self.push_char(ch as char);
+            }
         }
+    }
+
+    /// Push a character into the key buffer.
+    fn push_char(&mut self, ch: char) {
+        let key_stroke = HidManager::estimate_key_stroke_from_char(ch)
+            .unwrap_or(KeyStroke::new(Usage::ERR_UNDEFINED, Modifier::empty()));
+        let key = InputKey::new(key_stroke, ch as u16);
+        NonZeroInputKey::from_input_key(key).map(|v| {
+            let _ = self.key_buffer.push(v);
+        });
     }
 }
 
@@ -340,5 +446,15 @@ impl SimpleTextInput for VT100<'_> {
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         self.is_ready().then(|| self.key_buffer.remove(0))
+    }
+}
+
+/// Inner Serial Device Wrapper
+struct InnerSerial<'a>(&'a mut dyn SerialIo);
+
+impl<'a> InnerSerial<'a> {
+    #[inline]
+    pub const fn new(inner: &'a mut dyn SerialIo) -> Self {
+        Self(inner)
     }
 }

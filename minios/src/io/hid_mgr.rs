@@ -28,6 +28,7 @@ impl HidManager {
         unsafe { (&mut *(&raw mut HID_MGR)).get_mut() }
     }
 
+    /// Sets the current keyboard layout to the japanese 109-key layout, because NEC PC-98 series and Fujitsu FM TOWNS series use this layout.
     #[inline]
     pub fn set_japanese_layout() {
         let shared = unsafe { Self::shared_mut() };
@@ -35,11 +36,14 @@ impl HidManager {
         shared.layout = Some(Box::new(layout));
     }
 
+    /// Sets the current keyboard layout to the specified layout.
+    #[inline]
     pub fn set_layout(layout: Box<dyn KeyboardLayout>) {
         let shared = unsafe { Self::shared_mut() };
         shared.layout = Some(layout);
     }
 
+    /// Returns the current keyboard layout.
     pub fn current_layout<'a>() -> &'a dyn KeyboardLayout {
         let shared = unsafe { Self::shared_mut() };
         match shared.layout.as_ref() {

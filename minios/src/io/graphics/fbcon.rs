@@ -113,7 +113,21 @@ impl core::fmt::Write for FbCon {
                         row = new_row;
                     }
 
-                    if let Some(glyph) = self.font.glyph_for_char(ch) {
+                    if ch == ' ' {
+                        // for space char, just fill the background color
+                        self.fb
+                            .fill_solid(
+                                &Rectangle::new(
+                                    Point::new(
+                                        (col as usize * self.font_width) as i32,
+                                        (row as usize * self.font_height) as i32,
+                                    ),
+                                    Size::new(self.font_width as u32, self.font_height as u32),
+                                ),
+                                self.bg_color,
+                            )
+                            .unwrap();
+                    } else if let Some(glyph) = self.font.glyph_for_char(ch) {
                         self.fb.draw_glyph(
                             Point::new(
                                 (col as usize * self.font_width) as i32,
