@@ -142,7 +142,7 @@ impl MemoryManager {
             + info.conventional_memory_size as usize
             + page_size_m1)
             & page_mask;
-        let first_page_size = Self::PAGE_SIZE as usize;
+        let first_page_size = Self::PAGE_SIZE as usize * 4;
         let first_page_len = first_page_size / core::mem::size_of::<ConventionalMemoryMapEntry>();
         let end = end - first_page_size;
         unsafe {
