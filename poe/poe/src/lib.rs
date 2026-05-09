@@ -119,6 +119,7 @@ pub fn main() {
                                 break;
                             }
                             MainMenuItem::GraphicsMode => {
+                                stdout.reset();
                                 let _ = System::conctl().set_graphics_mode_from_list(&[
                                     // (1920, 1080, PixelFormat::BGRX8888),
                                     // (1280, 720, PixelFormat::BGRX8888),

@@ -68,6 +68,15 @@ impl CgaText {
                 shared.is_vga = true;
                 shared.attr_mask = 0xff;
 
+                shared.adjust_mode();
+            }
+        }
+    }
+
+    /// Adjust CGA text mode settings for better compatibility with VGA hardware
+    fn adjust_mode(&self) {
+        if self.is_vga {
+            unsafe {
                 // line graphics enable, blinking disable
                 AttributeController::Mode.write(0b0000_0101);
                 // Select 9-dot font
@@ -76,12 +85,15 @@ impl CgaText {
         }
     }
 
-    /// Handover control to CGA text mode
+    /// Handover control from Graphics Mode to CGA text mode
     pub(super) fn handover() {
         unsafe {
             let mut regs = Vm86StackContext::default();
             regs.eax = 0x0003.into();
             INT10.call(&mut regs);
+
+            let shared = (&mut *(&raw mut CGA_TEXT)).get_mut();
+            shared.adjust_mode();
         }
     }
 

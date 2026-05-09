@@ -1,4 +1,4 @@
-.PHONY: love all default clean install iso full run test apps kernel update
+.PHONY: love full default clean install iso full run test apps kernel update
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -36,7 +36,7 @@ ISO_DEPS	= $(BIN) $(ISO_SRC) $(IPLS) $(IMG_SOURCES)
 
 default: $(BIN) $(TARGETS)
 
-all: test $(TARGET_ALL)
+full: test $(TARGET_ALL)
 
 install: test $(TARGET_FD)
 

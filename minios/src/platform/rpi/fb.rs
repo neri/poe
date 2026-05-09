@@ -237,6 +237,10 @@ impl GraphicsOutputDevice for Fb {
     }
 
     fn detach(&mut self) {
-        // todo: nothing to do
+        unsafe {
+            let p = self.current_mode.fb.as_usize() as *mut u8;
+            let size = self.current_mode.fb_size;
+            p.write_bytes(0, size);
+        }
     }
 }

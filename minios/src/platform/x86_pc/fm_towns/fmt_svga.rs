@@ -80,6 +80,13 @@ impl GraphicsOutputDevice for FmtSvga {
     }
 
     fn detach(&mut self) {
+        unsafe {
+            Cpu::zero_memory32(
+                self.current_mode.fb.as_usize() as *mut u32,
+                self.current_mode.fb_size / 4,
+            );
+        }
+
         FmtText::handover();
     }
 }

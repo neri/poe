@@ -38,7 +38,7 @@ impl<'a> VT100Out<'a> {
             inner: InnerSerial::new(inner),
             mode: SimpleTextOutputMode::new(),
             is_shifted_out: false,
-            charset: CharsetMode::AsciiBoxChar,
+            charset: CharsetMode::UTF8,
         }
     }
 

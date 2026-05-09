@@ -90,6 +90,13 @@ impl GraphicsOutputDevice for PegcBios {
     }
 
     fn detach(&mut self) {
+        unsafe {
+            let mut regs = Vm86StackContext::default();
+
+            regs.eax = 0x3008.into();
+            regs.ebx = 0x2100.into();
+            INT18.call(&mut regs);
+        }
         Pc98Text::handover();
     }
 }

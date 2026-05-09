@@ -1,4 +1,6 @@
-# 🧸 poe 🧸
+# 🧸 The POE project 🧸
+
+* An Experimental Project for Early OS Development.
 
 ## History
 
