@@ -55,6 +55,12 @@ run:
 		-device nec-usb-xhci,id=xhci \
 		-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick
 
+run64:
+	qemu-system-x86_64 -cpu IvyBridge -smp 4,cores=2,threads=2 -machine q35 -boot a -rtc base=localtime,clock=host -serial mon:stdio \
+		-fda $(TARGET_FD) \
+		-device nec-usb-xhci,id=xhci \
+		-drive if=none,id=stick,format=raw,file=fat:rw:$(BIN) -device usb-storage,bus=xhci.0,port=2,drive=stick
+
 run_cd:
 	qemu-system-i386 -machine q35 -boot d -rtc base=localtime,clock=host -serial mon:stdio \
 		-cdrom $(TARGET_ISO)

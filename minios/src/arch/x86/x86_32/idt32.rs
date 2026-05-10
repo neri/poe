@@ -108,7 +108,7 @@ impl Idt {
         }
     }
 
-    pub(super) unsafe fn init() {
+    pub(crate) unsafe fn init() {
         unsafe {
             let idt = Self::shared();
 

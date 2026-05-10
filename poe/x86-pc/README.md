@@ -48,7 +48,7 @@ $ make iso
 $ make all
 ```
 
-## final products
+## FINAL PRODUCTS
 
 ### bin/bootfd.img
 

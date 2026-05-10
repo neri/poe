@@ -110,3 +110,35 @@ impl PrimaryColor for IndexedColor {
     const PRIMARY_YELLOW: Self = Self::from_rgb(0xFF_FF_00);
     const PRIMARY_WHITE: Self = Self::from_rgb(0xFF_FF_FF);
 }
+
+/// A wrapper for IndexedColor that expands it to 4 bytes (for use in 32-bit framebuffer)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IndexedColorX4(pub u32);
+
+impl IndexedColorX4 {
+    /// Convert an IndexedColor to IndexedColorX4 by replicating the index across all 4 bytes
+    #[inline]
+    pub const fn from_indexed_color(color: IndexedColor) -> Self {
+        Self((color.0 as u32) * 0x01010101)
+    }
+
+    /// Convert back to IndexedColor by taking the least significant byte
+    #[inline]
+    pub const fn into_single(self) -> IndexedColor {
+        IndexedColor((self.0 & 0xFF) as u8)
+    }
+}
+
+impl From<IndexedColor> for IndexedColorX4 {
+    #[inline]
+    fn from(color: IndexedColor) -> Self {
+        Self::from_indexed_color(color)
+    }
+}
+
+impl From<IndexedColorX4> for IndexedColor {
+    #[inline]
+    fn from(color: IndexedColorX4) -> Self {
+        color.into_single()
+    }
+}

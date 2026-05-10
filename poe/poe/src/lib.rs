@@ -20,7 +20,7 @@ use minios::io::graphics::PixelFormat;
 pub use minios::prelude;
 
 #[allow(unused)]
-static SYSTEM_NAME: &str = "myResearchOS";
+static SYSTEM_NAME: &str = "myosExp";
 
 #[allow(unused)]
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
@@ -64,17 +64,12 @@ pub fn main() {
         ];
 
         let mut menu_window = TuiWindowBufferAscii::new(
-            Rect::new(Point::new(2, 2), Size::new(40, menu_items.len() as i32 + 6)),
+            Rect::new(Point::new(2, 2), Size::new(20, menu_items.len() as i32 + 4)),
             Inset::new(2, 2, 2, 2),
-            TuiAttribute(0x07),
+            TuiAttribute(0xf0),
         );
         menu_window.draw_box(menu_window.bounds(), menu_window.default_attr);
-        menu_window.draw_simple_title(" Menu ", None, TuiAttribute(0xf0));
-        menu_window.put_string_at(
-            Point::new(2, 2),
-            "Pick an option:",
-            menu_window.default_attr,
-        );
+        menu_window.draw_simple_title(" Option ", None, menu_window.default_attr);
 
         menu_window.draw_to(stdout);
 
@@ -89,7 +84,7 @@ pub fn main() {
                     } else {
                         menu_window.default_attr
                     };
-                    menu_window.put_string_at(Point::new(4, 4 + i as i32), item.as_str(), attr);
+                    menu_window.put_string_at(Point::new(2, 2 + i as i32), item.as_str(), attr);
                 }
                 menu_window.redraw_if_needed(stdout);
                 needs_redraw = false;
@@ -149,15 +144,6 @@ pub fn main() {
     {}
 
     if true {
-        // let _ = System::conctl().set_graphics_mode_from_list(&[
-        //     // (1920, 1080, PixelFormat::BGRX8888),
-        //     // (1280, 720, PixelFormat::BGRX8888),
-        //     // (800, 600, PixelFormat::BGRX8888),
-        //     // (800, 600, PixelFormat::Indexed8),
-        //     (640, 480, PixelFormat::Indexed8),
-        //     (320, 200, PixelFormat::Indexed8),
-        // ]);
-
         let stdout = System::stdout();
         stdout.reset();
         stdout.enable_cursor(false);
@@ -201,13 +187,6 @@ pub fn main() {
             let mut timer = Event::with_timeout(Duration::from_millis(100));
             timer.wait();
         }
-
-        // let window = TuiWindowBufferAscii::new(
-        //     Rect::new(Point::new(0, 0), scr_size),
-        //     Inset::new(2, 2, 2, 2),
-        //     TuiAttribute(0xb7),
-        // );
-        // window.draw_to(stdout);
 
         stdout.set_attribute(0xb7);
         stdout.clear_screen();

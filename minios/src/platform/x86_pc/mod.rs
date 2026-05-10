@@ -9,7 +9,6 @@ mod pit;
 use super::{Platform, PlatformTrait};
 use crate::arch::{cpu, gdt, idt, lomem, vm86};
 use crate::mem::{MemoryManager, MemoryType};
-use crate::platform::x86_pc::pit::Pit;
 use crate::*;
 use core::time::Duration;
 
@@ -76,18 +75,17 @@ impl PlatformTrait for Platform {
         }
     }
 
-    fn halt() -> ! {
-        // TODO:
-        Hal::cpu().halt();
-    }
+    // fn halt() -> ! {
+    //     Hal::cpu().halt();
+    // }
 
     #[inline]
     fn monotonic() -> u64 {
-        Pit::monotonic()
+        pit::Pit::monotonic()
     }
 
     #[inline]
     fn duration_to_ticks(duration: Duration) -> u64 {
-        Pit::duration_to_ticks(duration)
+        pit::Pit::duration_to_ticks(duration)
     }
 }

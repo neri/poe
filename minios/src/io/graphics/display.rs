@@ -2,6 +2,7 @@
 use super::PixelFormat;
 use super::color::IndexedColor;
 use crate::io::fonts::SimpleGlyph;
+use crate::io::graphics::color::IndexedColorX4;
 use crate::*;
 use core::convert::Infallible;
 use embedded_graphics::prelude::*;
@@ -40,25 +41,7 @@ impl FbDisplay8 {
         fg: IndexedColor,
         bg: IndexedColor,
     ) {
-        let mut iter = glyph.data.iter().copied();
-        let w8 = glyph.dims.0 / 8;
-        let w7 = glyph.dims.0 & 7;
-        for y in 0..glyph.dims.1 {
-            let mut origin = Point::new(origin.x, origin.y + y as i32);
-            for _ in 0..w8 {
-                let Some(pattern) = iter.next() else {
-                    return;
-                };
-                self.0.put_8pixels(origin, pattern, 8, bg, fg);
-                origin.x += 8;
-            }
-            if w7 > 0 {
-                let Some(pattern) = iter.next() else {
-                    return;
-                };
-                self.0.put_8pixels(origin, pattern, w7, bg, fg);
-            }
-        }
+        self.0.draw_glyph(origin, glyph, fg, bg);
     }
 }
 
@@ -148,6 +131,16 @@ pub trait FrameBuffer {
         }
     }
 
+    fn draw_glyph(
+        &mut self,
+        origin: Point,
+        glyph: SimpleGlyph,
+        fg: IndexedColor,
+        bg: IndexedColor,
+    ) {
+        self.draw_glyph_fallback(origin, glyph, fg, bg);
+    }
+
     /// Draw 8 pixels from a pattern.
     fn put_8pixels(
         &mut self,
@@ -189,6 +182,35 @@ pub trait FrameBuffer {
     ///
     /// This function does not check bounds.
     unsafe fn fill_fast(&mut self, origin: Point, length: u32, color: IndexedColor);
+
+    #[inline]
+    fn draw_glyph_fallback(
+        &mut self,
+        origin: Point,
+        glyph: SimpleGlyph,
+        fg: IndexedColor,
+        bg: IndexedColor,
+    ) {
+        let mut iter = glyph.data.iter().copied();
+        let w8 = glyph.dims.0 / 8;
+        let w7 = glyph.dims.0 & 7;
+        for y in 0..glyph.dims.1 {
+            let mut origin = Point::new(origin.x, origin.y + y as i32);
+            for _ in 0..w8 {
+                let Some(pattern) = iter.next() else {
+                    return;
+                };
+                self.put_8pixels(origin, pattern, 8, bg, fg);
+                origin.x += 8;
+            }
+            if w7 > 0 {
+                let Some(pattern) = iter.next() else {
+                    return;
+                };
+                self.put_8pixels(origin, pattern, w7, bg, fg);
+            }
+        }
+    }
 }
 
 struct Fb8 {
@@ -196,6 +218,265 @@ struct Fb8 {
     stride: usize,
     dims: Size,
 }
+
+const PATTERN_LUT_8B: [u64; 256] = [
+    0x0000000000000000,
+    0xFF00000000000000,
+    0x00FF000000000000,
+    0xFFFF000000000000,
+    0x0000FF0000000000,
+    0xFF00FF0000000000,
+    0x00FFFF0000000000,
+    0xFFFFFF0000000000,
+    0x000000FF00000000,
+    0xFF0000FF00000000,
+    0x00FF00FF00000000,
+    0xFFFF00FF00000000,
+    0x0000FFFF00000000,
+    0xFF00FFFF00000000,
+    0x00FFFFFF00000000,
+    0xFFFFFFFF00000000,
+    0x00000000FF000000,
+    0xFF000000FF000000,
+    0x00FF0000FF000000,
+    0xFFFF0000FF000000,
+    0x0000FF00FF000000,
+    0xFF00FF00FF000000,
+    0x00FFFF00FF000000,
+    0xFFFFFF00FF000000,
+    0x000000FFFF000000,
+    0xFF0000FFFF000000,
+    0x00FF00FFFF000000,
+    0xFFFF00FFFF000000,
+    0x0000FFFFFF000000,
+    0xFF00FFFFFF000000,
+    0x00FFFFFFFF000000,
+    0xFFFFFFFFFF000000,
+    0x0000000000FF0000,
+    0xFF00000000FF0000,
+    0x00FF000000FF0000,
+    0xFFFF000000FF0000,
+    0x0000FF0000FF0000,
+    0xFF00FF0000FF0000,
+    0x00FFFF0000FF0000,
+    0xFFFFFF0000FF0000,
+    0x000000FF00FF0000,
+    0xFF0000FF00FF0000,
+    0x00FF00FF00FF0000,
+    0xFFFF00FF00FF0000,
+    0x0000FFFF00FF0000,
+    0xFF00FFFF00FF0000,
+    0x00FFFFFF00FF0000,
+    0xFFFFFFFF00FF0000,
+    0x00000000FFFF0000,
+    0xFF000000FFFF0000,
+    0x00FF0000FFFF0000,
+    0xFFFF0000FFFF0000,
+    0x0000FF00FFFF0000,
+    0xFF00FF00FFFF0000,
+    0x00FFFF00FFFF0000,
+    0xFFFFFF00FFFF0000,
+    0x000000FFFFFF0000,
+    0xFF0000FFFFFF0000,
+    0x00FF00FFFFFF0000,
+    0xFFFF00FFFFFF0000,
+    0x0000FFFFFFFF0000,
+    0xFF00FFFFFFFF0000,
+    0x00FFFFFFFFFF0000,
+    0xFFFFFFFFFFFF0000,
+    0x000000000000FF00,
+    0xFF0000000000FF00,
+    0x00FF00000000FF00,
+    0xFFFF00000000FF00,
+    0x0000FF000000FF00,
+    0xFF00FF000000FF00,
+    0x00FFFF000000FF00,
+    0xFFFFFF000000FF00,
+    0x000000FF0000FF00,
+    0xFF0000FF0000FF00,
+    0x00FF00FF0000FF00,
+    0xFFFF00FF0000FF00,
+    0x0000FFFF0000FF00,
+    0xFF00FFFF0000FF00,
+    0x00FFFFFF0000FF00,
+    0xFFFFFFFF0000FF00,
+    0x00000000FF00FF00,
+    0xFF000000FF00FF00,
+    0x00FF0000FF00FF00,
+    0xFFFF0000FF00FF00,
+    0x0000FF00FF00FF00,
+    0xFF00FF00FF00FF00,
+    0x00FFFF00FF00FF00,
+    0xFFFFFF00FF00FF00,
+    0x000000FFFF00FF00,
+    0xFF0000FFFF00FF00,
+    0x00FF00FFFF00FF00,
+    0xFFFF00FFFF00FF00,
+    0x0000FFFFFF00FF00,
+    0xFF00FFFFFF00FF00,
+    0x00FFFFFFFF00FF00,
+    0xFFFFFFFFFF00FF00,
+    0x0000000000FFFF00,
+    0xFF00000000FFFF00,
+    0x00FF000000FFFF00,
+    0xFFFF000000FFFF00,
+    0x0000FF0000FFFF00,
+    0xFF00FF0000FFFF00,
+    0x00FFFF0000FFFF00,
+    0xFFFFFF0000FFFF00,
+    0x000000FF00FFFF00,
+    0xFF0000FF00FFFF00,
+    0x00FF00FF00FFFF00,
+    0xFFFF00FF00FFFF00,
+    0x0000FFFF00FFFF00,
+    0xFF00FFFF00FFFF00,
+    0x00FFFFFF00FFFF00,
+    0xFFFFFFFF00FFFF00,
+    0x00000000FFFFFF00,
+    0xFF000000FFFFFF00,
+    0x00FF0000FFFFFF00,
+    0xFFFF0000FFFFFF00,
+    0x0000FF00FFFFFF00,
+    0xFF00FF00FFFFFF00,
+    0x00FFFF00FFFFFF00,
+    0xFFFFFF00FFFFFF00,
+    0x000000FFFFFFFF00,
+    0xFF0000FFFFFFFF00,
+    0x00FF00FFFFFFFF00,
+    0xFFFF00FFFFFFFF00,
+    0x0000FFFFFFFFFF00,
+    0xFF00FFFFFFFFFF00,
+    0x00FFFFFFFFFFFF00,
+    0xFFFFFFFFFFFFFF00,
+    0x00000000000000FF,
+    0xFF000000000000FF,
+    0x00FF0000000000FF,
+    0xFFFF0000000000FF,
+    0x0000FF00000000FF,
+    0xFF00FF00000000FF,
+    0x00FFFF00000000FF,
+    0xFFFFFF00000000FF,
+    0x000000FF000000FF,
+    0xFF0000FF000000FF,
+    0x00FF00FF000000FF,
+    0xFFFF00FF000000FF,
+    0x0000FFFF000000FF,
+    0xFF00FFFF000000FF,
+    0x00FFFFFF000000FF,
+    0xFFFFFFFF000000FF,
+    0x00000000FF0000FF,
+    0xFF000000FF0000FF,
+    0x00FF0000FF0000FF,
+    0xFFFF0000FF0000FF,
+    0x0000FF00FF0000FF,
+    0xFF00FF00FF0000FF,
+    0x00FFFF00FF0000FF,
+    0xFFFFFF00FF0000FF,
+    0x000000FFFF0000FF,
+    0xFF0000FFFF0000FF,
+    0x00FF00FFFF0000FF,
+    0xFFFF00FFFF0000FF,
+    0x0000FFFFFF0000FF,
+    0xFF00FFFFFF0000FF,
+    0x00FFFFFFFF0000FF,
+    0xFFFFFFFFFF0000FF,
+    0x0000000000FF00FF,
+    0xFF00000000FF00FF,
+    0x00FF000000FF00FF,
+    0xFFFF000000FF00FF,
+    0x0000FF0000FF00FF,
+    0xFF00FF0000FF00FF,
+    0x00FFFF0000FF00FF,
+    0xFFFFFF0000FF00FF,
+    0x000000FF00FF00FF,
+    0xFF0000FF00FF00FF,
+    0x00FF00FF00FF00FF,
+    0xFFFF00FF00FF00FF,
+    0x0000FFFF00FF00FF,
+    0xFF00FFFF00FF00FF,
+    0x00FFFFFF00FF00FF,
+    0xFFFFFFFF00FF00FF,
+    0x00000000FFFF00FF,
+    0xFF000000FFFF00FF,
+    0x00FF0000FFFF00FF,
+    0xFFFF0000FFFF00FF,
+    0x0000FF00FFFF00FF,
+    0xFF00FF00FFFF00FF,
+    0x00FFFF00FFFF00FF,
+    0xFFFFFF00FFFF00FF,
+    0x000000FFFFFF00FF,
+    0xFF0000FFFFFF00FF,
+    0x00FF00FFFFFF00FF,
+    0xFFFF00FFFFFF00FF,
+    0x0000FFFFFFFF00FF,
+    0xFF00FFFFFFFF00FF,
+    0x00FFFFFFFFFF00FF,
+    0xFFFFFFFFFFFF00FF,
+    0x000000000000FFFF,
+    0xFF0000000000FFFF,
+    0x00FF00000000FFFF,
+    0xFFFF00000000FFFF,
+    0x0000FF000000FFFF,
+    0xFF00FF000000FFFF,
+    0x00FFFF000000FFFF,
+    0xFFFFFF000000FFFF,
+    0x000000FF0000FFFF,
+    0xFF0000FF0000FFFF,
+    0x00FF00FF0000FFFF,
+    0xFFFF00FF0000FFFF,
+    0x0000FFFF0000FFFF,
+    0xFF00FFFF0000FFFF,
+    0x00FFFFFF0000FFFF,
+    0xFFFFFFFF0000FFFF,
+    0x00000000FF00FFFF,
+    0xFF000000FF00FFFF,
+    0x00FF0000FF00FFFF,
+    0xFFFF0000FF00FFFF,
+    0x0000FF00FF00FFFF,
+    0xFF00FF00FF00FFFF,
+    0x00FFFF00FF00FFFF,
+    0xFFFFFF00FF00FFFF,
+    0x000000FFFF00FFFF,
+    0xFF0000FFFF00FFFF,
+    0x00FF00FFFF00FFFF,
+    0xFFFF00FFFF00FFFF,
+    0x0000FFFFFF00FFFF,
+    0xFF00FFFFFF00FFFF,
+    0x00FFFFFFFF00FFFF,
+    0xFFFFFFFFFF00FFFF,
+    0x0000000000FFFFFF,
+    0xFF00000000FFFFFF,
+    0x00FF000000FFFFFF,
+    0xFFFF000000FFFFFF,
+    0x0000FF0000FFFFFF,
+    0xFF00FF0000FFFFFF,
+    0x00FFFF0000FFFFFF,
+    0xFFFFFF0000FFFFFF,
+    0x000000FF00FFFFFF,
+    0xFF0000FF00FFFFFF,
+    0x00FF00FF00FFFFFF,
+    0xFFFF00FF00FFFFFF,
+    0x0000FFFF00FFFFFF,
+    0xFF00FFFF00FFFFFF,
+    0x00FFFFFF00FFFFFF,
+    0xFFFFFFFF00FFFFFF,
+    0x00000000FFFFFFFF,
+    0xFF000000FFFFFFFF,
+    0x00FF0000FFFFFFFF,
+    0xFFFF0000FFFFFFFF,
+    0x0000FF00FFFFFFFF,
+    0xFF00FF00FFFFFFFF,
+    0x00FFFF00FFFFFFFF,
+    0xFFFFFF00FFFFFFFF,
+    0x000000FFFFFFFFFF,
+    0xFF0000FFFFFFFFFF,
+    0x00FF00FFFFFFFFFF,
+    0xFFFF00FFFFFFFFFF,
+    0x0000FFFFFFFFFFFF,
+    0xFF00FFFFFFFFFFFF,
+    0x00FFFFFFFFFFFFFF,
+    0xFFFFFFFFFFFFFFFF,
+];
 
 impl Fb8 {
     #[inline]
@@ -241,6 +522,41 @@ impl FrameBuffer for Fb8 {
         let pos = y * self.stride + x;
         unsafe {
             self.fb.add(pos).write_volatile(color.0);
+        }
+    }
+
+    fn draw_glyph(
+        &mut self,
+        origin: Point,
+        glyph: SimpleGlyph,
+        fg: IndexedColor,
+        bg: IndexedColor,
+    ) {
+        if glyph.dims.0 == 8 && (origin.x & 3) == 0 {
+            // Fast path for 8-pixel wide glyphs with 4-byte aligned x coordinate
+            let x = origin.x as usize;
+            let y = origin.y as usize;
+            if x > self.dims.width as usize - glyph.dims.0 as usize
+                || y > self.dims.height as usize - glyph.dims.1 as usize
+            {
+                return;
+            }
+
+            let fg = (IndexedColorX4::from_indexed_color(fg).0 as u64) * 0x1_0000_0001;
+            let bg = (IndexedColorX4::from_indexed_color(bg).0 as u64) * 0x1_0000_0001;
+            let mut pos = unsafe { self.fb.add(y * self.stride + x) };
+
+            for pettern in glyph.data.iter().copied() {
+                let mask = PATTERN_LUT_8B[pettern as usize];
+                let data = (fg & mask) | (bg & !mask);
+                unsafe {
+                    (pos as *mut u32).write_volatile(data as u32);
+                    (pos.add(4) as *mut u32).write_volatile((data >> 32) as u32);
+                    pos = pos.add(self.stride);
+                }
+            }
+        } else {
+            self.draw_glyph_fallback(origin, glyph, fg, bg);
         }
     }
 

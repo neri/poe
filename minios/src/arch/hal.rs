@@ -27,7 +27,7 @@ pub trait HalCpu {
 
     /// Executes a `wait-for-interrupt` instruction, putting the CPU into a low-power state until an interrupt occurs.
     ///
-    /// NOTE: This function may be same as `no_op` on some platforms
+    /// NOTE: This function may be same as `no_op` on some platforms.
     fn wait_for_interrupt(&self);
 
     /// Executes an invalid instruction, causing the CPU to raise an exception.

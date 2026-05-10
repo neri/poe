@@ -1,12 +1,10 @@
 //! Simple Virtual 8086 Mode Manager
 
-use super::{
+use super::super::{
     cpu::Cpu,
-    gdt::Gdt,
-    idt::Idt,
     lomem::{LoMemoryManager, ManagedLowMemory},
-    setjmp::JmpBuf,
 };
+use super::{gdt::Gdt, idt::Idt, setjmp::JmpBuf};
 use crate::*;
 use core::{
     cell::UnsafeCell,

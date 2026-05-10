@@ -3,9 +3,9 @@
 pub mod hal;
 pub mod spinlock;
 
-#[cfg(target_arch = "x86")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;
-#[cfg(target_arch = "x86")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[allow(unused_imports)]
 pub use x86::*;
 

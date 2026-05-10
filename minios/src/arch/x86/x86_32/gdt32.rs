@@ -54,7 +54,7 @@ impl Gdt {
         unsafe { (&mut *(&raw mut GDT)).get_mut() }
     }
 
-    pub(super) unsafe fn init() {
+    pub(crate) unsafe fn init() {
         unsafe {
             let gdt = Self::shared();
 
