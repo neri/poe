@@ -1,10 +1,12 @@
 //! setjmp/longjmp
 
 use alloc::rc::Rc;
-use core::arch::naked_asm;
-use core::marker::PhantomData;
-use core::num::NonZero;
-use core::sync::atomic::{Ordering, compiler_fence};
+use core::{
+    arch::naked_asm,
+    marker::PhantomData,
+    num::NonZero,
+    sync::atomic::{Ordering, compiler_fence},
+};
 
 #[allow(unused)]
 #[derive(Default)]

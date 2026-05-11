@@ -75,8 +75,9 @@ impl GraphicsOutputDevice for PegcBios {
             regs.eax = 0x4000.into();
             INT18.call(&mut regs);
 
-            (0x000e_0100 as *mut u8).write_volatile(0);
-            (0x000e_0102 as *mut u8).write_volatile(1);
+            (0x000e_0100 as *mut u8).write_volatile(0x00);
+            // (0x000e_0102 as *mut u8).write_volatile(0x01);
+            (0x000e_0102 as *mut u16).write_volatile(0x0001);
 
             for (i, &color) in IndexedColor::COLOR_PALETTE.iter().enumerate() {
                 LoIoPortWB::<0xa8>::new().write(i as u8);

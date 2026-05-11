@@ -7,7 +7,7 @@
 * risc-v
   * rv32imac virt machine
   * rv64gc virt machine
-* x86
+* x86-32
   * IBM PC Compatible
   * NEC PC-98 Series
   * Fujitsu FM TOWNS Series

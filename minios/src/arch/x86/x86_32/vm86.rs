@@ -1,10 +1,12 @@
 //! Simple Virtual 8086 Mode Manager
 
-use super::super::{
+use crate::arch::{
     cpu::Cpu,
+    gdt::Gdt,
+    idt::Idt,
     lomem::{LoMemoryManager, ManagedLowMemory},
+    setjmp::JmpBuf,
 };
-use super::{gdt::Gdt, idt::Idt, setjmp::JmpBuf};
 use crate::*;
 use core::{
     cell::UnsafeCell,
@@ -20,10 +22,16 @@ static mut VMM: UnsafeCell<VM86> = UnsafeCell::new(VM86::new());
 
 /// Simple Virtual 8086 Mode Manager
 pub struct VM86 {
+    /// Linear Address of the instruction to be executed in virtual 8086 mode, which is used for intercepting the execution of the instruction and returning to the caller of `invoke`.
     vmbp: Linear32,
+    /// A stack for virtual 8086 mode.
     vm_stack: Option<ManagedLowMemory>,
+    /// A buffer for `setjmp`/`longjmp` to return from virtual 8086 mode to the caller of `invoke`.
     jmp_buf: JmpBuf,
+    /// A pointer to the stack context of the caller of `invoke`
     context: *mut Vm86StackContext,
+    /// A work area
+    work_area: Option<ManagedLowMemory>,
 }
 
 impl VM86 {
@@ -37,6 +45,7 @@ impl VM86 {
             vm_stack: None,
             jmp_buf: JmpBuf::zeroed(),
             context: null_mut(),
+            work_area: None,
         }
     }
 
@@ -59,8 +68,11 @@ impl VM86 {
             }
 
             if vmbp == Linear32::ZERO {
-                // TODO: other methods
-                panic!("VMBP not found");
+                // If ARPL is not found, allocate a work area and write ARPL instruction there for now.
+                let work_area = LoMemoryManager::alloc_page();
+                work_area.as_slice()[0] = 0x63; // ARPL AX, AX
+                vmbp = work_area.base();
+                shared.work_area = Some(work_area);
             }
             shared.vmbp = vmbp;
 

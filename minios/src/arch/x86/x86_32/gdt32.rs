@@ -1,15 +1,14 @@
 //! Global Descriptor Table
 
-use crate::arch::bits::BitArray;
-use crate::arch::cpu::SetDescriptorError;
-use core::arch::{asm, naked_asm};
-use core::cell::UnsafeCell;
-use core::mem::offset_of;
-use core::ptr;
-use core::sync::atomic::{Ordering, compiler_fence};
-use x86::gpr::Gpr32;
-use x86::prot::*;
-use x86::real::Offset16;
+use crate::arch::{bits::BitArray, cpu::SetDescriptorError};
+use core::{
+    arch::{asm, naked_asm},
+    cell::UnsafeCell,
+    mem::offset_of,
+    ptr,
+    sync::atomic::{Ordering, compiler_fence},
+};
+use x86::{gpr::Gpr32, prot::*, real::Offset16};
 
 pub const SYSTEM_TSS: Selector = Selector::new(1, RPL0);
 pub const KERNEL_CSEL: Selector = Selector::new(2, RPL0);

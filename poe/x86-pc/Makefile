@@ -19,9 +19,9 @@ TARGET_ISO	= $(BIN)/bootcd.iso
 TARGET_ALL	= $(TARGET_FD) $(TARGET_FD2) $(TARGET_FD3) $(TARGET_ISO)
 
 FDIPL_BIN	= $(BIN)/fdipl.bin
-CDIPL_BIN	= $(BIN)/cdipl.bin
-FMCDIPL_BIN	= $(BIN)/fmcdipl.bin
-IPLS		= $(FDIPL_BIN) $(CDIPL_BIN) $(FMCDIPL_BIN)
+ETBOOT_BIN	= $(BIN)/etboot.bin
+CDBOOT_BIN	= $(BIN)/cdboot.bin
+IPLS		= $(FDIPL_BIN) $(ETBOOT_BIN) $(CDBOOT_BIN)
 SSBL_BIN	= $(BIN)/ssbl.bin
 
 POE_SRC		= ./poe-x86
@@ -86,10 +86,10 @@ $(ISO_SRC):
 $(FDIPL_BIN): ssbl/fdipl.asm
 	$(ASM2BIN) $< -o $@ -dSYSTEM_NAME="\"OSLDR   SYS\""
 
-$(CDIPL_BIN): ssbl/cdipl.asm
+$(ETBOOT_BIN): ssbl/etboot.asm
 	$(ASM2BIN) $< -o $@ -dSYSTEM_NAME="\"OSLDR.SYS\""
 
-$(FMCDIPL_BIN): ssbl/fmcdipl.asm
+$(CDBOOT_BIN): ssbl/cdboot.asm
 	$(ASM2BIN) $< -o $@ -dSYSTEM_NAME="\"OSLDR.SYS\""
 
 $(SSBL_BIN): ssbl/ssbl.asm
@@ -114,10 +114,10 @@ $(TARGET_FD3): $(FD_DEPS)
 	$(MKFDFS) -bs $(FDIPL_BIN) -f 320 -l "poe 320" $(TARGET_FD3) $(IMG_SOURCES)
 
 $(TARGET_ISO): $(ISO_DEPS)
-	cp -r $(CDIPL_BIN) $(IMG_SOURCES) $(ISO_SRC)
+	cp -r $(ETBOOT_BIN) $(IMG_SOURCES) $(ISO_SRC)
 	mkisofs -iso-level 2 -V "MEG-OS" \
 		-hide-joliet boot.catalog -hide-joliet-trans-tbl -J \
 		-r -T \
 		-hide boot.catalog -no-emul-boot -b cdipl.bin \
 		-o $(TARGET_ISO) $(ISO_SRC)
-	dd conv=notrunc if=$(FMCDIPL_BIN) of=$(TARGET_ISO)
+	dd conv=notrunc if=$(CDBOOT_BIN) of=$(TARGET_ISO)

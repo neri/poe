@@ -14,7 +14,6 @@ pub use core::arch::x86::{__cpuid as cpuid, __cpuid_count as cpuid_count};
 #[cfg(target_arch = "x86_64")]
 pub use core::arch::x86_64::{__cpuid as cpuid, __cpuid_count as cpuid_count};
 
-#[allow(dead_code)]
 static mut SHARED_CPU: UnsafeCell<SharedCpu> = UnsafeCell::new(SharedCpu::new());
 
 /// Shared CPU information
@@ -114,7 +113,10 @@ impl Cpu {
     pub fn isa_level() -> IsaLevel {
         unsafe { Cpu::shared().isa_level }
     }
+}
 
+#[cfg(target_arch = "x86")]
+impl Cpu {
     /// Jump to user mode with specified stack context
     #[inline(always)]
     pub unsafe fn jump_to_user_mode(regs: &X86StackContextView<UserMode>) -> ! {
@@ -227,7 +229,7 @@ impl SharedCpu {
 
 impl IsaLevel {
     /// Identify the CPU's supported instruction set architecture (ISA) level.
-    pub fn identify() -> IsaLevel {
+    pub unsafe fn identify() -> IsaLevel {
         unsafe {
             if cfg!(target_arch = "x86") {
                 // check 486 or later by testing if AC flag can be set in EFLAGS
