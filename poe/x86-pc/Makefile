@@ -116,8 +116,9 @@ $(TARGET_FD3): $(FD_DEPS)
 $(TARGET_ISO): $(ISO_DEPS)
 	cp -r $(ETBOOT_BIN) $(IMG_SOURCES) $(ISO_SRC)
 	mkisofs -iso-level 2 -V "MEG-OS" \
-		-hide-joliet boot.catalog -hide-joliet-trans-tbl -J \
-		-r -T \
-		-hide boot.catalog -no-emul-boot -b cdipl.bin \
+		-hide-joliet-trans-tbl -J -r -T \
+		-no-emul-boot -b etboot.bin \
 		-o $(TARGET_ISO) $(ISO_SRC)
 	dd conv=notrunc if=$(CDBOOT_BIN) of=$(TARGET_ISO)
+
+# 		-hide boot.catalog -hide-joliet boot.catalog \
