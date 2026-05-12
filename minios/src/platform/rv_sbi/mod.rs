@@ -21,7 +21,6 @@ impl PlatformTrait for Platform {
             sbi_console::SbiConsole::init();
             System::set_stdin(sbi_console::SbiConsole::shared());
             System::set_stdout(sbi_console::SbiConsole::shared());
-            System::set_stderr(sbi_console::SbiConsole::shared());
 
             CurrentConfig::shared().is_system_reset_supported =
                 sbi::base::probe_extension(Eid::SYSTEM_RESET).unwrap_or(false);

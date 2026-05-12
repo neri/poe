@@ -43,10 +43,6 @@ impl Pc98Text {
             let stdout = (&mut *(&raw mut PC98_TEXT)).get_mut();
             stdout.reset();
             System::set_stdout(stdout);
-
-            // UNSAFE: aliasing mutable static
-            let stderr = (&mut *(&raw mut PC98_TEXT)).get_mut();
-            System::set_stderr(stderr);
         }
     }
 

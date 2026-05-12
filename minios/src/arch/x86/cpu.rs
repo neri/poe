@@ -1,11 +1,13 @@
 //! i386 cpu core logic
 
+#[cfg(target_arch = "x86")]
 use super::vm86::{UserMode, X86StackContextView};
 use core::arch::{asm, naked_asm};
 use core::cell::UnsafeCell;
 use core::mem::size_of;
 use core::sync::atomic::{AtomicBool, Ordering, compiler_fence};
 use x86::cpuid::{F01C, Feature};
+#[cfg(target_arch = "x86")]
 use x86::gpr::Eflags;
 use x86::prot::*;
 
@@ -98,8 +100,11 @@ impl Cpu {
                 }
             }
 
-            super::gdt32::Gdt::init();
-            super::idt::Idt::init();
+            #[cfg(target_arch = "x86")]
+            {
+                super::gdt32::Gdt::init();
+                super::idt::Idt::init();
+            }
         }
     }
 
@@ -230,8 +235,10 @@ impl SharedCpu {
 impl IsaLevel {
     /// Identify the CPU's supported instruction set architecture (ISA) level.
     pub unsafe fn identify() -> IsaLevel {
+        #[allow(unused_unsafe)]
         unsafe {
-            if cfg!(target_arch = "x86") {
+            #[cfg(target_arch = "x86")]
+            {
                 // check 486 or later by testing if AC flag can be set in EFLAGS
                 let result: usize;
                 asm!(

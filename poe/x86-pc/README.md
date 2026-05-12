@@ -45,7 +45,7 @@ $ make iso
 ### make all targets
 
 ```
-$ make all
+$ make full
 ```
 
 ## FINAL PRODUCTS

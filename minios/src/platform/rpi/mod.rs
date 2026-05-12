@@ -56,7 +56,6 @@ impl PlatformTrait for Platform {
             uart0::Uart0::init().unwrap();
             System::set_stdin(uart0::Uart0::shared());
             System::set_stdout(uart0::Uart0::shared());
-            System::set_stderr(uart0::Uart0::shared());
 
             trap::init();
 

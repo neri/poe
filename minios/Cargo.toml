@@ -12,6 +12,7 @@ pc = []
 rpi = ["device_tree"]
 # sbi = ["device_tree"]
 sbi = []
+# uefi = []
 
 [dependencies]
 paste = { version = "1.0" }
@@ -32,9 +33,13 @@ edid = { path = "../lib/edid/" }
 simple_font = { path = "../lib/simple_font/" }
 tui = { path = "../lib/tui/" }
 
+uefi = { version="0.37", features = ['global_allocator'], optional = true }
+# uefi-raw = { version="0.14" }
+
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
 riscv = { path = "../lib/riscv/" }
 sbi = { path = "../lib/sbi/" }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 x86 = { path = "../lib/x86/" }
+

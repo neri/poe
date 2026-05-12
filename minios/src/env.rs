@@ -1,10 +1,12 @@
 //! MiniOS Execution Environment
 
-use crate::io::fonts;
-use crate::io::graphics::display::FbDisplay8;
-use crate::io::graphics::fbcon::FbCon;
-use crate::io::graphics::{GraphicsOutputDevice, PixelFormat};
-use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
+use crate::io::{
+    fonts,
+    graphics::display::FbDisplay8,
+    graphics::fbcon::FbCon,
+    graphics::{GraphicsOutputDevice, PixelFormat},
+    tty::{SimpleTextInput, SimpleTextOutput},
+};
 use crate::mem::MemoryManager;
 use crate::null::NullTty;
 use crate::platform::*;
@@ -30,7 +32,6 @@ pub struct System {
 
     stdin: NonNull<dyn SimpleTextInput>,
     stdout: NonNull<dyn SimpleTextOutput>,
-    stderr: NonNull<dyn SimpleTextOutput>,
     console_controller: ConsoleController,
 
     device_tree: Option<fdt::DeviceTree<'static>>,
@@ -55,7 +56,6 @@ impl System {
                 config_table: Vec::new(),
                 stdin: NonNull::new(&raw mut NULL).unwrap(),
                 stdout: NonNull::new(&raw mut NULL).unwrap(),
-                stderr: NonNull::new(&raw mut NULL).unwrap(),
                 console_controller: ConsoleController::new(),
                 device_tree: None,
             };
@@ -79,14 +79,12 @@ impl System {
                     platform: Platform::DeviceTree,
                     bios_boot_drive: BiosDriveSpec(0),
                     x86_real_memory_size: 0,
-                    reserved_memory_size: 0,
                     start_conventional_memory: 0,
                     conventional_memory_size: 0,
                 },
                 config_table: Vec::new(),
                 stdin: NonNull::new(&raw mut NULL).unwrap(),
                 stdout: NonNull::new(&raw mut NULL).unwrap(),
-                stderr: NonNull::new(&raw mut NULL).unwrap(),
                 console_controller: ConsoleController::new(),
                 device_tree: None,
             };
@@ -102,6 +100,33 @@ impl System {
             if let Some(dt) = NonNullPhysicalAddress::from_ptr(dt.as_ptr()) {
                 System::add_config_table_entry(fdt::DTB_TABLE_GUID, dt);
             }
+
+            Platform::init(arg);
+        }
+        Self::_init(main)
+    }
+
+    #[cfg(feature = "uefi")]
+    #[inline]
+    pub unsafe fn init_uefi(arg: usize, main: fn() -> ()) -> ! {
+        unsafe {
+            let shared = System {
+                info: SsblInfo {
+                    platform: Platform::UefiNative,
+                    bios_boot_drive: BiosDriveSpec(0),
+                    x86_real_memory_size: 0,
+                    start_conventional_memory: 0,
+                    conventional_memory_size: 0,
+                },
+                config_table: Vec::new(),
+                stdin: NonNull::new(&raw mut NULL).unwrap(),
+                stdout: NonNull::new(&raw mut NULL).unwrap(),
+                console_controller: ConsoleController::new(),
+                device_tree: None,
+            };
+            (&mut *(&raw mut SYSTEM)).write(shared);
+
+            // MemoryManager::init();
 
             Platform::init(arg);
         }
@@ -182,15 +207,6 @@ impl System {
         unsafe {
             let shared = Self::shared_mut();
             shared.stdout.as_mut()
-        }
-    }
-
-    /// Get current stderr
-    #[inline]
-    pub fn stderr<'a>() -> &'a mut dyn SimpleTextOutput {
-        unsafe {
-            let shared = Self::shared_mut();
-            shared.stderr.as_mut()
         }
     }
 
@@ -277,22 +293,10 @@ impl System {
         }
     }
 
-    #[inline]
-    pub unsafe fn set_stderr(stderr: &'static mut dyn SimpleTextOutput) {
-        unsafe {
-            let shared = Self::shared_mut();
-            shared.stderr = NonNull::new_unchecked(stderr);
-        }
-    }
-
     /// Helper function to convert a duration to timer ticks.
     pub fn duration_to_ticks_helper32(duration: Duration, nanos_per_tick: u32) -> u64 {
         let nanos = duration.subsec_nanos();
-        let ticks_nanos = if nanos == 0 {
-            0
-        } else {
-            (nanos / nanos_per_tick).max(1)
-        };
+        let ticks_nanos = ((nanos + nanos_per_tick - 1) / nanos_per_tick).max(1);
 
         let ticks_per_sec = (1_000_000_000 / nanos_per_tick) as u64;
         let secs = duration.as_secs();
@@ -309,9 +313,10 @@ impl System {
 /// Panic handler
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    let stderr = System::stderr();
-    stderr.set_attribute(0xcf);
-    let _ = writeln!(stderr, "{}", info);
+    let stdout = System::stdout();
+    stdout.set_attribute(0xcf);
+    println!("{}", info);
+
     loop {
         Hal::cpu().halt();
     }
@@ -321,11 +326,15 @@ fn panic(info: &PanicInfo) -> ! {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct SsblInfo {
+    /// Platform type
     pub platform: Platform,
+    /// BIOS boot drive secifier (for x86 PC platforms)
     pub bios_boot_drive: BiosDriveSpec,
+    /// Real memory size in paragraphs (for x86 PC platforms)
     pub x86_real_memory_size: u16,
-    pub reserved_memory_size: u32,
+    /// Start address of conventional memory
     pub start_conventional_memory: u32,
+    /// Size of conventional memory in bytes
     pub conventional_memory_size: u32,
 }
 

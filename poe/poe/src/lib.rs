@@ -117,8 +117,8 @@ pub fn main() {
                                 stdout.reset();
                                 let _ = System::conctl().set_graphics_mode_from_list(&[
                                     // (1920, 1080, PixelFormat::BGRX8888),
-                                    // (1280, 720, PixelFormat::BGRX8888),
-                                    // (800, 600, PixelFormat::BGRX8888),
+                                    (1280, 720, PixelFormat::BGRX8888),
+                                    (800, 600, PixelFormat::BGRX8888),
                                     // (800, 600, PixelFormat::Indexed8),
                                     (640, 480, PixelFormat::Indexed8),
                                     (320, 200, PixelFormat::Indexed8),

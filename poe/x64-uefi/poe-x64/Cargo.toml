@@ -1,21 +1,16 @@
 [package]
 edition = "2024"
-name = "poe"
+name = "poe-x64"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = []
-device_tree = ["fdt"]
-pc = []
-rpi = ["device_tree"]
-sbi = []
-uefi = []
-
 [dependencies]
-minios = { path = "../../minios/" }
-fdt = { path = "../../lib/fdt/", features = ["guid"], optional = true }
+poe = { path = "../../poe/", features = ["uefi"] }
+minios = { path = "../../../minios/", features = ["uefi"] }
+
+uefi = { version="0.37", features = ['global_allocator'] }
+uefi-raw = { version="0.14" }
 
 [profile.release]
 lto = true

@@ -1,4 +1,6 @@
+#[cfg(not(feature = "uefi"))]
 pub mod global_alloc;
+
 pub mod mmio;
 
 mod mm;

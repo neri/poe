@@ -41,8 +41,6 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             uart::Uart16550::init((0x400 as *const u16).read_volatile());
             let stdout = uart::Uart16550::shared();
             System::set_stdout(stdout);
-            let stderr = uart::Uart16550::shared();
-            System::set_stderr(stderr);
             let stdin = uart::Uart16550::shared();
             System::set_stdin(stdin);
         } else {

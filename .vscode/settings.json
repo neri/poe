@@ -3,6 +3,7 @@
         "./poe/arm64-rpi/poe-rpi/Cargo.toml",
         "./poe/rv32-virt/poe-rv32/Cargo.toml",
         "./poe/rv64-virt/poe-rv64/Cargo.toml",
+        "./poe/x64-uefi/poe-x64/Cargo.toml",
         "./poe/x86-pc/poe-x86/Cargo.toml",
         "./tools/mkfdfs/Cargo.toml",
     ]

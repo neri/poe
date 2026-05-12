@@ -49,10 +49,6 @@ impl CgaText {
 
             shared.reset();
             System::set_stdout(shared);
-
-            // UNSAFE: aliasing mutable static
-            let stderr = (&mut *(&raw mut CGA_TEXT)).get_mut();
-            System::set_stderr(stderr);
         }
     }
 

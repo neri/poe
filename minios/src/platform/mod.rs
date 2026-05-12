@@ -15,6 +15,11 @@ pub mod rv_sbi;
 #[cfg(all(feature = "sbi"))]
 pub use rv_sbi as current;
 
+#[cfg(feature = "uefi")]
+pub mod uefi;
+#[cfg(feature = "uefi")]
+pub use uefi as current;
+
 use crate::*;
 use core::fmt;
 use core::time::Duration;

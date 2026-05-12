@@ -93,10 +93,6 @@ impl FmtText {
             Self::hw_set_mode();
             stdout.reset();
             System::set_stdout(stdout);
-
-            // UNSAFE: aliasing mutable static
-            let stderr = (&mut *(&raw mut FMT_TEXT)).get_mut();
-            System::set_stderr(stderr);
         }
     }
 
