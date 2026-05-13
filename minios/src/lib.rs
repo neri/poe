@@ -26,7 +26,7 @@ pub mod prelude {
         arch::hal::*,
         env::*,
         io::{media::*, tty::*},
-        platform::{Platform, PlatformTrait},
+        platform::{Platform, PlatformTrait, RecommendedConsoleMode},
         task::event::*,
     };
     pub use crate::{print, println};

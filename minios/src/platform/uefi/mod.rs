@@ -1,10 +1,13 @@
 //! Platform modules for UEFI
 
+use crate::platform::RecommendedConsoleMode;
 use crate::*;
+use core::mem::transmute;
 use core::time::Duration;
 use uefi::{Status, runtime::ResetType};
 
 pub mod console;
+pub mod event;
 pub mod gop;
 
 impl PlatformTrait for Platform {
@@ -13,6 +16,17 @@ impl PlatformTrait for Platform {
             uefi::helpers::init().unwrap();
 
             console::UefiConsole::init();
+
+            uefi::system::with_config_table(|items| {
+                for item in items {
+                    let guid = transmute(item.guid);
+                    System::add_config_table_entry(
+                        &guid,
+                        NonNullPhysicalAddress::from_ptr(item.address).unwrap(),
+                    );
+                }
+            });
+
             gop::UefiGop::init();
         }
     }
@@ -37,7 +51,11 @@ impl PlatformTrait for Platform {
         0
     }
 
-    fn duration_to_ticks(_duration: Duration) -> u64 {
-        todo!()
+    fn create_timer_event(duration: Duration) -> Box<dyn PollingEvent> {
+        Box::new(event::EfiEventPoller::create_timer(duration))
+    }
+
+    fn recommended_console_mode() -> RecommendedConsoleMode {
+        RecommendedConsoleMode::Graphics
     }
 }

@@ -6,7 +6,7 @@ pub mod nec98;
 mod pic;
 mod pit;
 
-use super::{Platform, PlatformTrait};
+use super::{MonotonicTimerPoller, Platform, PlatformTrait};
 use crate::arch::{cpu, gdt, idt, lomem, vm86};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
@@ -85,7 +85,15 @@ impl PlatformTrait for Platform {
     }
 
     #[inline]
-    fn duration_to_ticks(duration: Duration) -> u64 {
-        pit::Pit::duration_to_ticks(duration)
+    fn create_timer_event(duration: Duration) -> Box<dyn PollingEvent> {
+        let timeout = Self::monotonic() + pit::Pit::duration_to_ticks(duration);
+        Box::new(MonotonicTimerPoller::Timeout(timeout))
+    }
+
+    fn recommended_console_mode() -> RecommendedConsoleMode {
+        match System::platform() {
+            Platform::FmTowns => RecommendedConsoleMode::Graphics,
+            _ => RecommendedConsoleMode::None,
+        }
     }
 }

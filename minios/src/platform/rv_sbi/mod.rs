@@ -90,8 +90,9 @@ impl PlatformTrait for Platform {
     }
 
     #[inline]
-    fn duration_to_ticks(duration: Duration) -> u64 {
-        timer::PlatformTimer::duration_to_ticks(duration)
+    fn create_timer_event(duration: Duration) -> Box<dyn PollingEvent> {
+        let timeout = Self::monotonic() + timer::PlatformTimer::duration_to_ticks(duration);
+        Box::new(MonotonicTimerPoller::Timeout(timeout))
     }
 }
 

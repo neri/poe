@@ -7,19 +7,19 @@ use uefi::{
     Identify,
     boot::{OpenProtocolParams, ScopedProtocol},
     prelude::*,
-    proto::console::gop::{self, Mode},
+    proto::console::gop,
 };
 
 pub struct UefiGop {
     gop: Handle,
     modes: Vec<ModeInfo>,
-    bios_modes: Vec<Mode>,
+    bios_modes: Vec<gop::Mode>,
     current_mode: CurrentMode,
 }
 
 impl UefiGop {
     #[inline]
-    const fn new(gop: Handle, modes: Vec<ModeInfo>, bios_modes: Vec<Mode>) -> Self {
+    const fn new(gop: Handle, modes: Vec<ModeInfo>, bios_modes: Vec<gop::Mode>) -> Self {
         Self {
             gop,
             modes,
@@ -39,10 +39,21 @@ impl UefiGop {
             let handle_gop = handle_buffer[0];
             let gop = open_gop(handle_gop).unwrap();
 
+            let mode_info = gop.current_mode_info();
+            let preferred_graphics_mode = PreferredGraphicsMode {
+                width: mode_info.resolution().0 as u16,
+                height: mode_info.resolution().1 as u16,
+                pixel_format: PixelFormat::BGRX8888,
+            };
+
             let bios_modes = gop
                 .modes()
                 .filter(|mode| matches!(mode.info().pixel_format(), gop::PixelFormat::Bgr))
                 .collect::<Vec<_>>();
+            if bios_modes.is_empty() {
+                // No compatible modes found
+                return;
+            }
             let modes = bios_modes
                 .iter()
                 .map(|mode| mode_info_from_gop_mode(mode.info()))
@@ -50,17 +61,18 @@ impl UefiGop {
 
             let driver = Box::new(Self::new(handle_gop, modes, bios_modes));
             System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
+            System::conctl().set_preferred_graphics_mode(preferred_graphics_mode);
         }
     }
 }
 
+#[inline]
 unsafe fn open_gop(handle: Handle) -> Option<ScopedProtocol<gop::GraphicsOutput>> {
     unsafe {
-        let hinsatnce = uefi::boot::image_handle();
         uefi::boot::open_protocol::<gop::GraphicsOutput>(
             OpenProtocolParams {
                 handle: handle,
-                agent: hinsatnce,
+                agent: uefi::boot::image_handle(),
                 controller: None,
             },
             uefi::boot::OpenProtocolAttributes::GetProtocol,
@@ -69,6 +81,7 @@ unsafe fn open_gop(handle: Handle) -> Option<ScopedProtocol<gop::GraphicsOutput>
     }
 }
 
+#[inline]
 fn mode_info_from_gop_mode(gop_mode: &gop::ModeInfo) -> ModeInfo {
     ModeInfo {
         width: gop_mode.resolution().0 as u16,

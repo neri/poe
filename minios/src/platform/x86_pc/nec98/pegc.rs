@@ -45,6 +45,7 @@ impl PegcBios {
             };
 
             System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
+            System::conctl().set_preferred_graphics_mode(inner_mode.into());
         }
     }
 }

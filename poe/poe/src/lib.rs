@@ -6,7 +6,10 @@ extern crate alloc;
 
 #[allow(unused_imports)]
 use core::time::Duration;
-use minios::io::tui::{self, prelude::box_drawing::AsciiExt};
+use minios::io::{
+    graphics::PreferredGraphicsMode,
+    tui::{self, prelude::box_drawing::AsciiExt},
+};
 #[allow(unused_imports)]
 use minios::mem::MemoryManager;
 use minios::prelude::*;
@@ -26,6 +29,12 @@ static SYSTEM_NAME: &str = "myosExp";
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
 pub fn main() {
+    if Platform::recommended_console_mode() == RecommendedConsoleMode::Graphics
+        && let Some(mode) = System::conctl().preferred_graphics_mode()
+    {
+        let _ = System::conctl().set_graphics_mode(mode);
+    }
+
     let mut exit_flag = false;
     loop {
         let stdout = System::stdout();
@@ -54,7 +63,11 @@ pub fn main() {
             Inset::default(),
             TuiAttribute(0xf0),
         );
-        // status_bar.put_string_at(Point::new(1, 0), "", status_bar.default_attr);
+        // status_bar.fill_rect(
+        //     status_bar.bounds(),
+        //     AsciiExt::from_char('@').unwrap(),
+        //     status_bar.default_attr,
+        // );
         status_bar.draw_to(stdout);
 
         let menu_items = [
@@ -115,14 +128,18 @@ pub fn main() {
                             }
                             MainMenuItem::GraphicsMode => {
                                 stdout.reset();
-                                let _ = System::conctl().set_graphics_mode_from_list(&[
-                                    // (1920, 1080, PixelFormat::BGRX8888),
-                                    (1280, 720, PixelFormat::BGRX8888),
-                                    (800, 600, PixelFormat::BGRX8888),
-                                    // (800, 600, PixelFormat::Indexed8),
-                                    (640, 480, PixelFormat::Indexed8),
-                                    (320, 200, PixelFormat::Indexed8),
-                                ]);
+                                if let Some(mode) = System::conctl().preferred_graphics_mode() {
+                                    let _ = System::conctl().set_graphics_mode(mode);
+                                } else {
+                                    let _ = System::conctl().set_graphics_mode_from_list(&[
+                                        // PreferredGraphicsMode::new(1920, 1080, PixelFormat::BGRX8888),
+                                        // PreferredGraphicsMode::new(1280, 720, PixelFormat::BGRX8888),
+                                        // PreferredGraphicsMode::new(800, 600, PixelFormat::BGRX8888),
+                                        // PreferredGraphicsMode::new(800, 600, PixelFormat::Indexed8),
+                                        PreferredGraphicsMode::new(640, 480, PixelFormat::Indexed8),
+                                        PreferredGraphicsMode::new(320, 200, PixelFormat::Indexed8),
+                                    ]);
+                                }
                                 break;
                             }
                             MainMenuItem::Start => {

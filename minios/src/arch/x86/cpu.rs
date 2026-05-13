@@ -1,14 +1,20 @@
 //! i386 cpu core logic
 
+use core::cell::UnsafeCell;
+use core::sync::atomic::{AtomicBool, Ordering};
+use x86::cpuid::{F01C, Feature};
+
 #[cfg(target_arch = "x86")]
 use super::vm86::{UserMode, X86StackContextView};
+#[cfg(target_arch = "x86")]
 use core::arch::{asm, naked_asm};
-use core::cell::UnsafeCell;
+#[cfg(target_arch = "x86")]
 use core::mem::size_of;
-use core::sync::atomic::{AtomicBool, Ordering, compiler_fence};
-use x86::cpuid::{F01C, Feature};
+#[cfg(target_arch = "x86")]
+use core::sync::atomic::compiler_fence;
 #[cfg(target_arch = "x86")]
 use x86::gpr::Eflags;
+#[cfg(target_arch = "x86")]
 use x86::prot::*;
 
 #[cfg(target_arch = "x86")]
@@ -66,6 +72,7 @@ pub enum IsaLevel {
 }
 
 impl Cpu {
+    #[allow(dead_code)]
     #[inline]
     pub(crate) unsafe fn init() {
         unsafe {

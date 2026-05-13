@@ -5,10 +5,7 @@ use crate::*;
 use core::cell::UnsafeCell;
 use core::mem::transmute;
 use libhid::layouts::KeyStroke;
-use uefi::{
-    boot::{EventType, Tpl},
-    proto::console::text::Key,
-};
+use uefi::proto::console::text::Key;
 
 pub struct UefiConsole {
     last_input: Option<NonZeroInputKey>,
@@ -49,13 +46,7 @@ impl UefiConsole {
         let Ok(key_event) = uefi::system::with_stdin(|v| v.wait_for_key_event()) else {
             return;
         };
-        let timer_event = unsafe {
-            uefi::boot::create_event(EventType::TIMER, Tpl::APPLICATION, None, None).unwrap()
-        };
-        uefi::boot::set_timer(&timer_event, uefi::boot::TimerTrigger::Relative(0)).unwrap();
-
-        let mut events = [key_event, timer_event];
-        if uefi::boot::wait_for_event(&mut events).unwrap() != 0 {
+        if !uefi::boot::check_event(&key_event).unwrap_or(false) {
             return;
         }
         let key = uefi::system::with_stdin(|v| v.read_key())
@@ -145,6 +136,9 @@ impl SimpleTextOutput for UefiConsole {
             result.cursor_column = v.cursor_position().0.clamp(0, 255) as u8;
             result.cursor_row = v.cursor_position().1.clamp(0, 255) as u8;
             result.cursor_visible = v.cursor_visible().into();
+            if result.columns >= 80 && result.rows >= 25 {
+                result.rows -= 1;
+            }
         });
         result
     }

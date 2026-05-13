@@ -1,6 +1,6 @@
 //! Platform dependent module for Raspberry Pi series
 
-use super::{Platform, PlatformTrait};
+use super::{MonotonicTimerPoller, Platform, PlatformTrait};
 use crate::*;
 use core::{
     arch::asm,
@@ -123,8 +123,9 @@ impl PlatformTrait for Platform {
     }
 
     #[inline]
-    fn duration_to_ticks(duration: Duration) -> u64 {
-        arch::timer::GenericTimer::duration_to_ticks(duration)
+    fn create_timer_event(duration: Duration) -> Box<dyn PollingEvent> {
+        let timeout = Self::monotonic() + arch::timer::GenericTimer::duration_to_ticks(duration);
+        Box::new(MonotonicTimerPoller::Timeout(timeout))
     }
 }
 

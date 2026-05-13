@@ -81,10 +81,10 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             }
 
             if let Some(acpi1) = acpi1 {
-                System::add_config_table_entry(ACPI_10_TABLE_GUID, acpi1);
+                System::add_config_table_entry(&ACPI_10_TABLE_GUID, acpi1);
             }
             if let Some(acpi2) = acpi2 {
-                System::add_config_table_entry(ACPI_20_TABLE_GUID, acpi2);
+                System::add_config_table_entry(&ACPI_20_TABLE_GUID, acpi2);
             }
         }
 
@@ -102,7 +102,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
                 }
             }
             if let Some(smbios) = smbios {
-                System::add_config_table_entry(SMBIOS_GUID, smbios);
+                System::add_config_table_entry(&SMBIOS_GUID, smbios);
             }
         }
 

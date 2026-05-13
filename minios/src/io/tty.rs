@@ -22,7 +22,7 @@ pub trait SimpleTextInput {
 impl<'a> dyn SimpleTextInput + 'a {
     /// Creates an event that becomes ready when a keystroke is available to read.
     pub fn event_for_key<'b>(&'b mut self) -> Event<'b> {
-        Event::with_polling(SimpleTextInputPoller(self))
+        Event::polling(SimpleTextInputPoller(self))
     }
 }
 
@@ -234,7 +234,7 @@ pub trait SerialIo {
 impl<'a> dyn SerialIo + 'a {
     /// Creates an event that becomes ready when a byte is available to read from the serial input.
     pub fn event_for_read<'b>(&'b mut self) -> Event<'b> {
-        Event::with_polling(SerialPoller(self))
+        Event::polling(SerialPoller(self))
     }
 }
 

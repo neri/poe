@@ -1,4 +1,6 @@
 //! VESA BIOS Extensions (VBE) support
+//!
+//! TODO: to support VGA mode 13 without VBE
 
 use super::bios::INT10;
 use super::cga_text::CgaText;

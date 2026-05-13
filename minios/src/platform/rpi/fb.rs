@@ -36,12 +36,14 @@ impl Fb {
             (width, height) = Self::get_default_size();
         }
 
-        driver.modes.push(ModeInfo {
+        let default_mode = ModeInfo {
             width: width as u16,
             height: height as u16,
             bytes_per_scanline: (width * 4) as u16,
             pixel_format: PixelFormat::BGRX8888,
-        });
+        };
+        driver.modes.push(default_mode);
+        System::conctl().set_preferred_graphics_mode(default_mode.into());
         for template in &[(320, 200), (320, 240), (640, 480), (800, 600), (1024, 768)] {
             driver.modes.push(ModeInfo {
                 width: template.0 as u16,
@@ -68,6 +70,7 @@ impl Fb {
         }
 
         System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
+        System::conctl().set_preferred_graphics_mode(default_mode.into());
     }
 
     /// Sets the resolution and pixel format.

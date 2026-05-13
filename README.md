@@ -2,11 +2,13 @@
 
 * An Experimental Project for Early OS Development.
 
-## Supported Architectures and Platforms
+## Platforms
 
 * risc-v
   * rv32imac virt machine
   * rv64gc virt machine
+* x86-64
+  * UEFI
 * x86-32
   * IBM PC Compatible
   * NEC PC-98 Series
@@ -15,6 +17,55 @@
   * Raspberry Pi 3 & 4
 
 * **NOTE**: It may not work or may need to be adjusted as it has not been fully verified on actual hardware.
+
+## Status
+
+* [ ] platform
+  * [ ] pc-bios
+  * [ ] nec pc-98
+  * [ ] fm towns
+  * [ ] uefi
+  * [ ] riscv64 virt
+  * [ ] riscv32 virt
+  * [ ] rpi
+* [x] arch
+  * [x] x86-32
+  * [ ] x86-64
+  * [x] riscv64
+  * [x] riscv32
+    * [x] minisbi
+  * [x] rpi
+* [x] simple console i/o
+  * [x] x86-32
+  * [x] riscv-sbi
+  * [x] rpi-uart
+  * [x] uefi
+  * [x] vt100
+* [ ] memory manager
+  * [ ] better memory manager
+  * [ ] uefi after exit_boot_services
+  * [ ] paging
+* [x] simple panic handler
+  * [x] x86-32
+  * [ ] x86-64
+  * [x] riscv64
+  * [x] riscv32
+  * [x] rpi
+* [x] graphical console
+  * [x] console controller
+  * [x] vesa driver
+  * [x] pegc driver
+  * [x] fmtowns driver
+  * [x] rpi driver
+  * [x] uefi-gop driver
+* [x] timer
+  * [x] x86-32
+  * [x] riscv64
+  * [x] riscv32
+  * [x] rpi
+  * [x] uefi
+* [ ] tui
+* [ ] filesystem
 
 ## History
 

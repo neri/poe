@@ -91,5 +91,41 @@ pub trait PlatformTrait {
     fn monotonic() -> u64;
 
     /// Convert a duration to timer ticks.
-    fn duration_to_ticks(duration: Duration) -> u64;
+    fn create_timer_event(duration: Duration) -> Box<dyn PollingEvent>;
+
+    /// Returns the recommended console mode for this platform.
+    fn recommended_console_mode() -> RecommendedConsoleMode {
+        RecommendedConsoleMode::None
+    }
+}
+
+/// Recommended console mode for a platform.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecommendedConsoleMode {
+    /// No recommendation
+    None,
+    /// Text mode is highly recommended.
+    Text,
+    /// Graphics mode is recommended.
+    Graphics,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MonotonicTimerPoller {
+    Timeout(u64),
+}
+
+impl PollingEvent for MonotonicTimerPoller {
+    fn poll(&mut self) -> PollResult {
+        match self {
+            Self::Timeout(deadline) => {
+                let result = Platform::monotonic().wrapping_sub(*deadline) as i64;
+                if result >= 0 {
+                    PollResult::Ready
+                } else {
+                    PollResult::Pending
+                }
+            }
+        }
+    }
 }

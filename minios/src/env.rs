@@ -2,9 +2,7 @@
 
 use crate::io::{
     fonts,
-    graphics::display::FbDisplay8,
-    graphics::fbcon::FbCon,
-    graphics::{GraphicsOutputDevice, PixelFormat},
+    graphics::{GraphicsOutputDevice, PreferredGraphicsMode, display::FbDisplay8, fbcon::FbCon},
     tty::{SimpleTextInput, SimpleTextOutput},
 };
 use crate::mem::MemoryManager;
@@ -98,7 +96,7 @@ impl System {
             MemoryManager::init_dt(&dt);
 
             if let Some(dt) = NonNullPhysicalAddress::from_ptr(dt.as_ptr()) {
-                System::add_config_table_entry(fdt::DTB_TABLE_GUID, dt);
+                System::add_config_table_entry(&fdt::DTB_TABLE_GUID, dt);
             }
 
             Platform::init(arg);
@@ -125,8 +123,6 @@ impl System {
                 device_tree: None,
             };
             (&mut *(&raw mut SYSTEM)).write(shared);
-
-            // MemoryManager::init();
 
             Platform::init(arg);
         }
@@ -259,12 +255,13 @@ impl System {
 
     /// Adds a configuration table entry
     #[inline]
-    pub unsafe fn add_config_table_entry(guid: Guid, address: NonNullPhysicalAddress) {
+    pub unsafe fn add_config_table_entry(guid: &Guid, address: NonNullPhysicalAddress) {
         unsafe {
             let shared = Self::shared_mut();
-            shared
-                .config_table
-                .push(ConfigurationTableEntry { guid, address });
+            shared.config_table.push(ConfigurationTableEntry {
+                guid: *guid,
+                address,
+            });
         }
     }
 
@@ -421,6 +418,7 @@ pub struct ConsoleController {
     text_out: NonNull<dyn SimpleTextOutput>,
     graphics_out: Option<Box<dyn GraphicsOutputDevice>>,
     fbcon: Option<FbCon>,
+    preferred_graphics_mode: Option<PreferredGraphicsMode>,
 }
 
 impl ConsoleController {
@@ -431,6 +429,7 @@ impl ConsoleController {
             text_out: NonNull::new(&raw mut NULL).unwrap(),
             graphics_out: None,
             fbcon: None,
+            preferred_graphics_mode: None,
         }
     }
 
@@ -439,6 +438,16 @@ impl ConsoleController {
     pub fn set_graphics(&mut self, graphics_out: Box<dyn GraphicsOutputDevice>) {
         self.set_text_mode();
         self.graphics_out = Some(graphics_out);
+    }
+
+    #[inline]
+    pub fn set_preferred_graphics_mode(&mut self, mode: PreferredGraphicsMode) {
+        self.preferred_graphics_mode = Some(mode);
+    }
+
+    #[inline]
+    pub const fn preferred_graphics_mode(&self) -> Option<PreferredGraphicsMode> {
+        self.preferred_graphics_mode
     }
 
     /// Returns whether the console is in text mode
@@ -485,8 +494,8 @@ impl ConsoleController {
             .map(|v| v.current_fb())
     }
 
-    /// Sets graphics mode
-    pub fn set_graphics_mode(&mut self, mode: io::graphics::ModeIndex) -> Result<(), ()> {
+    /// Sets graphics mode by index
+    pub fn set_graphics_mode_by_index(&mut self, mode: io::graphics::ModeIndex) -> Result<(), ()> {
         let Some(graphics) = self.graphics_out.as_mut() else {
             return Err(());
         };
@@ -541,13 +550,14 @@ impl ConsoleController {
     /// Finds graphics mode index by resolution and pixel format
     pub fn find_graphics_mode(
         &self,
-        width: u16,
-        height: u16,
-        pixel_format: PixelFormat,
+        mode: PreferredGraphicsMode,
     ) -> Option<io::graphics::ModeIndex> {
         let graphics = self.graphics_out.as_ref()?;
         for (index, item) in graphics.modes().iter().enumerate() {
-            if item.width == width && item.height == height && item.pixel_format == pixel_format {
+            if item.width == mode.width
+                && item.height == mode.height
+                && item.pixel_format == mode.pixel_format
+            {
                 return Some(io::graphics::ModeIndex(index));
             }
         }
@@ -555,27 +565,21 @@ impl ConsoleController {
     }
 
     /// Sets the best graphics mode matching the given criteria
-    pub fn set_best_graphics_mode(
-        &mut self,
-        width: u16,
-        height: u16,
-        pixel_format: PixelFormat,
-    ) -> Result<(), ()> {
-        let mode = self
-            .find_graphics_mode(width, height, pixel_format)
-            .ok_or(())?;
-        self.set_graphics_mode(mode)
+    #[inline]
+    pub fn set_graphics_mode(&mut self, mode: PreferredGraphicsMode) -> Result<(), ()> {
+        let mode = self.find_graphics_mode(mode).ok_or(())?;
+        self.set_graphics_mode_by_index(mode)
     }
 
     /// Sets the best graphics mode from the given list of candidates.
     /// The candidates should be ordered by priority.
     pub fn set_graphics_mode_from_list(
         &mut self,
-        candidates: &[(u16, u16, PixelFormat)],
+        candidates: &[PreferredGraphicsMode],
     ) -> Result<usize, ()> {
-        for (i, (w, h, pf)) in candidates.iter().copied().enumerate() {
-            if let Some(mode) = self.find_graphics_mode(w, h, pf) {
-                match self.set_graphics_mode(mode) {
+        for (i, mode) in candidates.iter().copied().enumerate() {
+            if let Some(mode) = self.find_graphics_mode(mode) {
+                match self.set_graphics_mode_by_index(mode) {
                     Ok(()) => return Ok(i),
                     Err(()) => continue,
                 }

@@ -151,3 +151,33 @@ impl PixelFormat {
         matches!(self, PixelFormat::BGRX8888)
     }
 }
+
+/// Preferred graphics mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreferredGraphicsMode {
+    pub width: u16,
+    pub height: u16,
+    pub pixel_format: PixelFormat,
+}
+
+impl PreferredGraphicsMode {
+    #[inline]
+    pub const fn new(width: u16, height: u16, pixel_format: PixelFormat) -> Self {
+        Self {
+            width,
+            height,
+            pixel_format,
+        }
+    }
+}
+
+impl From<ModeInfo> for PreferredGraphicsMode {
+    #[inline]
+    fn from(info: ModeInfo) -> Self {
+        Self {
+            width: info.width,
+            height: info.height,
+            pixel_format: info.pixel_format,
+        }
+    }
+}

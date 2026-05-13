@@ -18,12 +18,12 @@ pub struct Event<'a> {
 impl<'a> Event<'a> {
     /// Create an event with the specified polling event.
     #[inline]
-    pub fn with_polling(poll: impl PollingEvent + 'a) -> Self {
+    pub fn polling(poll: impl PollingEvent + 'a) -> Self {
         let poll = Box::new(poll);
         let poll: Box<dyn PollingEvent + 'a> = poll;
 
         Self {
-            state: EventState::Neutral,
+            state: EventState::Idle,
             poll: Some(poll),
         }
     }
@@ -31,14 +31,10 @@ impl<'a> Event<'a> {
     /// Create an event that will be signaled after the specified duration.
     #[inline]
     pub fn with_timeout(duration: Duration) -> Self {
-        Self::with_timer(TimerEvent::with_timeout(duration))
-    }
-
-    /// Create an event with the specified timer event.
-    #[inline]
-    pub fn with_timer(timer_event: TimerEvent) -> Self {
-        let poller = TimerPoller { timer_event };
-        Self::with_polling(poller)
+        Self {
+            state: EventState::Idle,
+            poll: Some(Platform::create_timer_event(duration)),
+        }
     }
 }
 
@@ -54,13 +50,13 @@ impl Event<'_> {
 
     pub fn poll(&mut self) -> PollResult {
         if self.state == EventState::Signaled {
-            self.state = EventState::Neutral;
+            self.state = EventState::Idle;
             return PollResult::Ready;
         }
         if let Some(poll) = &mut self.poll {
             self.state = EventState::Polling;
             let result = poll.poll();
-            self.state = EventState::Neutral;
+            self.state = EventState::Idle;
             return result;
         }
         PollResult::Pending
@@ -69,7 +65,7 @@ impl Event<'_> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventState {
-    Neutral,
+    Idle,
     Polling,
     Signaled,
 }
@@ -81,46 +77,6 @@ pub trait PollingEvent {
 pub enum PollResult {
     Ready,
     Pending,
-}
-
-#[allow(unused)]
-struct TimerPoller {
-    timer_event: TimerEvent,
-}
-
-impl PollingEvent for TimerPoller {
-    fn poll(&mut self) -> PollResult {
-        match self.timer_event {
-            TimerEvent::Timeout(deadline) => {
-                let result = Platform::monotonic().wrapping_sub(deadline) as i64;
-                if result >= 0 {
-                    PollResult::Ready
-                } else {
-                    PollResult::Pending
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TimerEvent {
-    Timeout(u64),
-}
-
-impl TimerEvent {
-    /// Create a timer event that will be signaled as soon as possible.
-    #[inline]
-    pub fn epsilon() -> Self {
-        Self::Timeout(1)
-    }
-
-    /// Create a timer event that will be signaled after the specified duration.
-    #[inline]
-    pub fn with_timeout(duration: Duration) -> Self {
-        let ticks = Platform::duration_to_ticks(duration);
-        Self::Timeout(Platform::monotonic() + ticks)
-    }
 }
 
 /// Null event that is always ready.
