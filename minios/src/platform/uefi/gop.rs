@@ -1,15 +1,11 @@
 //! UEFI Graphics Output Protocol (GOP) driver
 
+use super::*;
 use crate::io::graphics::*;
 use crate::platform::uefi::console::UefiConsole;
-use crate::*;
-use uefi::{
-    Identify,
-    boot::{OpenProtocolParams, ScopedProtocol},
-    prelude::*,
-    proto::console::gop,
-};
+use uefi::{Identify, prelude::*, proto::console::gop};
 
+/// UEFI Graphics Output Protocol (GOP) driver
 pub struct UefiGop {
     gop: Handle,
     modes: Vec<ModeInfo>,
@@ -37,7 +33,7 @@ impl UefiGop {
                 return;
             };
             let handle_gop = handle_buffer[0];
-            let gop = open_gop(handle_gop).unwrap();
+            let gop = get_protocol::<gop::GraphicsOutput>(handle_gop).unwrap();
 
             let mode_info = gop.current_mode_info();
             let preferred_graphics_mode = PreferredGraphicsMode {
@@ -67,21 +63,6 @@ impl UefiGop {
 }
 
 #[inline]
-unsafe fn open_gop(handle: Handle) -> Option<ScopedProtocol<gop::GraphicsOutput>> {
-    unsafe {
-        uefi::boot::open_protocol::<gop::GraphicsOutput>(
-            OpenProtocolParams {
-                handle: handle,
-                agent: uefi::boot::image_handle(),
-                controller: None,
-            },
-            uefi::boot::OpenProtocolAttributes::GetProtocol,
-        )
-        .ok()
-    }
-}
-
-#[inline]
 fn mode_info_from_gop_mode(gop_mode: &gop::ModeInfo) -> ModeInfo {
     ModeInfo {
         width: gop_mode.resolution().0 as u16,
@@ -105,7 +86,7 @@ impl GraphicsOutputDevice for UefiGop {
             let mode_info = *self.modes.get(mode.0 as usize).ok_or(())?;
             let bios_mode = *self.bios_modes.get(mode.0 as usize).ok_or(())?;
 
-            let mut gop = open_gop(self.gop).unwrap();
+            let mut gop = get_protocol::<gop::GraphicsOutput>(self.gop).unwrap();
             gop.set_mode(&bios_mode).map_err(|_| ())?;
             let mut fb = gop.frame_buffer();
 

@@ -15,9 +15,12 @@ pub trait GraphicsOutputDevice {
     fn current_mode(&self) -> &CurrentMode;
 
     /// Sets the video mode to the specified mode index.
+    ///
+    /// Returns `Ok` if the mode was successfully set, or `Err` if failed.
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()>;
 
     /// Detaches the graphics output device.
+    /// This function is used to switch to the text mode.
     fn detach(&mut self);
 }
 

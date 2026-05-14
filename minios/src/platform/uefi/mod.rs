@@ -6,6 +6,7 @@ use core::mem::transmute;
 use core::time::Duration;
 use uefi::{Status, runtime::ResetType};
 
+pub mod block;
 pub mod console;
 pub mod event;
 pub mod gop;
@@ -27,6 +28,8 @@ impl PlatformTrait for Platform {
                 }
             });
 
+            block::init();
+
             gop::UefiGop::init();
         }
     }
@@ -46,7 +49,7 @@ impl PlatformTrait for Platform {
     }
 
     fn monotonic() -> u64 {
-        // TODO: uefi does not provide a monotonic timer
+        // TODO: UEFI does not provide a monotonic timer
         // NOTE: `GetNextMonotonicCount` is not suitable for this purpose.
         0
     }
@@ -57,5 +60,21 @@ impl PlatformTrait for Platform {
 
     fn recommended_console_mode() -> RecommendedConsoleMode {
         RecommendedConsoleMode::Graphics
+    }
+}
+
+/// Helper function to get a protocol interface from a handle
+unsafe fn get_protocol<PROTOCOL: uefi::proto::ProtocolPointer + ?Sized>(
+    handle: uefi::Handle,
+) -> uefi::Result<uefi::boot::ScopedProtocol<PROTOCOL>> {
+    unsafe {
+        uefi::boot::open_protocol(
+            uefi::boot::OpenProtocolParams {
+                handle: handle,
+                agent: uefi::boot::image_handle(),
+                controller: None,
+            },
+            uefi::boot::OpenProtocolAttributes::GetProtocol,
+        )
     }
 }

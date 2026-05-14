@@ -33,7 +33,7 @@ edid = { path = "../lib/edid/" }
 simple_font = { path = "../lib/simple_font/" }
 tui = { path = "../lib/tui/" }
 
-uefi = { version="0.37", features = ['global_allocator'], optional = true }
+uefi = { version="0.37", features = ['global_allocator', 'alloc'], optional = true }
 # uefi-raw = { version="0.14" }
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]

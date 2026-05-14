@@ -94,7 +94,7 @@ _memsz_mid          dd 0
   * `0x02` IBM PC compatible
   * `0x03` FUJITSU FM TOWNS
 * _boot_drive: bios boot drive id (same as FSBL)
-* _memsz_lo: memory size under 1mb (typically 0xa000)
+* _memsz_lo: memory size under 1mb (typically about 0xa000)
 * _start_mid: start of available extended memory
 * _memsz_mid: Available memory size. This refers only to the amount of memory recognized by SSBL and available at system startup. It does not represent the total system memory.
 

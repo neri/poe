@@ -35,6 +35,7 @@ pub struct System {
     device_tree: Option<fdt::DeviceTree<'static>>,
 }
 
+/// Configuration table entry
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ConfigurationTableEntry {
@@ -104,6 +105,7 @@ impl System {
         Self::_init(main)
     }
 
+    /// Initialize in UEFI environment
     #[cfg(feature = "uefi")]
     #[inline]
     pub unsafe fn init_uefi(arg: usize, main: fn() -> ()) -> ! {
@@ -304,6 +306,15 @@ impl System {
         };
 
         ticks_secs.saturating_add(ticks_nanos as u64)
+    }
+
+    /// Sets graphics mode if the platform recommends graphics mode
+    pub fn set_graphics_mode_if_recommended() {
+        if Platform::recommended_console_mode() == RecommendedConsoleMode::Graphics
+            && let Some(mode) = Self::conctl().preferred_graphics_mode()
+        {
+            let _ = Self::conctl().set_graphics_mode(mode);
+        }
     }
 }
 

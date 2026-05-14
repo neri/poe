@@ -29,11 +29,7 @@ static SYSTEM_NAME: &str = "myosExp";
 static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 
 pub fn main() {
-    if Platform::recommended_console_mode() == RecommendedConsoleMode::Graphics
-        && let Some(mode) = System::conctl().preferred_graphics_mode()
-    {
-        let _ = System::conctl().set_graphics_mode(mode);
-    }
+    System::set_graphics_mode_if_recommended();
 
     let mut exit_flag = false;
     loop {

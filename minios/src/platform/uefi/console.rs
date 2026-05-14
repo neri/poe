@@ -1,4 +1,4 @@
-//! Console implementation using UEFI
+//! Console driver implementation using UEFI's Simple Text Input and Output protocols.
 
 use crate::io::hid_mgr::HidManager;
 use crate::*;
@@ -7,6 +7,7 @@ use core::mem::transmute;
 use libhid::layouts::KeyStroke;
 use uefi::proto::console::text::Key;
 
+/// Console driver implementation using UEFI's Simple Text Input and Output protocols.
 pub struct UefiConsole {
     last_input: Option<NonZeroInputKey>,
 }
@@ -66,12 +67,29 @@ impl UefiConsole {
             Key::Special(scan_code) => {
                 use uefi::proto::console::text::ScanCode;
                 let usage = match scan_code {
-                    ScanCode::ESCAPE => Some(Usage::KEY_ESCAPE),
-                    ScanCode::DELETE => Some(Usage::KEY_DELETE),
                     ScanCode::UP => Some(Usage::KEY_UP_ARROW),
                     ScanCode::DOWN => Some(Usage::KEY_DOWN_ARROW),
                     ScanCode::LEFT => Some(Usage::KEY_LEFT_ARROW),
                     ScanCode::RIGHT => Some(Usage::KEY_RIGHT_ARROW),
+                    ScanCode::HOME => Some(Usage::KEY_HOME),
+                    ScanCode::END => Some(Usage::KEY_END),
+                    ScanCode::INSERT => Some(Usage::KEY_INSERT),
+                    ScanCode::DELETE => Some(Usage::KEY_DELETE),
+                    ScanCode::PAGE_UP => Some(Usage::KEY_PAGE_UP),
+                    ScanCode::PAGE_DOWN => Some(Usage::KEY_PAGE_DOWN),
+                    ScanCode::FUNCTION_1 => Some(Usage::KEY_F1),
+                    ScanCode::FUNCTION_2 => Some(Usage::KEY_F2),
+                    ScanCode::FUNCTION_3 => Some(Usage::KEY_F3),
+                    ScanCode::FUNCTION_4 => Some(Usage::KEY_F4),
+                    ScanCode::FUNCTION_5 => Some(Usage::KEY_F5),
+                    ScanCode::FUNCTION_6 => Some(Usage::KEY_F6),
+                    ScanCode::FUNCTION_7 => Some(Usage::KEY_F7),
+                    ScanCode::FUNCTION_8 => Some(Usage::KEY_F8),
+                    ScanCode::FUNCTION_9 => Some(Usage::KEY_F9),
+                    ScanCode::FUNCTION_10 => Some(Usage::KEY_F10),
+                    ScanCode::FUNCTION_11 => Some(Usage::KEY_F11),
+                    ScanCode::FUNCTION_12 => Some(Usage::KEY_F12),
+                    ScanCode::ESCAPE => Some(Usage::KEY_ESCAPE),
                     _ => None,
                 };
                 self.last_input = usage
@@ -108,6 +126,11 @@ impl SimpleTextOutput for UefiConsole {
     }
 
     fn set_attribute(&mut self, attribute: u8) {
+        let attribute = if attribute == 0 {
+            System::DEFAULT_STDOUT_ATTRIBUTE
+        } else {
+            attribute
+        };
         let bg = unsafe { transmute((attribute >> 4) & 7) };
         let fg = unsafe { transmute(attribute & 0x0f) };
         let _ = uefi::system::with_stdout(|v| v.set_color(fg, bg));

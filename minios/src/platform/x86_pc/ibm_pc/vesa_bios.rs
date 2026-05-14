@@ -204,6 +204,7 @@ impl VbeModeInfo {
             // other modes are not supported
             _ => return None,
         }
+        // determine pixel format by mask
         let magic = u64::from_le_bytes([
             self.red_mask_size,
             self.red_field_position,
