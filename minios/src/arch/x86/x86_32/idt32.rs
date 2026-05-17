@@ -204,8 +204,8 @@ unsafe extern "fastcall" fn default_exception_handler(ctx: &mut X86StackContext)
     output.set_attribute(0x1f);
 
     let is_vm = ctx.is_vm();
-    let ctx_vm = ctx.try_as_vm();
-    let ctx_user = ctx.try_as_user();
+    let ctx_vm = ctx.view().try_as_vm();
+    let ctx_user = ctx.view().try_as_user();
 
     let ss = ctx_user.map(|v| v.ss3()).unwrap_or(Selector::NULL);
     let esp = ctx_user

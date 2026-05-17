@@ -2,7 +2,7 @@
 
 use super::PORT_5F;
 use crate::arch::cpu::Cpu;
-use crate::arch::vm86::Vm86StackContext;
+use crate::arch::vm86::Vm86Context;
 use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 use crate::platform::x86_pc::nec98::bios::INT18;
 use crate::*;
@@ -49,7 +49,7 @@ impl Pc98Text {
     /// Handover control to PC-98 text mode
     pub(super) fn handover() {
         unsafe {
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
             regs.eax = 0x4100.into();
             INT18.call(&mut regs);
 

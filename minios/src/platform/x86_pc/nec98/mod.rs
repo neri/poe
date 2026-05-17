@@ -20,7 +20,7 @@ mod bios {
 }
 
 use super::pic::Irq;
-use crate::arch::vm86::Vm86StackContext;
+use crate::arch::vm86::Vm86Context;
 use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
@@ -125,7 +125,7 @@ impl BiosTextInput {
 impl SimpleTextInput for BiosTextInput {
     fn reset(&mut self) {
         unsafe {
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
             regs.eax = 0x0300.into();
             bios::INT18.call(&mut regs);
         }
@@ -133,7 +133,7 @@ impl SimpleTextInput for BiosTextInput {
 
     fn is_ready(&mut self) -> bool {
         unsafe {
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
             regs.eax = 0x0100.into();
             bios::INT18.call(&mut regs);
             regs.ebx.h() != 0
@@ -142,7 +142,7 @@ impl SimpleTextInput for BiosTextInput {
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
         unsafe {
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
             regs.eax = 0x0100.into();
             bios::INT18.call(&mut regs);
             if regs.ebx.h() == 0 {

@@ -2,7 +2,7 @@
 
 use super::bios::INT10;
 use crate::System;
-use crate::arch::{cpu::Cpu, vm86::Vm86StackContext};
+use crate::arch::{cpu::Cpu, vm86::Vm86Context};
 use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 use core::cell::UnsafeCell;
 use tui::prelude::box_drawing;
@@ -56,7 +56,7 @@ impl CgaText {
         unsafe {
             let shared = (&mut *(&raw mut CGA_TEXT)).get_mut();
 
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
             regs.eax = 0x1a00.into();
             INT10.call(&mut regs);
             if regs.eax.b() == 0x1a {
@@ -84,7 +84,7 @@ impl CgaText {
     /// Handover control from Graphics Mode to CGA text mode
     pub(super) fn handover() {
         unsafe {
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
             regs.eax = 0x0003.into();
             INT10.call(&mut regs);
 

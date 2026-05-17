@@ -63,10 +63,8 @@ impl Pit {
 
     /// Get monotonic timer value.
     pub fn monotonic() -> u64 {
-        unsafe {
-            let shared = Self::shared();
-            Hal::cpu().atomic_u64_load(&shared.monotonic)
-        }
+        let shared = unsafe { Self::shared() };
+        Hal::cpu().atomic_u64_load(&shared.monotonic)
     }
 
     /// Convert a duration to timer ticks.

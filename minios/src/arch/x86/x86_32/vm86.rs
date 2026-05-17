@@ -28,8 +28,8 @@ pub struct VM86 {
     vm_stack: Option<ManagedLowMemory>,
     /// A buffer for `setjmp`/`longjmp` to return from virtual 8086 mode to the caller of `invoke`.
     jmp_buf: JmpBuf,
-    /// A pointer to the stack context of the caller of `invoke`
-    context: *mut Vm86StackContext,
+    /// A pointer to the current context of virtual 8086 mode
+    context: *mut Vm86Context,
     /// A work area
     work_area: Option<ManagedLowMemory>,
 }
@@ -93,7 +93,7 @@ impl VM86 {
     ///
     /// - Some BIOS implementations may cause unexpected results if called recursively.
     #[allow(unused)]
-    pub unsafe fn call_bios(int_vec: InterruptVector, ctx: &mut Vm86StackContext) {
+    pub unsafe fn call_bios(int_vec: InterruptVector, ctx: &mut Vm86Context) {
         unsafe {
             Self::invoke(ctx, |ctx| {
                 ctx.vm_redirect_interrupt(int_vec, true);
@@ -104,7 +104,7 @@ impl VM86 {
     /// Invokes virtual 8086 mode with FAR CALL instruction executed.
     ///
     #[allow(unused)]
-    pub unsafe fn call_far(target: Far16Ptr, ctx: &mut Vm86StackContext) {
+    pub unsafe fn call_far(target: Far16Ptr, ctx: &mut Vm86Context) {
         unsafe {
             Self::invoke(ctx, |ctx| {
                 ctx.vm_simulate_call_far(target);
@@ -115,9 +115,9 @@ impl VM86 {
     /// Invokes virtual 8086 mode.
     #[allow(unused)]
     #[inline]
-    pub unsafe fn invoke<F>(ctx: &mut Vm86StackContext, context_modifier: F)
+    pub unsafe fn invoke<F>(ctx: &mut Vm86Context, context_modifier: F)
     where
-        F: FnOnce(&mut Vm86StackContext),
+        F: FnOnce(&mut Vm86Context),
     {
         unsafe {
             let interrupt_guard = Hal::cpu().interrupt_guard();
@@ -137,7 +137,7 @@ impl VM86 {
                     }
                 };
 
-                ctx.adjust_vm_eflags();
+                ctx.set_vm_eflags(ctx._eflags);
                 ctx.set_ss3(vm_stack.sel());
                 ctx.set_esp3(Pointer32::from_u16(vm_stack.limit().as_u16() & 0xfffe));
                 let vmbp_csip = Far16Ptr::from_linear(shared.vmbp);
@@ -162,7 +162,7 @@ impl VM86 {
 
     /// Handles VMBP interception by jumping back to the caller of `invoke` with the modified stack context.
     #[inline(always)]
-    unsafe fn intercept_vmbp(&mut self, ctx: &Vm86StackContext) -> ! {
+    unsafe fn intercept_vmbp(&mut self, ctx: &Vm86Context) -> ! {
         unsafe {
             self.context.write_volatile(ctx.clone());
             self.jmp_buf.long_jmp(NonZeroUsize::new(1).unwrap());
@@ -172,7 +172,7 @@ impl VM86 {
     /// Handles #UD exception in virtual 8086 mode.
     unsafe fn _handle_ud(ctx: &mut X86StackContext) -> bool {
         unsafe {
-            if let Some(ctx) = ctx.try_as_vm() {
+            if let Some(ctx) = ctx.view().try_as_vm() {
                 let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip.as_u16())).to_linear();
                 let shared = Self::shared_mut();
                 if shared.vmbp == vm_csip {
@@ -186,7 +186,7 @@ impl VM86 {
     /// Handles #GP exception in virtual 8086 mode.
     unsafe fn _handle_gpf(ctx: &mut X86StackContext) -> bool {
         unsafe {
-            if let Some(ctx) = ctx.try_as_vm_mut() {
+            if let Some(ctx) = ctx.view_mut().try_as_vm_mut() {
                 let vm_csip = Far16Ptr::new(ctx.cs(), Offset16::new(ctx.eip.as_u16())).to_linear();
                 let shared = Self::shared_mut();
                 if shared.vmbp == vm_csip {
@@ -211,10 +211,10 @@ impl VM86 {
     /// otherwise (running in protected mode) invoke virtual 8086 mode.
     pub unsafe fn redirect_interrupt(int_vec: InterruptVector, ctx: &mut X86StackContext) {
         unsafe {
-            if let Some(ctx) = ctx.try_as_vm_mut() {
+            if let Some(ctx) = ctx.view_mut().try_as_vm_mut() {
                 ctx.vm_redirect_interrupt(int_vec, true);
             } else {
-                let mut regs = Vm86StackContext::default();
+                let mut regs = Vm86Context::default();
                 Self::call_bios(int_vec, &mut regs);
             }
         }
@@ -229,7 +229,7 @@ impl VM86 {
     ///
     /// More accurate emulation is needed to create an OS, but POE is not an OS, so we cut corners.
     #[must_use]
-    unsafe fn simulate_vm_instruction(ctx: &mut Vm86StackContext) -> bool {
+    unsafe fn simulate_vm_instruction(ctx: &mut Vm86Context) -> bool {
         unsafe {
             let vm_csip = ctx.vm_csip_ptr();
             let mut skip = 0;
@@ -249,7 +249,9 @@ impl VM86 {
             match vm_csip.add(skip).read_volatile() {
                 0x9C => {
                     // 9C: PUSHF/PUSHFD
-                    let eflags = ctx.vm_eflags();
+                    let mut eflags = ctx._eflags;
+                    eflags.remove(Eflags::VM);
+                    eflags.clear_iopl();
                     if prefix_66 {
                         ctx.vm_push32(eflags.bits() as u32);
                     } else {
@@ -331,6 +333,23 @@ impl VM86 {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct BiosCallVector<const V: u8>;
+
+impl<const V: u8> BiosCallVector<V> {
+    #[inline]
+    pub const fn new() -> Self {
+        Self
+    }
+
+    #[inline]
+    pub unsafe fn call(&self, ctx: &mut Vm86Context) {
+        unsafe {
+            VM86::call_bios(InterruptVector(V), ctx);
+        }
+    }
+}
+
 /// A stack structure for handling exceptions and entering virtual 8086 mode.
 #[repr(C)]
 #[derive(Debug, Clone, Default)]
@@ -373,14 +392,12 @@ pub struct X86StackContext {
 impl From<X86StackContext> for X86StackContextView<KernelMode> {
     #[inline]
     fn from(ctx: X86StackContext) -> Self {
-        Self {
-            inner: ctx,
-            _phantom: PhantomData,
-        }
+        unsafe { transmute(ctx) }
     }
 }
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct X86StackContextView<VIEW: ContextViewMode> {
     inner: X86StackContext,
     _phantom: PhantomData<VIEW>,
@@ -400,7 +417,8 @@ pub struct Virtual8086Mode;
 
 impl ContextViewMode for Virtual8086Mode {}
 
-pub type Vm86StackContext = X86StackContextView<Virtual8086Mode>;
+/// A type alias for stack context in virtual 8086 mode.
+pub type Vm86Context = X86StackContextView<Virtual8086Mode>;
 
 impl<VIEW: ContextViewMode> Clone for X86StackContextView<VIEW> {
     #[inline]
@@ -425,7 +443,7 @@ impl Default for X86StackContextView<Virtual8086Mode> {
     }
 }
 
-impl Deref for X86StackContextView<UserMode> {
+impl Deref for X86StackContextView<KernelMode> {
     type Target = X86StackContext;
 
     #[inline]
@@ -434,10 +452,26 @@ impl Deref for X86StackContextView<UserMode> {
     }
 }
 
-impl DerefMut for X86StackContextView<UserMode> {
+impl DerefMut for X86StackContextView<KernelMode> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+impl Deref for X86StackContextView<UserMode> {
+    type Target = X86StackContextView<KernelMode>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        unsafe { transmute(self) }
+    }
+}
+
+impl DerefMut for X86StackContextView<UserMode> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { transmute(self) }
     }
 }
 
@@ -459,35 +493,6 @@ impl DerefMut for X86StackContextView<Virtual8086Mode> {
 
 #[allow(unused)]
 impl X86StackContext {
-    #[inline]
-    pub const fn empty() -> Self {
-        Self {
-            _es: AlignedSelector32::NULL,
-            _ds: AlignedSelector32::NULL,
-            _fs: AlignedSelector32::NULL,
-            _gs: AlignedSelector32::NULL,
-            edi: Gpr32::ZERO,
-            esi: Gpr32::ZERO,
-            ebp: Gpr32::ZERO,
-            _esp: Gpr32::ZERO,
-            ebx: Gpr32::ZERO,
-            edx: Gpr32::ZERO,
-            ecx: Gpr32::ZERO,
-            eax: Gpr32::ZERO,
-            _vector: 0,
-            _error_code: 0,
-            eip: Pointer32(0),
-            _cs: AlignedSelector32::NULL,
-            _eflags: Eflags::ZERO,
-            _esp3: Pointer32(0),
-            _ss3: AlignedSelector32::NULL,
-            _vmes: AlignedSelector32::NULL,
-            _vmds: AlignedSelector32::NULL,
-            _vmfs: AlignedSelector32::NULL,
-            _vmgs: AlignedSelector32::NULL,
-        }
-    }
-
     /// Returns `true` if the context is in virtual 8086 mode.
     #[inline]
     pub fn is_vm(&self) -> bool {
@@ -557,8 +562,20 @@ impl X86StackContext {
     }
 
     #[inline]
+    pub fn view(&self) -> &X86StackContextView<KernelMode> {
+        unsafe { transmute(self) }
+    }
+
+    #[inline]
+    pub fn view_mut(&mut self) -> &mut X86StackContextView<KernelMode> {
+        unsafe { transmute(self) }
+    }
+}
+
+impl<VIEW: ContextViewMode> X86StackContextView<VIEW> {
+    #[inline]
     pub fn try_as_user<'a>(&'a self) -> Option<&'a X86StackContextView<UserMode>> {
-        if self.is_user() {
+        if self.inner.is_user() {
             Some(unsafe { transmute(self) })
         } else {
             None
@@ -567,7 +584,7 @@ impl X86StackContext {
 
     #[inline]
     pub fn try_as_user_mut<'a>(&'a mut self) -> Option<&'a mut X86StackContextView<UserMode>> {
-        if self.is_user() {
+        if self.inner.is_user() {
             Some(unsafe { transmute(self) })
         } else {
             None
@@ -576,7 +593,7 @@ impl X86StackContext {
 
     #[inline]
     pub fn try_as_vm<'a>(&'a self) -> Option<&'a X86StackContextView<Virtual8086Mode>> {
-        if self.is_vm() {
+        if self.inner.is_vm() {
             Some(unsafe { transmute(self) })
         } else {
             None
@@ -585,16 +602,7 @@ impl X86StackContext {
 
     #[inline]
     pub fn try_as_vm_mut<'a>(&'a mut self) -> Option<&'a mut X86StackContextView<Virtual8086Mode>> {
-        if self.is_vm() {
-            Some(unsafe { transmute(self) })
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn try_into_vm(self) -> Option<X86StackContextView<Virtual8086Mode>> {
-        if self.is_vm() {
+        if self.inner.is_vm() {
             Some(unsafe { transmute(self) })
         } else {
             None
@@ -646,6 +654,12 @@ impl X86StackContextView<UserMode> {
 }
 
 impl X86StackContextView<Virtual8086Mode> {
+    /// Clears all fields
+    #[inline]
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
     /// Returns the context as a user mode view.
     #[inline]
     pub fn as_user<'a>(&'a self) -> &'a X86StackContextView<UserMode> {
@@ -708,28 +722,13 @@ impl X86StackContextView<Virtual8086Mode> {
         self.inner._vmgs = AlignedSelector32::from(vmgs);
     }
 
-    /// Returns the EFLAGS for virtual 8086 mode by removing the VM flag and clearing IOPL bits.
-    #[inline]
-    pub fn vm_eflags(&self) -> Eflags {
-        let mut eflags = self._eflags.canonicalized();
-        eflags.remove(Eflags::VM);
-        eflags.clear_iopl();
-        eflags
-    }
-
-    /// Sets the EFLAGS for virtual 8086 mode by inserting the VM flag and setting IOPL bits to `IOPL_VM`.
+    /// Sets EFLAGS for virtual 8086 mode, ensuring that the VM flag is set and IOPL is set to the value for virtual 8086 mode.
     #[inline]
     pub fn set_vm_eflags(&mut self, eflags: Eflags) {
         let mut eflags = eflags.canonicalized();
         eflags.insert(Eflags::VM);
         eflags.set_iopl(VM86::IOPL_VM);
         self._eflags = eflags;
-    }
-
-    /// Adjusts the EFLAGS for virtual 8086 mode by reapplying the VM flag and IOPL bits to the current EFLAGS.
-    #[inline]
-    pub fn adjust_vm_eflags(&mut self) {
-        self.set_vm_eflags(self._eflags);
     }
 
     /// Returns a pointer to the current instruction in virtual 8086 mode.
@@ -807,7 +806,7 @@ impl X86StackContextView<Virtual8086Mode> {
     /// - `int_vec`: The interrupt vector to redirect to.
     /// - `is_external`: Whether the interrupt is an external interrupt or not.
     #[inline]
-    unsafe fn vm_redirect_interrupt(&mut self, int_vec: InterruptVector, is_external: bool) {
+    pub unsafe fn vm_redirect_interrupt(&mut self, int_vec: InterruptVector, is_external: bool) {
         unsafe {
             if is_external {
                 self.vm_push16(self._eflags.bits() as u16);
@@ -840,23 +839,6 @@ impl X86StackContextView<Virtual8086Mode> {
                 Far16Ptr::from_u32((((int_vec.0 as usize) << 2) as *const u32).read_volatile());
             self.eip = Pointer32::from(vm_intvec.off());
             self.set_cs(vm_intvec.sel());
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct BiosCallVector<const V: u8>;
-
-impl<const V: u8> BiosCallVector<V> {
-    #[inline]
-    pub const fn new() -> Self {
-        Self
-    }
-
-    #[inline]
-    pub unsafe fn call(&self, ctx: &mut Vm86StackContext) {
-        unsafe {
-            VM86::call_bios(InterruptVector(V), ctx);
         }
     }
 }

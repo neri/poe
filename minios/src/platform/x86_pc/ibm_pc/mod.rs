@@ -24,7 +24,7 @@ mod bios {
 }
 
 use super::pic::Irq;
-use crate::arch::{lomem::LoMemoryManager, vm86::Vm86StackContext};
+use crate::arch::{lomem::LoMemoryManager, vm86::Vm86Context};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
 use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
@@ -139,7 +139,7 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
         let _1mb = 0x0010_0000;
         let mut smap_supported = false;
         let buf = LoMemoryManager::alloc_page();
-        let mut regs = Vm86StackContext::default();
+        let mut regs = Vm86Context::default();
         loop {
             regs.eax = 0xe820.into();
             regs.edx = 0x534d4150.into();

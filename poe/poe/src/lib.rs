@@ -42,16 +42,17 @@ pub fn main() {
             stdout.current_mode().rows as i32,
         );
 
-        let mut title_bar = TuiWindowBufferAscii::new(
+        let mut title_bar = TuiWindowBufferA::new(
             Rect::new(Point::new(0, 0), Size::new(scr_size.width, 1)),
             Inset::default(),
             TuiAttribute(0xf0),
         );
-        title_bar.put_string_at(Point::new(1, 0), SYSTEM_NAME, title_bar.default_attr);
+        // title_bar.put_string_at(Point::new(1, 0), SYSTEM_NAME, title_bar.default_attr);
+        title_bar.draw_simple_title(SYSTEM_NAME, None, title_bar.default_attr);
         title_bar.draw_to(stdout);
 
         #[allow(unused_mut)]
-        let mut status_bar = TuiWindowBufferAscii::new(
+        let mut status_bar = TuiWindowBufferA::new(
             Rect::new(
                 Point::new(0, scr_size.height - 1),
                 Size::new(scr_size.width, 1),
@@ -72,7 +73,7 @@ pub fn main() {
             MainMenuItem::GraphicsMode,
         ];
 
-        let mut menu_window = TuiWindowBufferAscii::new(
+        let mut menu_window = TuiWindowBufferA::new(
             Rect::new(Point::new(2, 2), Size::new(20, menu_items.len() as i32 + 4)),
             Inset::new(2, 2, 2, 2),
             TuiAttribute(0xf0),
@@ -171,7 +172,7 @@ pub fn main() {
             (scr_size.width - window_size.width) / 2,
             (scr_size.height - window_size.height) / 2,
         );
-        let mut window = TuiWindowBufferAscii::new(
+        let mut window = TuiWindowBufferA::new(
             Rect::new(window_pos, window_size),
             Inset::new(2, 2, 2, 2),
             TuiAttribute(0xf0),
@@ -218,7 +219,7 @@ pub fn main() {
                 stdout.current_mode().rows as i32,
             );
 
-            let mut title_bar = TuiWindowBufferAscii::new(
+            let mut title_bar = TuiWindowBufferA::new(
                 Rect::new(Point::new(0, 0), Size::new(scr_size.0, 1)),
                 Inset::default(),
                 TuiAttribute(0xf0),
@@ -226,7 +227,7 @@ pub fn main() {
             title_bar.put_string_at(Point::new(1, 0), SYSTEM_NAME, title_bar.default_attr);
             title_bar.draw_to(stdout);
 
-            let mut status_bar = TuiWindowBufferAscii::new(
+            let mut status_bar = TuiWindowBufferA::new(
                 Rect::new(Point::new(0, scr_size.1 - 1), Size::new(scr_size.0, 1)),
                 Inset::default(),
                 TuiAttribute(0xf0),
@@ -234,7 +235,7 @@ pub fn main() {
             status_bar.put_string_at(Point::new(1, 0), " Status: None ", status_bar.default_attr);
             status_bar.draw_to(stdout);
 
-            let mut window = TuiWindowBufferAscii::new(
+            let mut window = TuiWindowBufferA::new(
                 Rect::new(Point::new(2, 2), Size::new(20, 10)),
                 Inset::new(2, 2, 2, 2),
                 TuiAttribute(0xf0),

@@ -1,7 +1,7 @@
 //! Disk Bios Driver
 
 use super::{bios::INT13, *};
-use arch::vm86::Vm86StackContext;
+use crate::arch::vm86::Vm86Context;
 use x86::{gpr::Flags, prot::Selector};
 
 pub(super) struct DiskBios {
@@ -11,9 +11,9 @@ pub(super) struct DiskBios {
 impl DiskBios {
     #[inline(never)]
     pub unsafe fn init() {
-        // let info = Environment::boot_info();
+        // let info = System::boot_info();
         // unsafe {
-        //     let mut regs = Vm86StackContext::default();
+        //     let mut regs = Vm86Context::default();
 
         //     println!("boot drive: {:02x}", info.bios_boot_drive.0);
         //     print_disk_type(info.bios_boot_drive.0, &mut regs);
@@ -34,11 +34,12 @@ impl DiskBios {
         //     }
         //     println!("");
         // }
+        // todo!()
     }
 }
 
 #[allow(dead_code)]
-fn print_disk_type(drive: u8, regs: &mut Vm86StackContext) {
+fn print_disk_type(drive: u8, regs: &mut Vm86Context) {
     let drive_type: u8;
 
     regs.eax.set_d(0x15ff);
@@ -104,8 +105,8 @@ impl BlockDevice for Int13Device {
         unimplemented!()
     }
 
-    fn media_info(&self) -> MediaInfo {
-        unimplemented!()
+    fn media_info(&self) -> &MediaInfo {
+        &self.media_info
     }
 }
 

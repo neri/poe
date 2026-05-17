@@ -85,6 +85,7 @@ _boot_info:
 _platform           db 0
 _boot_drive         db 0
 _memsz_lo           dw 0
+_reserved           dd 0
 _start_mid          dd 0x00100000
 _memsz_mid          dd 0
 ```

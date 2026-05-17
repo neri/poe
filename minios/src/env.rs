@@ -78,6 +78,7 @@ impl System {
                     platform: Platform::DeviceTree,
                     bios_boot_drive: BiosDriveSpec(0),
                     x86_real_memory_size: 0,
+                    reserved: 0,
                     start_conventional_memory: 0,
                     conventional_memory_size: 0,
                 },
@@ -115,6 +116,7 @@ impl System {
                     platform: Platform::UefiNative,
                     bios_boot_drive: BiosDriveSpec(0),
                     x86_real_memory_size: 0,
+                    reserved: 0,
                     start_conventional_memory: 0,
                     conventional_memory_size: 0,
                 },
@@ -340,6 +342,8 @@ pub struct SsblInfo {
     pub bios_boot_drive: BiosDriveSpec,
     /// Real memory size in paragraphs (for x86 PC platforms)
     pub x86_real_memory_size: u16,
+    /// Reserved
+    pub reserved: u32,
     /// Start address of conventional memory
     pub start_conventional_memory: u32,
     /// Size of conventional memory in bytes

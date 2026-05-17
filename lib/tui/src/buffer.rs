@@ -18,10 +18,10 @@ pub struct TuiWindowBuffer<TCHAR: TChar> {
 }
 
 /// Type alias for a TUI window buffer with Ascii characters.
-pub type TuiWindowBufferAscii = TuiWindowBuffer<AsciiExt>;
+pub type TuiWindowBufferA = TuiWindowBuffer<AsciiExt>;
 
 /// Type alias for a TUI window buffer with Unicode characters.
-pub type TuiWindowBufferUcs = TuiWindowBuffer<char>;
+pub type TuiWindowBufferU = TuiWindowBuffer<char>;
 
 /// Text Buffer for Text User Interface.
 pub struct TextBuffer<TCHAR: TChar> {

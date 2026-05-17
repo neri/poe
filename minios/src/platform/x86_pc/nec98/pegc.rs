@@ -2,7 +2,7 @@
 
 use super::bios::INT18;
 use super::pc98_text::Pc98Text;
-use crate::arch::vm86::Vm86StackContext;
+use crate::arch::vm86::Vm86Context;
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
@@ -63,7 +63,7 @@ impl GraphicsOutputDevice for PegcBios {
         unsafe {
             let _inner_mode = *self.modes.get(mode.0 as usize).ok_or(())?;
 
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
             regs.eax = 0x300c.into();
             regs.ebx = 0x3200.into();
             INT18.call(&mut regs);
@@ -93,7 +93,7 @@ impl GraphicsOutputDevice for PegcBios {
 
     fn detach(&mut self) {
         unsafe {
-            let mut regs = Vm86StackContext::default();
+            let mut regs = Vm86Context::default();
 
             regs.eax = 0x3008.into();
             regs.ebx = 0x2100.into();

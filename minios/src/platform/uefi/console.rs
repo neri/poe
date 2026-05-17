@@ -101,7 +101,10 @@ impl UefiConsole {
 
     #[inline]
     pub(super) fn handover() {
-        (Self::shared() as &mut dyn SimpleTextOutput).reset();
+        let _ = uefi::system::with_stdout(|v| v.reset(true));
+        let stdout = Self::shared();
+        stdout.set_attribute(0);
+        stdout.clear_screen();
     }
 }
 
@@ -116,7 +119,7 @@ impl core::fmt::Write for UefiConsole {
 impl SimpleTextOutput for UefiConsole {
     #[inline]
     fn reset(&mut self) {
-        let _ = uefi::system::with_stdout(|v| v.reset(true));
+        let _ = uefi::system::with_stdout(|v| v.reset(false));
         self.set_attribute(0);
         self.clear_screen();
     }
@@ -169,7 +172,7 @@ impl SimpleTextOutput for UefiConsole {
 
 impl SimpleTextInput for UefiConsole {
     fn reset(&mut self) {
-        let _ = uefi::system::with_stdin(|v| v.reset(true));
+        let _ = uefi::system::with_stdin(|v| v.reset(false));
     }
 
     fn read_key_stroke(&mut self) -> Option<NonZeroInputKey> {
