@@ -44,6 +44,31 @@ run:
 		-device nec-usb-xhci,id=xhci \
 		-device intel-hda -device hda-duplex \
 		-device usb-hub,bus=xhci.0,port=1,id=usb-hub \
+		-drive id=stick,format=raw,file=fat:rw:$(MNT) \
+		-device usb-tablet \
+		-device usb-audio,id=usb-audio \
+		-serial mon:stdio
+
+run_usb:
+	qemu-system-x86_64 -cpu IvyBridge -smp 4,cores=2,threads=2 -machine q35 -rtc base=localtime,clock=host \
+		-bios $(OVMF_X64) \
+		-device virtio-net-pci \
+		-device nec-usb-xhci,id=xhci \
+		-device intel-hda -device hda-duplex \
+		-device usb-hub,bus=xhci.0,port=1,id=usb-hub \
+		-drive if=none,id=stick,format=raw,file=fat:rw:$(MNT) -device usb-storage,bus=xhci.0,port=2,drive=stick \
+		-device usb-tablet \
+		-device usb-audio,id=usb-audio \
+		-serial mon:stdio
+
+run_cd:
+	qemu-system-x86_64 -cpu IvyBridge -smp 4,cores=2,threads=2 -machine q35 -rtc base=localtime,clock=host \
+		-bios $(OVMF_X64) \
+		-cdrom ../x86-pc/bin/bootcd.iso \
+		-device virtio-net-pci \
+		-device nec-usb-xhci,id=xhci \
+		-device intel-hda -device hda-duplex \
+		-device usb-hub,bus=xhci.0,port=1,id=usb-hub \
 		-drive if=none,id=stick,format=raw,file=fat:rw:$(MNT) -device usb-storage,bus=xhci.0,port=2,drive=stick \
 		-device usb-tablet \
 		-device usb-audio,id=usb-audio \

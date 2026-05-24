@@ -27,6 +27,44 @@ pub const ELFDATA2MSB: u8 = 2;
 pub const EV_NONE: u8 = 0;
 pub const EV_CURRENT: u8 = 1;
 
+/// The ELF format type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ElfFormat {
+    Elf32,
+    Elf64,
+}
+
+impl ElfFormat {
+    /// Identify the ELF format of the given blob.
+    /// Returns `None` if the blob is not a valid ELF file.
+    ///
+    /// Parameters:
+    /// - `blob`: The byte slice to identify.
+    /// - `data`: Optional expected value for the EI_DATA field. The default is `ELFDATA2LSB`.
+    /// - `version`: Optional expected value for the EI_VERSION field. The default is `EV_CURRENT`.
+    pub fn identify(blob: &[u8], data: Option<u8>, version: Option<u8>) -> Option<Self> {
+        if blob.len() < EI_NIDENT {
+            return None;
+        }
+        if blob[..4] != ELFMAG {
+            return None;
+        }
+        let data = data.unwrap_or(ELFDATA2LSB);
+        if blob[EI_DATA] != data {
+            return None;
+        }
+        let version = version.unwrap_or(EV_CURRENT);
+        if blob[EI_VERSION] != version {
+            return None;
+        }
+        match blob[EI_CLASS] {
+            ELFCLASS32 => Some(Self::Elf32),
+            ELFCLASS64 => Some(Self::Elf64),
+            _ => None,
+        }
+    }
+}
+
 pub type ElfHalf = u16;
 pub type ElfWord = u32;
 pub type ElfXWord = u64;
@@ -254,10 +292,10 @@ pub mod elf32 {
 
         #[inline]
         pub fn is_valid(&self) -> bool {
-            (self.e_ident[..4] == ELFMAG)
-                && (self.e_ident[EI_CLASS] == ELFCLASS32)
-                && (self.e_ident[EI_DATA] == ELFDATA2LSB)
-                && (self.e_ident[EI_VERSION] == EV_CURRENT)
+            matches!(
+                ElfFormat::identify(&self.e_ident, Some(ELFDATA2LSB), Some(EV_CURRENT)),
+                Some(ElfFormat::Elf32)
+            )
         }
 
         #[inline]
@@ -318,10 +356,10 @@ pub mod elf64 {
 
         #[inline]
         pub fn is_valid(&self) -> bool {
-            (self.e_ident[..4] == ELFMAG)
-                && (self.e_ident[EI_CLASS] == ELFCLASS64)
-                && (self.e_ident[EI_DATA] == ELFDATA2LSB)
-                && (self.e_ident[EI_VERSION] == EV_CURRENT)
+            matches!(
+                ElfFormat::identify(&self.e_ident, Some(ELFDATA2LSB), Some(EV_CURRENT)),
+                Some(ElfFormat::Elf64)
+            )
         }
 
         #[inline]

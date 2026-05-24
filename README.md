@@ -2,6 +2,14 @@
 
 * An Experimental Project for Early OS Development.
 
+## POE is Not an Operating System
+
+* The main functions operate in Supervisor mode.
+* No multitasking
+* Minimal memory protection
+* The system will stop when an exception occurs.
+* In UEFI environments, `ExitBootServices` is not called until POE is exited.
+
 ## Platforms
 
 * risc-v

@@ -8,6 +8,7 @@ use uefi::{Status, runtime::ResetType};
 
 pub mod block;
 pub mod console;
+pub mod device_path;
 pub mod event;
 pub mod gop;
 
@@ -28,7 +29,7 @@ impl PlatformTrait for Platform {
                 }
             });
 
-            block::init();
+            block::BlockDeviceManager::init();
 
             gop::UefiGop::init();
         }

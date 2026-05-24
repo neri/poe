@@ -159,8 +159,11 @@ struct Fatfs {
 
 #[allow(dead_code)]
 enum FatType {
+    /// < 4085
     Fat12,
+    /// 4085 <= x < 65525
     Fat16,
+    /// >= 65525
     Fat32,
 }
 

@@ -39,6 +39,8 @@ pub enum BlockIoError {
     NoMedia,
     /// The media has changed
     MediaChanged,
+    /// The buffer size is not a multiple of the block size of the device
+    BadBufferSize,
 }
 
 #[derive(Debug, Clone, Copy)]

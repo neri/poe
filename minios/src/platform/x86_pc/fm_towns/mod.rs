@@ -10,9 +10,11 @@ mod fmt_kbd;
 mod fmt_svga;
 mod fmt_text;
 
-use crate::mem::{MemoryManager, MemoryType};
-use crate::platform::x86_pc::pic::Irq;
-use crate::*;
+use crate::{
+    mem::{MemoryManager, MemoryType},
+    platform::x86_pc::pic::Irq,
+    *,
+};
 use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
 pub(super) unsafe fn init(_info: &SsblInfo) {

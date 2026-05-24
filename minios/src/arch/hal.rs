@@ -80,7 +80,7 @@ pub trait HalCpu {
 
     /// Atomically loads a 64-bit counter value from the given pointer.
     #[inline]
-    fn atomic_u64_load(&self, p: &u64) -> u64 {
+    fn load_atomic_counter_u64(&self, p: &u64) -> u64 {
         if cfg!(target_pointer_width = "32") {
             unsafe {
                 let p = p as *const u64 as *const u32;
@@ -105,8 +105,12 @@ pub trait HalCpu {
 #[macro_export]
 macro_rules! without_interrupts {
     ( $f:expr ) => {{
+        use core::sync::atomic::{Ordering, compiler_fence};
+
         let guard = Hal::cpu().interrupt_guard();
+        compiler_fence(Ordering::SeqCst);
         let result = { $f };
+        compiler_fence(Ordering::SeqCst);
         drop(guard);
         result
     }};

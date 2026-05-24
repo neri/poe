@@ -24,14 +24,18 @@ mod bios {
 }
 
 use super::pic::Irq;
-use crate::arch::{lomem::LoMemoryManager, vm86::Vm86Context};
-use crate::mem::{MemoryManager, MemoryType};
-use crate::*;
-use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
+use crate::{
+    arch::{lomem::LoMemoryManager, vm86::Vm86Context},
+    mem::{MemoryManager, MemoryType},
+    *,
+};
+use acpi::{RsdPtr, RsdPtrV1, ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID};
 use core::{ffi::c_void, iter::Iterator, ops::Range};
-use smbios::{SMBIOS_GUID, SmBios};
-use x86::gpr::Eflags;
-use x86::isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB};
+use smbios::{SmBios, SMBIOS_GUID};
+use x86::{
+    gpr::Eflags,
+    isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB},
+};
 
 const USE_UART_STDIO: bool = false;
 
@@ -180,9 +184,9 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             let _ = ps2::Ps2::init();
         }
 
-        vesa_bios::VesaBios::init();
-
         disk_bios::DiskBios::init();
+
+        vesa_bios::VesaBios::init();
     }
 }
 

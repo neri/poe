@@ -1,4 +1,4 @@
-//! Disk Bios Driver
+//! PC compatible Disk BIOS Driver
 
 use super::{bios::INT13, *};
 use crate::arch::vm86::Vm86Context;

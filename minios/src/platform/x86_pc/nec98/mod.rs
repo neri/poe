@@ -5,6 +5,7 @@
 //! May not work or may need to be adjusted as it has not been fully verified on actual hardware.
 //!
 
+mod disk_bios;
 mod pc98_text;
 mod pegc;
 
@@ -20,10 +21,12 @@ mod bios {
 }
 
 use super::pic::Irq;
-use crate::arch::vm86::Vm86Context;
-use crate::io::hid_mgr::{HidManager, KeyStroke};
-use crate::mem::{MemoryManager, MemoryType};
-use crate::*;
+use crate::{
+    arch::vm86::Vm86Context,
+    io::hid_mgr::{HidManager, KeyStroke},
+    mem::{MemoryManager, MemoryType},
+    *,
+};
 use libhid::{Modifier, Usage};
 use x86::isolated_io::{LoIoPortDummyB, LoIoPortWB};
 
@@ -87,6 +90,8 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
         Hal::cpu().enable_interrupt();
 
         BiosTextInput::init();
+
+        disk_bios::DiskBios::init();
 
         pegc::PegcBios::init();
     }

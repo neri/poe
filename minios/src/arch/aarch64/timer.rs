@@ -55,7 +55,7 @@ impl GenericTimer {
     pub fn monotonic() -> u64 {
         unsafe {
             let shared = Self::shared();
-            Hal::cpu().atomic_u64_load(&shared.monotonic_timer_value)
+            Hal::cpu().load_atomic_counter_u64(&shared.monotonic_timer_value)
         }
     }
 

@@ -1,38 +1,6 @@
 ;; Floppy Boot Sector for MEG-OS
 ;; PUBLIC DOMAIN
 ;;
-;; # MEMORY MAP
-;;
-;; 0000_0000 ----------------
-;;           | IVT          |
-;; 0000_0400 ----------------
-;;           | BDA          |
-;;           - - - - - - - -
-;;           | STACK        |
-;; 0000_0700 ----------------
-;;           | UNUSED       |
-;; 0000_7C00 ----------------
-;;           | THIS PROGRAM |
-;; 0000_8000 ----------------
-;;           | FAT BUFFER   |
-;;           - - - - - - - - 
-;;           | UNUSED       |
-;; 0001_0000 ----------------
-;;           | LOADED IMAGE |
-;;           - - - - - - - - 
-;;           | UNUSED       |
-;; 000A_0000 ----------------
-;;           | VRAM & BIOS  |
-;; 000F_FFFF ----------------
-;;
-;; # HANDOVER
-;;
-;; * REAL MODE
-;; * CS:IP = 0x1000:0x0000
-;; * AX = signature (0x1eaf)
-;; * CL = platform type (0: NEC PC-98, 1: IBM PC COMPATIBLE, 2: FM TOWNS)
-;; * CH = drive number (ex. 0x00)
-;;
 
 %define IPL_SIGN    0x1eaf
 %define ARCH_NEC98  0

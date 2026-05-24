@@ -6,7 +6,7 @@ Copyright (c) 2026 MEG-OS Project
 
 ## First Stage Boot Loader (FSBL aka IPL)
 
-* Load a binary with a name like "KERNEL.SYS" or "OSLDR.SYS" from the boot disk.
+* A 512-byte boot sector that auto-detects the platform by examining the CS register value set by each machine's BIOS, then loads `KERNEL.SYS` (or `OSLDR.SYS`) from a FAT12 floppy into memory at `0x1000:0x0000` and jumps to it, passing the platform type and boot drive in registers.
 
 ### State at transition from FSBL to SSBL
 
@@ -99,7 +99,7 @@ _memsz_mid          dd 0
 * _start_mid: start of available extended memory
 * _memsz_mid: Available memory size. This refers only to the amount of memory recognized by SSBL and available at system startup. It does not represent the total system memory.
 
-## License
+## LICENSE
 
 Copyright (c) 2026 MEG-OS Project
 
