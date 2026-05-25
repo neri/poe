@@ -1,11 +1,13 @@
 //! Console driver implementation using UEFI's Simple Text Input and Output protocols.
 
-use crate::io::hid_mgr::HidManager;
-use crate::*;
 use core::cell::UnsafeCell;
 use core::mem::transmute;
+
 use libhid::layouts::KeyStroke;
 use uefi::proto::console::text::Key;
+
+use crate::io::hid_mgr::HidManager;
+use crate::*;
 
 /// Console driver implementation using UEFI's Simple Text Input and Output protocols.
 pub struct UefiConsole {

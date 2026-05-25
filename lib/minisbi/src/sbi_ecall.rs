@@ -1,8 +1,11 @@
 //! Environment call (ecall) handling for MiniSBI.
 
-use crate::{trap::ExceptionContext, *};
 use minilib::unknown_enum::*;
-use sbi::{Eid, EidFid, Fid, ImplementationID, ResetType, SbiRet, base::SpecVersion};
+use sbi::base::SpecVersion;
+use sbi::{Eid, EidFid, Fid, ImplementationID, ResetType, SbiRet};
+
+use crate::trap::ExceptionContext;
+use crate::*;
 
 /// The current SBI specification version implemented by MiniSBI.
 pub const CURRENT_SPEC_VERSION: SpecVersion = SpecVersion::new(0, 2);

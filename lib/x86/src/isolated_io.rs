@@ -1,6 +1,7 @@
 //! Isolated I/O operations.
 
 use core::arch::asm;
+
 use paste::paste;
 
 macro_rules! lo_ioport {

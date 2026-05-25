@@ -1,14 +1,13 @@
 //! Platform dependent module for Raspberry Pi series
 
+use core::arch::asm;
+use core::cell::UnsafeCell;
+use core::mem::MaybeUninit;
+use core::sync::atomic::{Ordering, compiler_fence};
+use core::time::Duration;
+
 use super::{MonotonicTimerPoller, Platform, PlatformTrait};
 use crate::*;
-use core::{
-    arch::asm,
-    cell::UnsafeCell,
-    mem::MaybeUninit,
-    sync::atomic::{Ordering, compiler_fence},
-    time::Duration,
-};
 
 pub mod fb;
 pub mod gpio;

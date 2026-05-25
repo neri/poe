@@ -2,6 +2,7 @@
 #![cfg_attr(not(test), no_std)]
 
 use core::arch::asm;
+
 use minilib::unknown_enum;
 use minilib::unknown_enum::*;
 

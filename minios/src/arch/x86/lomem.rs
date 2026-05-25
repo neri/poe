@@ -1,10 +1,14 @@
 //! Real Mode Memory Manager
 
-use super::bits::AtomicBitArray;
-use crate::*;
-use core::{cell::UnsafeCell, num::NonZeroU16, ops::Range};
+use core::cell::UnsafeCell;
+use core::num::NonZeroU16;
+use core::ops::Range;
+
 use mem::{MemoryMapEntry, MemoryType};
 use x86::prot::{Limit16, Linear32, Selector};
+
+use super::bits::AtomicBitArray;
+use crate::*;
 
 static mut LMM: UnsafeCell<LoMemoryManager> = UnsafeCell::new(LoMemoryManager::new());
 

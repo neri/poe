@@ -1,7 +1,8 @@
 //! Efi Event Polling
 
-use crate::*;
 use core::time::Duration;
+
+use crate::*;
 
 pub struct EfiEventPoller {
     inner: uefi::Event,

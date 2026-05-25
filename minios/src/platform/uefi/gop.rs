@@ -1,9 +1,12 @@
 //! UEFI Graphics Output Protocol (GOP) driver
 
+use uefi::Identify;
+use uefi::prelude::*;
+use uefi::proto::console::gop;
+
 use super::*;
 use crate::io::graphics::*;
 use crate::platform::uefi::console::UefiConsole;
-use uefi::{Identify, prelude::*, proto::console::gop};
 
 /// UEFI Graphics Output Protocol (GOP) driver
 pub struct UefiGop {

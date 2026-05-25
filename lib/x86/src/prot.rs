@@ -1,13 +1,15 @@
 //! protected mode structures
 
+use core::convert::TryFrom;
+use core::fmt::LowerHex;
+use core::mem::transmute;
+
+use paste::paste;
+
 use crate::gpr::Flags;
 #[cfg(target_arch = "x86")]
 use crate::gpr::Gpr32;
 use crate::real::Offset16;
-use core::convert::TryFrom;
-use core::fmt::LowerHex;
-use core::mem::transmute;
-use paste::paste;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Eq, PartialEq)]

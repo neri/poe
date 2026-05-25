@@ -1,9 +1,12 @@
 //! RISC-V Platform Timer implementation
 
+use core::cell::UnsafeCell;
+use core::time::Duration;
+
+use fdt::{NodeName, PropName};
+
 use crate::arch::csr::CSR;
 use crate::*;
-use core::{cell::UnsafeCell, time::Duration};
-use fdt::{NodeName, PropName};
 
 static mut TIMER: UnsafeCell<PlatformTimer> = UnsafeCell::new(PlatformTimer::new());
 

@@ -1,16 +1,13 @@
 //! Zero Allocation Flattened Device Tree Parser
 #![cfg_attr(not(test), no_std)]
 
-use core::{
-    ffi::c_void,
-    fmt,
-    marker::PhantomData,
-    mem::transmute,
-    ops::Deref,
-    ptr::null,
-    slice::{self, Iter},
-    str,
-};
+use core::ffi::c_void;
+use core::marker::PhantomData;
+use core::mem::transmute;
+use core::ops::Deref;
+use core::ptr::null;
+use core::slice::{self, Iter};
+use core::{fmt, str};
 
 /// EFI GUID of the Device Tree Table
 #[cfg(feature = "guid")]

@@ -1,12 +1,14 @@
 //! Framebuffer Display implementations.
+use core::convert::Infallible;
+
+use embedded_graphics::prelude::*;
+use embedded_graphics::primitives::Rectangle;
+
 use super::PixelFormat;
 use super::color::IndexedColor;
 use crate::io::fonts::SimpleGlyph;
 use crate::io::graphics::color::IndexedColorX4;
 use crate::*;
-use core::convert::Infallible;
-use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::Rectangle;
 
 #[repr(transparent)]
 pub struct FbDisplay8(Box<dyn FrameBuffer>);

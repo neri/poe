@@ -1,11 +1,12 @@
 //! Framebuffer console implementation
 
-use super::color::IndexedColor;
-use super::display::FbDisplay8;
-use crate::*;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::Rectangle;
 use simple_font::SimpleFont;
+
+use super::color::IndexedColor;
+use super::display::FbDisplay8;
+use crate::*;
 
 /// Framebuffer Console Output Driver
 pub struct FbCon {

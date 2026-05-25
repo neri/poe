@@ -1,10 +1,13 @@
 //! Platform modules for UEFI
 
-use crate::platform::RecommendedConsoleMode;
-use crate::*;
 use core::mem::transmute;
 use core::time::Duration;
-use uefi::{Status, runtime::ResetType};
+
+use uefi::Status;
+use uefi::runtime::ResetType;
+
+use crate::platform::RecommendedConsoleMode;
+use crate::*;
 
 pub mod block;
 pub mod console;

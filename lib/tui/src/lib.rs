@@ -10,12 +10,12 @@ pub mod fixed_str;
 
 #[allow(unused)]
 pub mod prelude {
-    pub use crate::TChar;
-    pub use crate::TuiDrawTarget;
+    pub use box_drawing;
+
     pub use crate::buffer::*;
     pub use crate::color::*;
     pub use crate::coord::*;
-    pub use box_drawing;
+    pub use crate::{TChar, TuiDrawTarget};
 }
 
 extern crate alloc;

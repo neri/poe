@@ -3,10 +3,12 @@
 pub mod null;
 pub mod vt100;
 
+use core::num::NonZero;
+
+pub use libhid::*;
+
 use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::task::event::{Event, PollResult, PollingEvent};
-use core::num::NonZero;
-pub use libhid::*;
 
 pub trait SimpleTextInput {
     /// Resets the input state

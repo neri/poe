@@ -1,4 +1,5 @@
-use crate::{mem::mmio::*, *};
+use crate::mem::mmio::*;
+use crate::*;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]

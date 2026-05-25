@@ -1,10 +1,11 @@
 //! Hardware Abstraction Layer for riscv
 
-use crate::arch::riscv::csr::CSR;
-use crate::*;
 use core::arch::asm;
 use core::fmt;
 use core::sync::atomic::{Ordering, compiler_fence};
+
+use crate::arch::riscv::csr::CSR;
+use crate::*;
 
 impl HalTrait for Hal {
     #[inline]

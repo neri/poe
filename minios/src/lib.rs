@@ -1,7 +1,6 @@
 //! Mini OS Library
 
 #![cfg_attr(not(test), no_std)]
-// #![feature(negative_impls)]
 
 extern crate alloc;
 
@@ -22,24 +21,22 @@ pub(crate) mod _prelude_ {
 }
 
 pub mod prelude {
-    pub use crate::{
-        arch::hal::*,
-        env::*,
-        io::{media::*, tty::*},
-        platform::{Platform, PlatformTrait, RecommendedConsoleMode},
-        task::event::*,
-    };
-    pub use crate::{print, println};
-    pub use alloc::{
-        borrow::ToOwned,
-        boxed::Box,
-        collections::BTreeMap,
-        rc::Rc,
-        string::{String, ToString},
-        sync::Arc,
-        vec::Vec,
-    };
+    pub use alloc::borrow::ToOwned;
+    pub use alloc::boxed::Box;
+    pub use alloc::collections::BTreeMap;
+    pub use alloc::rc::Rc;
+    pub use alloc::string::{String, ToString};
+    pub use alloc::sync::Arc;
+    pub use alloc::vec::Vec;
     pub use core::fmt::Write;
+
+    pub use crate::arch::hal::*;
+    pub use crate::env::*;
+    pub use crate::io::media::*;
+    pub use crate::io::tty::*;
+    pub use crate::platform::{Platform, PlatformTrait, RecommendedConsoleMode};
+    pub use crate::task::event::*;
+    pub use crate::{print, println};
 }
 
 #[macro_export]

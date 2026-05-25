@@ -1,14 +1,16 @@
 //! PC98 Text Mode Driver
 
+use core::cell::UnsafeCell;
+
+use tui::prelude::box_drawing;
+use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
+
 use super::PORT_5F;
 use crate::arch::cpu::Cpu;
 use crate::arch::vm86::Vm86Context;
 use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 use crate::platform::x86_pc::nec98::bios::INT18;
 use crate::*;
-use core::cell::UnsafeCell;
-use tui::prelude::box_drawing;
-use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
 const COLOR_TABLE: [u8; 8] = [0, 1, 4, 5, 2, 3, 6, 7];
 

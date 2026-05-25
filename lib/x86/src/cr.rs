@@ -1,8 +1,9 @@
 //! Control Registers
 
-use crate::view::ControlRegisterView;
 use core::arch::asm;
 use core::sync::atomic::{Ordering, compiler_fence};
+
+use crate::view::ControlRegisterView;
 
 /// Control Register 0
 #[repr(transparent)]

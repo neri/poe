@@ -1,6 +1,7 @@
 //! Generic Uart driver
-use crate::*;
 use core::cell::UnsafeCell;
+
+use crate::*;
 
 static mut RAW: UnsafeCell<Uart16550> = UnsafeCell::new(Uart16550::new());
 

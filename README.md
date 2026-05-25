@@ -19,8 +19,8 @@
   * UEFI
 * x86-32
   * IBM PC Compatible
-  * NEC PC-98 Series
-  * Fujitsu FM TOWNS Series
+  * NEC PC-98 Series Computer
+  * Fujitsu FM TOWNS
 * arm64
   * Raspberry Pi 3 & 4
 
@@ -35,12 +35,15 @@
   * [ ] uefi
   * [ ] riscv64 virt
   * [ ] riscv32 virt
-  * [ ] rpi
+  * [ ] raspberry pi
+    * [ ] rpi3
+    * [ ] rpi4
+    * [ ] rpi5
 * [x] arch
   * [x] x86-32
   * [ ] x86-64
-  * [x] riscv64
-  * [x] riscv32
+  * [x] rv64gc
+  * [x] rv32imac
     * [x] minisbi
   * [x] rpi
 * [x] simple console i/o
@@ -63,7 +66,7 @@
   * [x] console controller
   * [x] vesa driver
   * [x] pegc driver
-  * [x] fmtowns driver
+  * [x] fmtowns-svga driver
   * [x] rpi driver
   * [x] uefi-gop driver
 * [x] timer
@@ -74,6 +77,10 @@
   * [x] uefi
 * [ ] tui
 * [ ] filesystem
+  * [ ] uefi
+  * [ ] pc-bios
+  * [ ] nec-98
+  * [ ] fm towns
 
 ## History
 

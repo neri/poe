@@ -1,7 +1,8 @@
 //! Physical Memory Protection (PMP) implementation for RISC-V.
 
-use super::*;
 use core::arch::naked_asm;
+
+use super::*;
 
 /// Physical Memory Protection (PMP)
 pub struct Pmp;

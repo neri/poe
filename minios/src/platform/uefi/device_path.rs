@@ -20,6 +20,7 @@ impl GenericDevicePathNode {
         length: DpWord([4, 0]),
     };
 
+    /// Parses a device path node from a byte slice.
     pub fn from_bytes<'a>(bytes: &'a [u8]) -> Option<&'a Self> {
         if bytes.len() < size_of::<Self>() {
             return None;
@@ -28,6 +29,7 @@ impl GenericDevicePathNode {
         unsafe { Some(transmute(bytes.as_ptr())) }
     }
 
+    /// Returns the type and subtype of the device path node, or `None` if the type is unknown.
     pub const fn type_(&self) -> Option<(Type, u8)> {
         match Type::from_u8(self.type_) {
             Some(t) => Some((t, self.sub_type)),
@@ -35,11 +37,13 @@ impl GenericDevicePathNode {
         }
     }
 
+    /// Returns the length of the device path node, including the header.
     #[inline]
     pub const fn len(&self) -> u16 {
         self.length.get()
     }
 
+    /// Returns `true` if this device path node is the end of device path.
     #[inline]
     pub fn is_end(&self) -> bool {
         *self == Self::END
@@ -79,8 +83,9 @@ impl DpQword {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// The type of a device path node.
 #[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type {
     /// Hardware Device Path
     Hardware = 0x01,
@@ -111,6 +116,7 @@ impl Type {
     }
 }
 
+/// The media device path node for hard drive.
 #[repr(C)]
 pub struct HardDriveMedia {
     header: GenericDevicePathNode,
@@ -123,6 +129,7 @@ pub struct HardDriveMedia {
 }
 
 impl HardDriveMedia {
+    /// Parses a hard drive media device path node from a byte slice.
     pub fn parse<'a>(bytes: &'a [u8]) -> Option<&'a Self> {
         if bytes.len() < size_of::<Self>() {
             return None;
@@ -139,26 +146,31 @@ impl HardDriveMedia {
         })
     }
 
+    /// Returns the partition number of this hard drive media device path node.
     #[inline]
     pub const fn partition_number(&self) -> u32 {
         self.partition_number.get()
     }
 
+    /// Returns the starting LBA of the partition described by this hard drive media device path node.
     #[inline]
     pub const fn partition_start(&self) -> u64 {
         self.partition_start.get()
     }
 
+    /// Returns the size of the partition described by this hard drive media device path node, in number of LBAs.
     #[inline]
     pub const fn partition_size(&self) -> u64 {
         self.partition_size.get()
     }
 
+    /// Returns the partition format of this hard drive media device path node.
     #[inline]
     pub const fn partition_format(&self) -> PartitionFormat {
         PartitionFormat::from_u8(self.partition_format)
     }
 
+    /// Returns the partition signature of this hard drive media device path node.
     pub fn partition_signature(&self) -> PartitionSignature {
         match SignatureType::from_u8(self.signature_type) {
             SignatureType::None => PartitionSignature::Unknown,
@@ -176,6 +188,7 @@ impl HardDriveMedia {
     }
 }
 
+/// The Partition Signature of a hard drive media device path node.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PartitionSignature {
     Unknown,
@@ -183,6 +196,7 @@ pub enum PartitionSignature {
     Gpt([u8; 16]),
 }
 
+/// The Partition Format of a hard drive media device path node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PartitionFormat {
     Unknown,
@@ -201,6 +215,8 @@ impl PartitionFormat {
     }
 }
 
+/// The Signature Type of a hard drive media device path node.
+/// Typically, it is same as the Partition Format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignatureType {
     None,
@@ -219,6 +235,7 @@ impl SignatureType {
     }
 }
 
+/// The media device path node for CD-ROM.
 #[repr(C)]
 pub struct CdromMedia {
     header: GenericDevicePathNode,
@@ -228,6 +245,7 @@ pub struct CdromMedia {
 }
 
 impl CdromMedia {
+    /// Parses a CD-ROM media device path node from a byte slice.
     pub fn parse<'a>(bytes: &'a [u8]) -> Option<&'a Self> {
         if bytes.len() < size_of::<Self>() {
             return None;

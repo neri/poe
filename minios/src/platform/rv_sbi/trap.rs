@@ -1,8 +1,10 @@
 // use super::*;
+use core::arch::naked_asm;
+
+use riscv::XLEN_BYTES;
+
 use crate::arch::csr::{CSR, VectorMode};
 use crate::*;
-use core::arch::naked_asm;
-use riscv::XLEN_BYTES;
 
 pub(crate) unsafe fn init() {
     unsafe {

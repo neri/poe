@@ -5,7 +5,9 @@
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
-use core::{fmt, mem::transmute};
+use core::fmt;
+use core::mem::transmute;
+
 pub use uuid_identify::*;
 
 /// Universally Unique IDentifier (RFC 4122)

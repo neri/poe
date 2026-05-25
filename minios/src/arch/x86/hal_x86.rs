@@ -1,10 +1,12 @@
 //! Hardware Abstraction Layer for x86
 
-use crate::*;
 use core::arch::asm;
 use core::fmt;
 use core::sync::atomic::{Ordering, compiler_fence};
+
 use x86::gpr::Flags;
+
+use crate::*;
 
 impl HalTrait for Hal {
     #[inline]

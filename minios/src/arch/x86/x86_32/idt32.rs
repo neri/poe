@@ -1,17 +1,16 @@
 //! Interrupt Descriptor Table
 
-use crate::arch::{
-    gdt::{KERNEL_CSEL, KERNEL_DSEL},
-    vm86::X86StackContext,
-};
-use crate::*;
-use core::{
-    arch::{asm, global_asm},
-    cell::UnsafeCell,
-    sync::atomic::{Ordering, compiler_fence},
-};
+use core::arch::{asm, global_asm};
+use core::cell::UnsafeCell;
+use core::sync::atomic::{Ordering, compiler_fence};
+
 use paste::paste;
-use x86::{gpr::Pointer32, prot::*};
+use x86::gpr::Pointer32;
+use x86::prot::*;
+
+use crate::arch::gdt::{KERNEL_CSEL, KERNEL_DSEL};
+use crate::arch::vm86::X86StackContext;
+use crate::*;
 
 static mut IDT: UnsafeCell<Idt> = UnsafeCell::new(Idt::new());
 

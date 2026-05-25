@@ -1,11 +1,12 @@
 //! Human Interface Device (HID) manager
 
-use crate::*;
 use core::cell::UnsafeCell;
+
+pub use layouts::KeyStroke;
 use libhid::layouts::*;
 use libhid::*;
 
-pub use layouts::KeyStroke;
+use crate::*;
 
 static mut HID_MGR: UnsafeCell<HidManager> = UnsafeCell::new(HidManager::new());
 

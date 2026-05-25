@@ -1,6 +1,8 @@
 //! Trap handling
-use crate::{sbi_ecall::sbi_shutdown, *};
 use riscv::XLEN_BYTES;
+
+use crate::sbi_ecall::sbi_shutdown;
+use crate::*;
 
 pub(crate) unsafe fn init() {
     unsafe {

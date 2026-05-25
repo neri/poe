@@ -1,6 +1,7 @@
-use crate::*;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+
+use crate::*;
 
 #[derive(Debug)]
 pub struct HidParsedReport {

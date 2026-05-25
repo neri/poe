@@ -1,10 +1,13 @@
 //! Platform dependent module for RISC-V machine with SBI
 
+use core::cell::UnsafeCell;
+use core::ffi::c_void;
+use core::time::Duration;
+
+use sbi::Eid;
+
 use super::*;
 use crate::*;
-use core::cell::UnsafeCell;
-use core::{ffi::c_void, time::Duration};
-use sbi::Eid;
 
 pub mod sbi_console;
 pub mod timer;

@@ -2,7 +2,9 @@
 #![no_std]
 #![no_main]
 
-use core::{arch::naked_asm, ffi::c_void};
+use core::arch::naked_asm;
+use core::ffi::c_void;
+
 use poe::prelude::*;
 
 unsafe extern "C" {

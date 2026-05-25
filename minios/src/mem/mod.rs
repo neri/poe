@@ -4,9 +4,10 @@ pub mod global_alloc;
 pub mod mmio;
 
 mod mm;
-pub use mm::*;
+use core::cmp;
+use core::ops::Range;
 
-use core::{cmp, ops::Range};
+pub use mm::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryType {

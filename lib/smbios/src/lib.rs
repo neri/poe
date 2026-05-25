@@ -2,7 +2,9 @@
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
-use core::{ffi::c_void, marker::PhantomData, slice, str};
+use core::ffi::c_void;
+use core::marker::PhantomData;
+use core::{slice, str};
 
 /// EFI GUID of the SMBIOS 1.0 table.
 #[cfg(feature = "guid")]

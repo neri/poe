@@ -1,26 +1,26 @@
 //! i386 cpu core logic
 
-use core::cell::UnsafeCell;
-use core::sync::atomic::{AtomicBool, Ordering};
-use x86::cpuid::{F01C, Feature};
-
 #[cfg(target_arch = "x86")]
-use super::vm86::{UserMode, X86StackContextView};
+pub use core::arch::x86::{__cpuid as cpuid, __cpuid_count as cpuid_count};
+#[cfg(target_arch = "x86_64")]
+pub use core::arch::x86_64::{__cpuid as cpuid, __cpuid_count as cpuid_count};
 #[cfg(target_arch = "x86")]
 use core::arch::{asm, naked_asm};
+use core::cell::UnsafeCell;
 #[cfg(target_arch = "x86")]
 use core::mem::size_of;
 #[cfg(target_arch = "x86")]
 use core::sync::atomic::compiler_fence;
+use core::sync::atomic::{AtomicBool, Ordering};
+
+use x86::cpuid::{F01C, Feature};
 #[cfg(target_arch = "x86")]
 use x86::gpr::Eflags;
 #[cfg(target_arch = "x86")]
 use x86::prot::*;
 
 #[cfg(target_arch = "x86")]
-pub use core::arch::x86::{__cpuid as cpuid, __cpuid_count as cpuid_count};
-#[cfg(target_arch = "x86_64")]
-pub use core::arch::x86_64::{__cpuid as cpuid, __cpuid_count as cpuid_count};
+use super::vm86::{UserMode, X86StackContextView};
 
 static mut SHARED_CPU: UnsafeCell<SharedCpu> = UnsafeCell::new(SharedCpu::new());
 

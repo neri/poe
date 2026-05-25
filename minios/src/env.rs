@@ -1,15 +1,5 @@
 //! MiniOS Execution Environment
 
-use crate::io::{
-    fonts,
-    graphics::{GraphicsOutputDevice, PreferredGraphicsMode, display::FbDisplay8, fbcon::FbCon},
-    tty::{SimpleTextInput, SimpleTextOutput},
-};
-use crate::mem::MemoryManager;
-use crate::null::NullTty;
-use crate::platform::*;
-use crate::task::event::{Event, PollResult};
-use crate::*;
 use core::fmt;
 use core::iter::Iterator;
 use core::mem::MaybeUninit;
@@ -17,7 +7,19 @@ use core::ops::Range;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
 use core::time::Duration;
+
 use guid::Guid;
+
+use crate::io::fonts;
+use crate::io::graphics::display::FbDisplay8;
+use crate::io::graphics::fbcon::FbCon;
+use crate::io::graphics::{GraphicsOutputDevice, PreferredGraphicsMode};
+use crate::io::tty::{SimpleTextInput, SimpleTextOutput};
+use crate::mem::MemoryManager;
+use crate::null::NullTty;
+use crate::platform::*;
+use crate::task::event::{Event, PollResult};
+use crate::*;
 
 static mut SYSTEM: MaybeUninit<System> = MaybeUninit::zeroed();
 

@@ -20,15 +20,14 @@ mod bios {
     pub const INT1B: BiosCallVector<0x1B> = BiosCallVector::new();
 }
 
-use super::pic::Irq;
-use crate::{
-    arch::vm86::Vm86Context,
-    io::hid_mgr::{HidManager, KeyStroke},
-    mem::{MemoryManager, MemoryType},
-    *,
-};
 use libhid::{Modifier, Usage};
 use x86::isolated_io::{LoIoPortDummyB, LoIoPortWB};
+
+use super::pic::Irq;
+use crate::arch::vm86::Vm86Context;
+use crate::io::hid_mgr::{HidManager, KeyStroke};
+use crate::mem::{MemoryManager, MemoryType};
+use crate::*;
 
 pub static PORT_5F: LoIoPortDummyB<0x5F> = LoIoPortDummyB::new();
 

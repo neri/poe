@@ -1,12 +1,15 @@
 //! CGA Text Mode Driver
 
-use super::bios::INT10;
-use crate::System;
-use crate::arch::{cpu::Cpu, vm86::Vm86Context};
-use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 use core::cell::UnsafeCell;
+
 use tui::prelude::box_drawing;
 use x86::isolated_io::*;
+
+use super::bios::INT10;
+use crate::System;
+use crate::arch::cpu::Cpu;
+use crate::arch::vm86::Vm86Context;
+use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 
 pub struct CgaText {
     mode: SimpleTextOutputMode,

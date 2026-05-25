@@ -1,22 +1,22 @@
 //! Simple Virtual 8086 Mode Manager
 
-use crate::arch::{
-    cpu::Cpu,
-    gdt::Gdt,
-    idt::Idt,
-    lomem::{LoMemoryManager, ManagedLowMemory},
-    setjmp::JmpBuf,
-};
+use core::cell::UnsafeCell;
+use core::marker::PhantomData;
+use core::mem::transmute;
+use core::num::NonZeroUsize;
+use core::ops::{Deref, DerefMut};
+use core::ptr::null_mut;
+
+use x86::gpr::*;
+use x86::prot::*;
+use x86::real::*;
+
+use crate::arch::cpu::Cpu;
+use crate::arch::gdt::Gdt;
+use crate::arch::idt::Idt;
+use crate::arch::lomem::{LoMemoryManager, ManagedLowMemory};
+use crate::arch::setjmp::JmpBuf;
 use crate::*;
-use core::{
-    cell::UnsafeCell,
-    marker::PhantomData,
-    mem::transmute,
-    num::NonZeroUsize,
-    ops::{Deref, DerefMut},
-    ptr::null_mut,
-};
-use x86::{gpr::*, prot::*, real::*};
 
 static mut VMM: UnsafeCell<VM86> = UnsafeCell::new(VM86::new());
 

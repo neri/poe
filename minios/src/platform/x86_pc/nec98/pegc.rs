@@ -1,12 +1,13 @@
 //! PC-9821 640x480 Graphics Mode Driver
 
+use x86::isolated_io::LoIoPortWB;
+
 use super::bios::INT18;
 use super::pc98_text::Pc98Text;
 use crate::arch::vm86::Vm86Context;
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
-use x86::isolated_io::LoIoPortWB;
 
 pub struct PegcBios {
     modes: Vec<ModeInfo>,

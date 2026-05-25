@@ -2,14 +2,17 @@
 //!
 //! TODO: to support VGA mode 13 without VBE
 
+use alloc::collections::BinaryHeap;
+
+use x86::isolated_io::IoPortWB;
+
 use super::bios::INT10;
 use super::cga_text::CgaText;
-use crate::arch::{lomem::LoMemoryManager, vm86::Vm86Context};
+use crate::arch::lomem::LoMemoryManager;
+use crate::arch::vm86::Vm86Context;
 use crate::io::graphics::color::IndexedColor;
 use crate::io::graphics::*;
 use crate::*;
-use alloc::collections::BinaryHeap;
-use x86::isolated_io::IoPortWB;
 
 pub struct VesaBios {
     modes: Vec<ModeInfo>,

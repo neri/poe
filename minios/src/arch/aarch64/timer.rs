@@ -1,9 +1,10 @@
 //! Generic Timer for AArch64
 
-use crate::*;
 use core::arch::asm;
 use core::cell::UnsafeCell;
 use core::time::Duration;
+
+use crate::*;
 
 static mut TIMER: UnsafeCell<GenericTimer> = UnsafeCell::new(GenericTimer::new());
 

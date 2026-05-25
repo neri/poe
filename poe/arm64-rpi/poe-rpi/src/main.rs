@@ -3,6 +3,7 @@
 #![no_main]
 
 use core::arch::naked_asm;
+
 use poe::prelude::*;
 
 fn _arch_rpi_start(dtb: usize) -> ! {

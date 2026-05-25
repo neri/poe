@@ -1,9 +1,10 @@
 //! Hardware Abstraction Layer for aarch64
 
-use crate::*;
 use core::arch::asm;
 use core::fmt;
 use core::sync::atomic::{Ordering, compiler_fence};
+
+use crate::*;
 
 impl HalTrait for Hal {
     #[inline]

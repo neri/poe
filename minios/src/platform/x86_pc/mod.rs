@@ -6,11 +6,12 @@ pub mod nec98;
 mod pic;
 mod pit;
 
+use core::time::Duration;
+
 use super::{MonotonicTimerPoller, Platform, PlatformTrait};
 use crate::arch::{cpu, gdt, idt, lomem, vm86};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
-use core::time::Duration;
 
 impl PlatformTrait for Platform {
     unsafe fn init(_arg: usize) {

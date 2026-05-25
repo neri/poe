@@ -1,9 +1,11 @@
 //! VT100 Serial Terminal Driver
 
+use core::time::Duration;
+
+use tui::prelude::box_drawing::AsciiExt;
+
 use super::*;
 use crate::*;
-use core::time::Duration;
-use tui::prelude::box_drawing::AsciiExt;
 
 /// Color mapping from 3-bit color attributes to VT100 color codes.
 const COLOR_TABLE: [u8; 8] = [0, 4, 2, 6, 1, 5, 3, 7];

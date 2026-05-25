@@ -1,8 +1,11 @@
 //! PC-98 Disk BIOS Driver
 
-use super::{bios::INT1B, *};
+use x86::gpr::Flags;
+use x86::prot::Selector;
+
+use super::bios::INT1B;
+use super::*;
 use crate::arch::vm86::Vm86Context;
-use x86::{gpr::Flags, prot::Selector};
 
 pub(super) struct DiskBios {
     //

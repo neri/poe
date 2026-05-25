@@ -1,12 +1,14 @@
 //! TUI text buffer implementation.
 
-use crate::fixed_str::FixedStrBuf;
-use crate::prelude::*;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use box_drawing::AsciiExt;
 use core::cell::UnsafeCell;
 use core::num::NonZero;
+
+use box_drawing::AsciiExt;
+
+use crate::fixed_str::FixedStrBuf;
+use crate::prelude::*;
 
 /// Window Buffer for Text User Interface.
 pub struct TuiWindowBuffer<TCHAR: TChar> {

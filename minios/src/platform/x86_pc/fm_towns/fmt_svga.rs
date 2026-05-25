@@ -1,10 +1,13 @@
 //! FM TOWNS Graphics Mode Driver
 
-use super::{crtc::Crtc, fmt_text::FmtText};
-use crate::arch::cpu::Cpu;
-use crate::io::graphics::{color::IndexedColor, *};
-use crate::*;
 use x86::isolated_io::IoPortWB;
+
+use super::crtc::Crtc;
+use super::fmt_text::FmtText;
+use crate::arch::cpu::Cpu;
+use crate::io::graphics::color::IndexedColor;
+use crate::io::graphics::*;
+use crate::*;
 
 pub struct FmtSvga {
     modes: Vec<ModeInfo>,

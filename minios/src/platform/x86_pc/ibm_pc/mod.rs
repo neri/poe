@@ -23,19 +23,20 @@ mod bios {
     pub const INT16: BiosCallVector<0x16> = BiosCallVector::new();
 }
 
+use core::ffi::c_void;
+use core::iter::Iterator;
+use core::ops::Range;
+
+use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
+use smbios::{SMBIOS_GUID, SmBios};
+use x86::gpr::Eflags;
+use x86::isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB};
+
 use super::pic::Irq;
-use crate::{
-    arch::{lomem::LoMemoryManager, vm86::Vm86Context},
-    mem::{MemoryManager, MemoryType},
-    *,
-};
-use acpi::{RsdPtr, RsdPtrV1, ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID};
-use core::{ffi::c_void, iter::Iterator, ops::Range};
-use smbios::{SmBios, SMBIOS_GUID};
-use x86::{
-    gpr::Eflags,
-    isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB},
-};
+use crate::arch::lomem::LoMemoryManager;
+use crate::arch::vm86::Vm86Context;
+use crate::mem::{MemoryManager, MemoryType};
+use crate::*;
 
 const USE_UART_STDIO: bool = false;
 

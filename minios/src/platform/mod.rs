@@ -17,12 +17,13 @@ pub use rv_sbi as current;
 
 #[cfg(feature = "uefi")]
 pub mod uefi;
+use core::fmt;
+use core::time::Duration;
+
 #[cfg(feature = "uefi")]
 pub use uefi as current;
 
 use crate::*;
-use core::fmt;
-use core::time::Duration;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]

@@ -1,15 +1,16 @@
 //! FM TOWNS Pseudo Text Mode Driver
 
+use core::cell::UnsafeCell;
+use core::mem::transmute;
+
+use tui::prelude::box_drawing;
+use x86::isolated_io::*;
+
 use super::crtc::Crtc;
 use crate::System;
 use crate::arch::cpu::Cpu;
-use crate::io::{
-    graphics::color::IndexedColor,
-    tty::{SimpleTextOutput, SimpleTextOutputMode},
-};
-use core::{cell::UnsafeCell, mem::transmute};
-use tui::prelude::box_drawing;
-use x86::isolated_io::*;
+use crate::io::graphics::color::IndexedColor;
+use crate::io::tty::{SimpleTextOutput, SimpleTextOutputMode};
 
 const TVRAM_OFFSET_MASK: usize = 0x0003_ffff / 4;
 

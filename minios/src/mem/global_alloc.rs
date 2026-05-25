@@ -1,10 +1,9 @@
 //! Global Allocator
 
+use core::alloc::{GlobalAlloc, Layout};
+use core::ptr::null_mut;
+
 use super::{MemoryManager, MemoryType};
-use core::{
-    alloc::{GlobalAlloc, Layout},
-    ptr::null_mut,
-};
 
 #[global_allocator]
 static ALLOC: CustomAlloc = CustomAlloc::new();

@@ -1,9 +1,13 @@
 extern crate proc_macro;
 
-use box_drawing::{BoxDrawingChar, dir::LineDir};
+use std::fs::File;
+use std::io::Read;
+use std::vec;
+
+use box_drawing::BoxDrawingChar;
+use box_drawing::dir::LineDir;
 use image::{GenericImage, GenericImageView, Pixel, Rgba};
 use proc_macro::{Span, TokenStream};
-use std::{fs::File, io::Read, vec};
 
 /// A macro to include specified font at compile time.
 ///

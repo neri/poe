@@ -1,10 +1,12 @@
 //! Spinlock
 
-use crate::*;
-use arch::spinlock::Spinlock;
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
+
+use arch::spinlock::Spinlock;
+
+use crate::*;
 
 /// Mutual exclusion primitives like std::sync::Mutex implemented in Spinlock
 pub struct SpinMutex<T: ?Sized> {

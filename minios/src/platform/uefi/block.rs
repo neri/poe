@@ -1,21 +1,20 @@
 //! Block device driver for UEFI
 
+use alloc::vec::Vec;
+use core::cell::UnsafeCell;
+
+use uefi::Identify;
+use uefi::boot::ScopedProtocol;
+use uefi::prelude::*;
+use uefi::proto::device_path::DevicePath;
+use uefi::proto::loaded_image::LoadedImage;
+use uefi::proto::media::block::{BlockIO, BlockIOMedia};
+use uefi::proto::media::fs::SimpleFileSystem;
+
 use super::device_path::{
     CdromMedia, GenericDevicePathNode, HardDriveMedia, PartitionSignature, Type,
 };
 use super::*;
-use alloc::vec::Vec;
-use core::cell::UnsafeCell;
-use uefi::proto::media::block::BlockIOMedia;
-use uefi::{
-    Handle, Identify,
-    boot::ScopedProtocol,
-    proto::{
-        device_path::DevicePath,
-        loaded_image::LoadedImage,
-        media::{block::BlockIO, fs::SimpleFileSystem},
-    },
-};
 
 static mut BLOCK_DEVICE_MANAGER: UnsafeCell<BlockDeviceManager> =
     UnsafeCell::new(BlockDeviceManager::new());
@@ -208,6 +207,7 @@ fn parse_device(handle: Handle) -> Option<UefiBlockDevice> {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct UefiBlockDevice {
+    /// The BlockIO protocol of the device
     block_io: Box<ScopedProtocol<BlockIO>>,
     /// The handle of the device
     handle: Handle,

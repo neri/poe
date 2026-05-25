@@ -1,10 +1,12 @@
 //! PIT: Programmable Interval Timer i8253/i8254
 
-use super::pic::{Irq, IrqHandler};
-use crate::*;
 use core::cell::UnsafeCell;
 use core::time::Duration;
+
 use x86::isolated_io::IoPortWB;
+
+use super::pic::{Irq, IrqHandler};
+use crate::*;
 
 static mut PIT: UnsafeCell<Pit> = UnsafeCell::new(Pit::new());
 

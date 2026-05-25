@@ -1,11 +1,10 @@
 //! Event subsystem
 
 // use super::*;
-use crate::{
-    platform::{Platform, PlatformTrait},
-    *,
-};
 use core::time::Duration;
+
+use crate::platform::{Platform, PlatformTrait};
+use crate::*;
 
 // pub type EventCallback = *const fn(usize);
 

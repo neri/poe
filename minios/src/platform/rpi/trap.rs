@@ -1,5 +1,7 @@
-use crate::{platform::rpi::timer_eoi, *};
 use core::arch::{asm, naked_asm};
+
+use crate::platform::rpi::timer_eoi;
+use crate::*;
 
 pub(super) unsafe fn init() {
     unsafe {

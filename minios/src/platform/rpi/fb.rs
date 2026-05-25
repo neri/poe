@@ -1,8 +1,11 @@
-use super::mbox::{Mbox, PixelOrder, Tag};
-use crate::io::graphics::{color::IndexedColor, *};
-use crate::*;
 use core::mem::transmute;
+
 use edid::Edid;
+
+use super::mbox::{Mbox, PixelOrder, Tag};
+use crate::io::graphics::color::IndexedColor;
+use crate::io::graphics::*;
+use crate::*;
 
 pub struct Fb {
     modes: Vec<ModeInfo>,

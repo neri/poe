@@ -1,16 +1,13 @@
 //! Hardware Abstraction Layer
 
 use alloc::rc::Rc;
-use core::{
-    ffi::c_void,
-    fmt,
-    marker::PhantomData,
-    ops::{Add, BitAnd, BitOr, Mul, Not, Sub},
-    sync::atomic::{Ordering, compiler_fence},
-};
-
+use core::ffi::c_void;
+use core::fmt;
+use core::marker::PhantomData;
 #[allow(unused_imports)]
 use core::num::{NonZeroU32, NonZeroU64};
+use core::ops::{Add, BitAnd, BitOr, Mul, Not, Sub};
+use core::sync::atomic::{Ordering, compiler_fence};
 
 pub struct Hal;
 

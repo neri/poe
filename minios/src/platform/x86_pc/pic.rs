@@ -1,16 +1,18 @@
 //! PIC: Programmable Interrupt Controller i8259
 
-use super::gdt::KERNEL_DSEL;
-use super::idt::Idt;
-use super::vm86::{VM86, X86StackContext};
-use crate::*;
 use core::arch::global_asm;
 use core::cell::UnsafeCell;
 use core::num::NonZeroUsize;
+
 use paste::paste;
 use seq_macro::seq;
 use x86::isolated_io::{IoPortRB, IoPortRWB, IoPortWB};
 use x86::prot::{DPL0, InterruptVector};
+
+use super::gdt::KERNEL_DSEL;
+use super::idt::Idt;
+use super::vm86::{VM86, X86StackContext};
+use crate::*;
 
 static mut PIC: UnsafeCell<Pic> = UnsafeCell::new(Pic::new());
 

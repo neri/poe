@@ -1,9 +1,7 @@
 //! RISCV Control and Status Registers
 
-use core::{
-    arch::asm,
-    sync::atomic::{Ordering, compiler_fence},
-};
+use core::arch::asm;
+use core::sync::atomic::{Ordering, compiler_fence};
 
 pub mod pmp;
 

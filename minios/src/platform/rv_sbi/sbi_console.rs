@@ -1,7 +1,9 @@
 //! Console implementation using SBI
 
-use crate::{vt100::VT100, *};
 use core::cell::UnsafeCell;
+
+use crate::vt100::VT100;
+use crate::*;
 
 pub struct SbiConsole {
     last_input: Option<u8>,

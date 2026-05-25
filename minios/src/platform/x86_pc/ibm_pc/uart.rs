@@ -1,8 +1,11 @@
 //! Console implementation using UART
 
-use crate::{vt100::VT100, *};
 use core::cell::UnsafeCell;
+
 use x86::isolated_io::{IoPortRB, IoPortRWB, IoPortWB};
+
+use crate::vt100::VT100;
+use crate::*;
 
 static mut RAW: UnsafeCell<Uart16550> = UnsafeCell::new(Uart16550::new());
 

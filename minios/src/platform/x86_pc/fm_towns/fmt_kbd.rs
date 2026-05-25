@@ -1,11 +1,13 @@
 //! FM TOWNS Keyboard Driver
 
+use core::cell::UnsafeCell;
+
+use libhid::*;
+use x86::isolated_io::{IoPortRB, IoPortWB};
+
 use crate::io::hid_mgr::{HidManager, KeyStroke};
 use crate::platform::x86_pc::pic::Irq;
 use crate::*;
-use core::cell::UnsafeCell;
-use libhid::*;
-use x86::isolated_io::{IoPortRB, IoPortWB};
 
 static mut FMT_KBD: UnsafeCell<FmtKbd> = UnsafeCell::new(FmtKbd::new());
 

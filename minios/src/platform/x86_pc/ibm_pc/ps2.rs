@@ -1,12 +1,14 @@
 //! PS2 Driver
 
+use core::cell::UnsafeCell;
+
+use bitflags::bitflags;
+use libhid::*;
+use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
+
 use super::Irq;
 use crate::io::hid_mgr::KeyStroke;
 use crate::*;
-use bitflags::bitflags;
-use core::cell::UnsafeCell;
-use libhid::*;
-use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
 static mut PS2: UnsafeCell<Ps2> = UnsafeCell::new(Ps2::new());
 

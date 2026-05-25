@@ -6,21 +6,18 @@ extern crate alloc;
 
 #[allow(unused_imports)]
 use core::time::Duration;
-use minios::io::{
-    graphics::PreferredGraphicsMode,
-    tui::{self, prelude::box_drawing::AsciiExt},
-};
-#[allow(unused_imports)]
-use minios::mem::MemoryManager;
-use minios::prelude::*;
-
-#[allow(unused_imports)]
-use tui::prelude::*;
 
 #[allow(unused_imports)]
 use minios::io::graphics::PixelFormat;
-
+use minios::io::graphics::PreferredGraphicsMode;
+use minios::io::tui::prelude::box_drawing::AsciiExt;
+use minios::io::tui::{self};
+#[allow(unused_imports)]
+use minios::mem::MemoryManager;
 pub use minios::prelude;
+use minios::prelude::*;
+#[allow(unused_imports)]
+use tui::prelude::*;
 
 #[allow(unused)]
 static SYSTEM_NAME: &str = "myosExp";

@@ -1,9 +1,9 @@
-use crate::{mem::mmio::Mmio32, *};
-use core::{
-    arch::asm,
-    marker::PhantomData,
-    sync::atomic::{Ordering, compiler_fence},
-};
+use core::arch::asm;
+use core::marker::PhantomData;
+use core::sync::atomic::{Ordering, compiler_fence};
+
+use crate::mem::mmio::Mmio32;
+use crate::*;
 
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]

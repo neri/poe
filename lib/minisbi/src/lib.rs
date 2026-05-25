@@ -3,13 +3,15 @@
 //! This is a minimal SBI implementation that provides only the necessary functions for minios to run on RISC-V virt machine.
 #![cfg_attr(not(test), no_std)]
 
-use crate::syscon::Syscon;
-use crate::uart::Uart16550;
 use core::arch::{asm, naked_asm};
 use core::sync::atomic::{Ordering, compiler_fence};
+
 use riscv::XLEN;
 use riscv::csr::pmp::{PmpAddressMode, PmpConfig, PmpIndex};
 use riscv::csr::{CSR, VectorMode};
+
+use crate::syscon::Syscon;
+use crate::uart::Uart16550;
 
 pub mod sbi_ecall;
 pub mod syscon;

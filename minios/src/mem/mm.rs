@@ -2,23 +2,21 @@
 //!
 //! TODO: Will rewrite the whole thing later
 
-use super::{MemoryAllocationStrategy, MemoryMapEntry, MemoryType};
-use crate::*;
-use core::{
-    alloc::Layout,
-    cell::UnsafeCell,
-    cmp,
-    ops::{Deref, DerefMut, Range},
-    ptr::{NonNull, null_mut},
-};
-#[allow(unused_imports)]
-use minilib::fixedvec::FixedVec;
-
-#[cfg(target_arch = "x86")]
-use crate::arch::lomem::LoMemoryManager;
+use core::alloc::Layout;
+use core::cell::UnsafeCell;
+use core::cmp;
+use core::ops::{Deref, DerefMut, Range};
+use core::ptr::{NonNull, null_mut};
 
 #[cfg(feature = "device_tree")]
 use fdt::DeviceTree;
+#[allow(unused_imports)]
+use minilib::fixedvec::FixedVec;
+
+use super::{MemoryAllocationStrategy, MemoryMapEntry, MemoryType};
+#[cfg(target_arch = "x86")]
+use crate::arch::lomem::LoMemoryManager;
+use crate::*;
 
 static mut MM: UnsafeCell<MemoryManager> = UnsafeCell::new(MemoryManager::new());
 

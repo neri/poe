@@ -1,5 +1,7 @@
-use super::{gpio::*, *};
-use crate::{Hal, HalCpu, HalTrait, mem::mmio::Mmio32};
+use super::gpio::*;
+use super::*;
+use crate::mem::mmio::Mmio32;
+use crate::{Hal, HalCpu, HalTrait};
 
 #[allow(dead_code)]
 static mut UART1: MiniUart = MiniUart {};

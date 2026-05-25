@@ -3,7 +3,8 @@
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
-use core::{fmt, mem::transmute};
+use core::fmt;
+use core::mem::transmute;
 
 /// Globally Unique Identifier (MS-GUID)
 #[repr(C, align(8))]
