@@ -29,7 +29,6 @@ use core::ops::Range;
 
 use acpi::{ACPI_10_TABLE_GUID, ACPI_20_TABLE_GUID, RsdPtr, RsdPtrV1};
 use smbios::{SMBIOS_GUID, SmBios};
-use x86::gpr::Eflags;
 use x86::isolated_io::{IoPortWB, LoIoPortRB, LoIoPortWB};
 
 use super::pic::Irq;
@@ -152,12 +151,12 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
             regs.set_vmes(buf.sel());
             regs.edi.set_zero();
             bios::INT15.call(&mut regs);
-            if regs.eflags().contains(Eflags::CF) || regs.eax.d() != 0x534d4150 {
+            if regs.eflags().is_c() || regs.eax.d() != 0x534d4150 {
                 break;
             }
             smap_supported = true;
 
-            let entry = &*(buf.as_slice().as_ptr() as *const SmapEntry);
+            let entry = buf.map::<SmapEntry>().unwrap();
             let range = entry.range();
             let mem_type = entry.mem_type();
             if range.start < _1mb && range.end <= _1mb {

@@ -62,7 +62,7 @@ impl CgaText {
             let mut regs = Vm86Context::default();
             regs.eax = 0x1a00.into();
             INT10.call(&mut regs);
-            if regs.eax.b() == 0x1a {
+            if regs.al() == 0x1a {
                 // vga or later
                 shared.is_vga = true;
                 shared.attr_mask = 0xff;

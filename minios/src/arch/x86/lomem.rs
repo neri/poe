@@ -6,6 +6,7 @@ use core::ops::Range;
 
 use mem::{MemoryMapEntry, MemoryType};
 use x86::prot::{Limit16, Linear32, Selector};
+use x86::real::{Far16Ptr, Offset16};
 
 use super::bits::AtomicBitArray;
 use crate::*;
@@ -171,7 +172,7 @@ impl ManagedLowMemory {
     }
 
     #[inline]
-    pub fn sel(&self) -> Selector {
+    pub const fn sel(&self) -> Selector {
         Selector(self.base_para)
     }
 
@@ -181,12 +182,39 @@ impl ManagedLowMemory {
     }
 
     #[inline]
+    pub const fn as_far16(&self) -> Far16Ptr {
+        Far16Ptr::new(self.sel(), Offset16::ZERO)
+    }
+
+    #[inline]
     pub fn as_slice<'a>(&self) -> &'a mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
                 self.base().as_ptr(),
                 self.limit().as_u32() as usize + 1,
             )
+        }
+    }
+
+    /// Clear the memory to zero
+    #[inline]
+    pub fn clear(&self) {
+        unsafe {
+            core::ptr::write_bytes(
+                self.base().as_ptr::<u8>(),
+                0,
+                (self.limit().as_u32() as usize) + 1,
+            );
+        }
+    }
+
+    #[inline]
+    pub fn map<T: Sized>(&self) -> Option<&mut T> {
+        if self.limit.get() as usize + 1 < core::mem::size_of::<T>() {
+            None
+        } else {
+            // SAFETY: The size is checked above
+            unsafe { Some(&mut *(self.base().as_ptr() as *mut T)) }
         }
     }
 }

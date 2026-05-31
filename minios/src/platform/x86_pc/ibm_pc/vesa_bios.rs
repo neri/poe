@@ -39,7 +39,7 @@ impl VesaBios {
             regs.set_vmes(buffer.sel());
             regs.edi.set_zero();
             INT10.call(&mut regs);
-            if regs.eax.w() != 0x004f {
+            if regs.ax() != 0x004f {
                 // VESA BIOS not supported
                 return;
             }
@@ -61,10 +61,10 @@ impl VesaBios {
                 regs.set_vmes(buffer.sel());
                 regs.edi.set_zero();
                 INT10.call(&mut regs);
-                if regs.eax.w() != 0x004f {
+                if regs.ax() != 0x004f {
                     continue;
                 }
-                let mode_info = &*buffer.base().as_ptr::<VbeModeInfo>();
+                let mode_info = buffer.map::<VbeModeInfo>().unwrap();
 
                 if mode_info.attributes & 0x99 != 0x99 {
                     // not supported, not graphics, not linear framebuffer
@@ -118,17 +118,17 @@ impl GraphicsOutputDevice for VesaBios {
             regs.set_vmes(buffer.sel());
             regs.edi.set_zero();
             INT10.call(&mut regs);
-            if regs.eax.w() != 0x004f {
+            if regs.ax() != 0x004f {
                 return Err(());
             }
-            let vbe_mode_info = &*buffer.base().as_ptr::<VbeModeInfo>();
+            let vbe_mode_info = buffer.map::<VbeModeInfo>().unwrap();
             let fb = vbe_mode_info.phys_base_ptr as usize;
             let fb_size = info.bytes_per_scanline as usize * info.height as usize;
 
             regs.eax = 0x4f02.into();
             regs.ebx = (0x4000 | bios_mode as u32).into();
             INT10.call(&mut regs);
-            if regs.eax.w() != 0x004f {
+            if regs.ax() != 0x004f {
                 return Err(());
             }
 

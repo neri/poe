@@ -536,6 +536,81 @@ impl X86StackContext {
     }
 
     #[inline]
+    pub const fn al(&self) -> u8 {
+        self.eax.b()
+    }
+
+    #[inline]
+    pub const fn ah(&self) -> u8 {
+        self.eax.h()
+    }
+
+    #[inline]
+    pub const fn ax(&self) -> u16 {
+        self.eax.w()
+    }
+
+    #[inline]
+    pub const fn bl(&self) -> u8 {
+        self.ebx.b()
+    }
+
+    #[inline]
+    pub const fn bh(&self) -> u8 {
+        self.ebx.h()
+    }
+
+    #[inline]
+    pub const fn bx(&self) -> u16 {
+        self.ebx.w()
+    }
+
+    #[inline]
+    pub const fn cl(&self) -> u8 {
+        self.ecx.b()
+    }
+
+    #[inline]
+    pub const fn ch(&self) -> u8 {
+        self.ecx.h()
+    }
+
+    #[inline]
+    pub const fn cx(&self) -> u16 {
+        self.ecx.w()
+    }
+
+    #[inline]
+    pub const fn dl(&self) -> u8 {
+        self.edx.b()
+    }
+
+    #[inline]
+    pub const fn dh(&self) -> u8 {
+        self.edx.h()
+    }
+
+    #[inline]
+    pub const fn dx(&self) -> u16 {
+        self.edx.w()
+    }
+
+    #[inline]
+    pub const fn bp(&self) -> u16 {
+        self.ebp.w()
+    }
+
+    #[inline]
+    pub const fn si(&self) -> u16 {
+        self.esi.w()
+    }
+
+    #[inline]
+    pub const fn di(&self) -> u16 {
+        self.edi.w()
+    }
+
+    #[inline]
     pub const fn error_code(&self) -> u16 {
         self._error_code as u16
     }

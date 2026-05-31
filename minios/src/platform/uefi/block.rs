@@ -16,8 +16,7 @@ use super::device_path::{
 };
 use super::*;
 
-static mut BLOCK_DEVICE_MANAGER: UnsafeCell<BlockDeviceManager> =
-    UnsafeCell::new(BlockDeviceManager::new());
+static mut SHARED: UnsafeCell<BlockDeviceManager> = UnsafeCell::new(BlockDeviceManager::new());
 
 pub struct BlockDeviceManager {
     handle_order: Vec<Handle>,
@@ -36,7 +35,7 @@ impl BlockDeviceManager {
 
     #[inline]
     unsafe fn shared() -> &'static mut Self {
-        unsafe { (&mut *(&raw mut BLOCK_DEVICE_MANAGER)).get_mut() }
+        unsafe { (&mut *(&raw mut SHARED)).get_mut() }
     }
 
     pub unsafe fn init() {
@@ -45,9 +44,9 @@ impl BlockDeviceManager {
 
     /// Recognizes block devices
     fn _recognize_devices() {
+        println!("List of Volumes:");
         unsafe {
             let shared = Self::shared();
-            println!("List of Volumes:");
 
             let boot_device = {
                 let image = get_protocol::<LoadedImage>(uefi::boot::image_handle()).unwrap();
@@ -107,6 +106,14 @@ impl BlockDeviceManager {
                         partition_info.partition_signature
                     );
                 }
+
+                let media_info = device.block_io.media();
+                println!(
+                    "  media_id: {}, block_size: {}, block_count: {}",
+                    media_info.media_id(),
+                    media_info.block_size(),
+                    media_info.last_block() + 1,
+                );
             }
         }
     }
@@ -311,13 +318,13 @@ impl BlockDevice for UefiBlockDevice {
             .map_err(|e| self.handle_uefi_error(e))
     }
 
-    fn write(&mut self, _block: LBA, _buf: &[u8]) -> Result<(), BlockIoError> {
+    fn write(&mut self, lba: LBA, buffer: &[u8]) -> Result<(), BlockIoError> {
         self.block_io
-            .write_blocks(self.media_info.media_id.0, _block.0, _buf)
+            .write_blocks(self.media_info.media_id.0, lba.0, buffer)
             .map_err(|e| self.handle_uefi_error(e))
     }
 
-    fn media_info(&self) -> &MediaInfo {
+    fn media_info(&mut self) -> &MediaInfo {
         &self.media_info
     }
 }

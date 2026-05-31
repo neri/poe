@@ -52,6 +52,13 @@
   * [x] rpi-uart
   * [x] uefi
   * [x] vt100
+  * [x] graphical console
+    * [x] console controller
+    * [x] vesa driver
+    * [x] pegc driver
+    * [x] fmtowns-svga driver
+    * [x] rpi driver
+    * [x] uefi-gop driver
 * [ ] memory manager
   * [ ] better memory manager
   * [ ] uefi after exit_boot_services
@@ -62,13 +69,6 @@
   * [x] riscv64
   * [x] riscv32
   * [x] rpi
-* [x] graphical console
-  * [x] console controller
-  * [x] vesa driver
-  * [x] pegc driver
-  * [x] fmtowns-svga driver
-  * [x] rpi driver
-  * [x] uefi-gop driver
 * [x] timer
   * [x] x86-32
   * [x] riscv64
@@ -77,10 +77,11 @@
   * [x] uefi
 * [ ] tui
 * [ ] filesystem
-  * [ ] uefi
-  * [ ] pc-bios
-  * [ ] nec-98
-  * [ ] fm towns
+  * [ ] block device
+    * [ ] uefi
+    * [ ] pc-bios
+    * [ ] nec-98
+    * [ ] fm towns
 
 ## History
 

@@ -72,6 +72,12 @@ impl Gpr32 {
     pub fn set_h(&mut self, h: u8) {
         self.0 = (self.0 & 0xffff00ff) | ((h as u32) << 8);
     }
+
+    /// Set the high 8 bits and low 8 bits of the register.
+    #[inline]
+    pub fn set_hl(&mut self, h: u8, l: u8) {
+        self.0 = ((h as u32) << 8) | (l as u32);
+    }
 }
 
 impl From<i32> for Gpr32 {
@@ -334,6 +340,46 @@ impl Flags {
     #[inline]
     pub fn canonicalize(&mut self) {
         *self = self.canonicalized();
+    }
+
+    #[inline]
+    pub const fn is_c(&self) -> bool {
+        self.contains(Self::CF)
+    }
+
+    #[inline]
+    pub const fn is_p(&self) -> bool {
+        self.contains(Self::PF)
+    }
+
+    #[inline]
+    pub const fn is_z(&self) -> bool {
+        self.contains(Self::ZF)
+    }
+
+    #[inline]
+    pub const fn is_s(&self) -> bool {
+        self.contains(Self::SF)
+    }
+
+    #[inline]
+    pub const fn is_nc(&self) -> bool {
+        !self.contains(Self::CF)
+    }
+
+    #[inline]
+    pub const fn is_np(&self) -> bool {
+        !self.contains(Self::PF)
+    }
+
+    #[inline]
+    pub const fn is_nz(&self) -> bool {
+        !self.contains(Self::ZF)
+    }
+
+    #[inline]
+    pub const fn is_ns(&self) -> bool {
+        !self.contains(Self::SF)
     }
 }
 
