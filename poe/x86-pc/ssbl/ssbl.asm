@@ -41,8 +41,6 @@
 %define CEEF_BASE           0x08
 %define CEEF_MINALLOC       0x0C
 
-%define MAX_PALETTE         16
-
 %define SMAP_AVAILABLE      0x01
 %define SMAP_RESERVED       0x02
 %define SMAP_ACPI_RECLAIM   0x03
@@ -186,38 +184,6 @@ _init:
     pop ax
     mov [_platform], ax
     push es
-
-    ;; check cpu
-_check_cpu:
-    ;; is 286 or later
-    mov dx, 0xf000
-    pushf
-    pop ax
-    mov cx, ax
-    and ax, 0x0fff
-    push ax
-    popf
-    pushf
-    pop ax
-    and ax, dx
-    cmp ax, dx
-    jnz short .286_ok
-.bad_cpu:
-    mov si, cpu_err_mes
-    call _puts
-    jmp forever
-
-.286_ok:
-    ;; is 386 or later
-    or cx, dx
-    push cx
-    popf
-    pushf
-    pop ax
-    and ax, dx
-    jz short .bad_cpu
-
-.cpu_ok:
 
 _mem_check:
     mov al, [_platform]
@@ -553,9 +519,6 @@ _tek1_decode:
     pop ebp
     ret
 
-
-cpu_err_mes:
-    db "NEEDS 386", 0
 
 a20_err_mes:
     db "A20 LINE ERROR", 0

@@ -37,7 +37,6 @@ impl DiskBios {
 
     #[inline(never)]
     pub unsafe fn init() {
-        println!("List of Volumes:");
         let info = System::boot_info();
         unsafe {
             let shared = Self::shared();
@@ -45,8 +44,6 @@ impl DiskBios {
             shared.boot_drive = info.bios_boot_drive;
             shared.io_buffer = Some(LoMemoryManager::alloc_page());
             shared.packet_buffer = Some(LoMemoryManager::alloc_page());
-
-            println!("boot drive: {:02x}", info.bios_boot_drive.0);
 
             let mut devices = Vec::new();
             for i in 0..2 {
@@ -62,17 +59,6 @@ impl DiskBios {
             }
 
             shared.devices = devices;
-
-            // for drive in shared.devices.iter_mut() {
-            //     println!(
-            //         "Drive {:02x}: {:?}, LBA={}, Block Size={} bytes",
-            //         drive.drive_spec.0,
-            //         drive.geometry,
-            //         drive.media_info.block_count.0,
-            //         drive.media_info.block_size
-            //     );
-            // }
-            // todo!()
         }
     }
 }

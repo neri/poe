@@ -10,9 +10,7 @@ default = []
 device_tree = []
 pc = []
 rpi = ["device_tree"]
-# sbi = ["device_tree"]
 sbi = []
-# uefi = []
 
 [dependencies]
 paste = { version = "1.0" }
@@ -24,13 +22,14 @@ bitflags = { version = "2.11" }
 
 # bootprot = {path = "../lib/bootprot/"}
 acpi = { path = "../lib/acpi/", features = ["guid"] }
+edid = { path = "../lib/edid/" }
+fatfs = { path = "../lib/fatfs/" }
 fdt = { path = "../lib/fdt/", features = ["guid"] }
+guid = { path = "../lib/guid/" }
 libhid = { path = "../lib/hid/" }
 minilib = { path = "../lib/minilib/" }
-smbios = { path = "../lib/smbios/", features = ["guid"] }
-guid = { path = "../lib/guid/" }
-edid = { path = "../lib/edid/" }
 simple_font = { path = "../lib/simple_font/" }
+smbios = { path = "../lib/smbios/", features = ["guid"] }
 tui = { path = "../lib/tui/" }
 
 uefi = { version="0.37", features = ['global_allocator', 'alloc'], optional = true }

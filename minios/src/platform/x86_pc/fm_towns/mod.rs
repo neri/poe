@@ -6,11 +6,12 @@
 //!
 
 mod crtc;
+mod disk_bios;
 mod fmt_kbd;
 mod fmt_svga;
 mod fmt_text;
 
-use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
+use x86::isolated_io::{IoPortRB, LoIoPortRB, LoIoPortWB};
 
 use crate::mem::{MemoryManager, MemoryType};
 use crate::platform::x86_pc::pic::Irq;
@@ -56,6 +57,8 @@ pub(super) unsafe fn init(_info: &SsblInfo) {
 
         fmt_kbd::FmtKbd::init();
         // Irq(11).register(irq11).unwrap();
+
+        disk_bios::DiskBios::init();
 
         fmt_svga::FmtSvga::init();
     }

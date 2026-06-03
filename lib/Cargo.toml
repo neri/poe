@@ -6,6 +6,7 @@ members = [
     "box_drawing",
     "edid",
     "elf",
+    "fatfs",
     "fdt",
     "guid",
     "hid",

@@ -40,78 +40,25 @@ impl DiskBios {
             shared.boot_drive = DaUa(info.bios_boot_drive.0).representative();
             shared.io_buffer = Some(LoMemoryManager::alloc_page());
 
-            println!(
-                "boot drive: {:02x}({:02x})",
-                shared.boot_drive.0, info.bios_boot_drive.0
-            );
-            println!("List of Volumes:");
-
             let disk_equip = (0x55c as *const u16).read_volatile();
 
             let mut devices = Vec::new();
-            for i in 0x90..0x92 {
-                let drive_spec = BiosDriveSpec(i);
-                devices.push(Int1BDevice::identity(drive_spec).unwrap());
+            for i in 0..2 {
+                let daua = DaUa(i).another_device(Da::FLOPPY);
+                devices.push(Int1BDevice::identity(daua).unwrap());
             }
             for i in 0..4 {
                 if disk_equip & (1 << i) == 0 {
                     continue;
                 }
-                let drive_spec = BiosDriveSpec(i);
-                let Ok(device) = Int1BDevice::identity(drive_spec) else {
+                let daua = DaUa(i).another_device(Da::HD_RBA);
+                let Ok(device) = Int1BDevice::identity(daua) else {
                     continue;
                 };
                 devices.push(device);
             }
 
             shared.devices = devices;
-
-            // for drive in shared.devices.iter_mut() {
-            //     match drive.geometry {
-            //         BiosGeometry::CHRN(chrn) => {
-            //             println!(
-            //                 "{:02x}({:02x}): {:?}, block_size: {}, block_count: {}",
-            //                 drive.representative_daua.0,
-            //                 drive.daua.0,
-            //                 chrn,
-            //                 drive.media_info.block_size,
-            //                 drive.media_info.block_count.0
-            //             );
-            //         }
-            //         BiosGeometry::CHS(chs) => {
-            //             println!(
-            //                 "{:02x}({:02x}): {:?}, block_size: {}, block_count: {}",
-            //                 drive.representative_daua.0,
-            //                 drive.daua.0,
-            //                 chs,
-            //                 drive.media_info.block_size,
-            //                 drive.media_info.block_count.0
-            //             );
-            //         }
-            //     }
-
-            //     let mut buffer = Vec::new();
-            //     buffer.resize(drive.media_info.block_size as usize, 0);
-            //     if let Err(e) = drive.read(LBA(0), &mut buffer) {
-            //         println!("  drive {:02x}: Failed: {:?}", drive.daua.0, e);
-            //     } else {
-            //         for (i, chunk) in buffer.chunks(16).enumerate().take(4) {
-            //             print!("  {:04x}: ", i * 16);
-            //             for byte in chunk {
-            //                 print!("{:02x} ", byte);
-            //             }
-            //             for byte in chunk {
-            //                 let c = match byte {
-            //                     0x20..=0x7e => *byte as char,
-            //                     _ => '.',
-            //                 };
-            //                 print!("{}", c);
-            //             }
-            //             println!();
-            //         }
-            //     }
-            // }
-            // todo!()
         }
     }
 }
@@ -157,6 +104,7 @@ impl TransferFunction<'_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DaUa(pub u8);
 
+#[allow(unused)]
 impl DaUa {
     /// Returns whether the drive is a floppy drive or not.
     #[inline]
@@ -166,30 +114,69 @@ impl DaUa {
 
     /// Returns unit address of the drive.
     #[inline]
-    pub const fn unit_address(&self) -> u8 {
+    pub const fn ua(&self) -> u8 {
         self.0 & 0x0f
     }
 
-    // #[inline]
-    // pub const fn device_address(&self) -> u8 {
-    //     self.0 & 0xf0
-    // }
+    /// Returns device address of the drive.
+    #[inline]
+    pub const fn da(&self) -> Da {
+        Da(self.0 & 0xf0)
+    }
 
     /// Returns another DaUa with the same unit address but different device address.
     #[inline]
-    pub const fn another_device(&self, device_address: u8) -> Self {
-        Self(self.unit_address() | device_address)
+    pub const fn another_device(&self, da: Da) -> Self {
+        Self(self.ua() | da.0)
     }
 
     /// Returns a representative value for the drive
     #[inline]
     pub fn representative(&self) -> Self {
         if self.is_floppy() {
-            self.another_device(0x90)
+            self.another_device(Da::FLOPPY)
         } else {
             Self(self.0 | 0x80)
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Da(pub u8);
+
+#[allow(unused)]
+impl Da {
+    pub const FLOPPY: Self = Self::FD_2HD;
+
+    /// SASI or IDE hard disk Relative Addressing mode
+    pub const HD_RBA: Self = Self(0x00);
+
+    /// 2DD mode on 1mb mode
+    pub const FD_2DD_ON_1MB: Self = Self(0x10);
+
+    /// SCSI hard disk Relative Addressing mode
+    pub const SCSI_RBA: Self = Self(0x20);
+
+    /// 1.44MB floppy
+    pub const FD_1_4M: Self = Self(0x30);
+
+    /// 320KB floppy
+    pub const FD_320KB: Self = Self(0x50);
+
+    /// 2DD mode on 640kb mode
+    pub const FD_2DD_ON_640KB: Self = Self(0x70);
+
+    /// SASI or IDE hard disk CHS mode
+    pub const HD_CHS: Self = Self(0x80);
+
+    /// 2HD mode on 1mb mode (default 2HD)
+    pub const FD_2HD: Self = Self(0x90);
+
+    /// SCSI hard disk CHS mode
+    pub const SCSI_CHS: Self = Self(0xa0);
+
+    /// 2HD mode on 640kb mode
+    pub const FD_2HD_ON_640KB: Self = Self(0xf0);
 }
 
 pub struct Int1BDevice {
@@ -201,8 +188,8 @@ pub struct Int1BDevice {
 }
 
 impl Int1BDevice {
-    unsafe fn identity(drive_spec: BiosDriveSpec) -> Result<Self, BlockIoError> {
-        let daua = DaUa(drive_spec.0).representative();
+    unsafe fn identity(drive_spec: DaUa) -> Result<Self, BlockIoError> {
+        let daua = drive_spec.representative();
         let mut device = Self {
             representative_daua: daua,
             daua,
@@ -233,7 +220,7 @@ impl Int1BDevice {
                 }
 
                 // Attempt to read as 1.44MB floppy
-                let current_daua = self.daua.another_device(0x30);
+                let current_daua = self.daua.another_device(Da::FD_1_4M);
                 regs.eax.set_hl(0x76, current_daua.0);
                 regs.ecx.set_d(0x0200);
                 regs.edx.set_d(0x0001);
@@ -250,7 +237,7 @@ impl Int1BDevice {
                 }
 
                 // Attempt to read as 2HD
-                let current_daua = self.daua.another_device(0x90);
+                let current_daua = self.daua.another_device(Da::FD_2HD);
                 regs.eax.set_hl(0x7a, current_daua.0);
                 regs.ecx.set_zero();
                 regs.edx.set_zero();
@@ -278,10 +265,6 @@ impl Int1BDevice {
                         }
                     }
                 }
-
-                self.geometry = BiosGeometry::default();
-                self.media_info = MediaInfo::EMPTY;
-                Err(BlockIoError::NoMedia)
             } else {
                 regs.eax.set_hl(0x84, self.daua.0);
                 INT1B.call(regs);
@@ -292,11 +275,11 @@ impl Int1BDevice {
                     self.media_info.block_count = LBA(chs.total_sectors() as u64);
                     return Ok(());
                 }
-
-                self.geometry = BiosGeometry::default();
-                self.media_info = MediaInfo::EMPTY;
-                Err(BlockIoError::NoMedia)
             }
+
+            self.geometry = BiosGeometry::default();
+            self.media_info = MediaInfo::EMPTY;
+            Err(BlockIoError::NoMedia)
         }
     }
 
