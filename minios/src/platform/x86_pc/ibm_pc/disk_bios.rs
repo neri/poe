@@ -48,11 +48,11 @@ impl DiskBios {
             let mut devices = Vec::new();
             for i in 0..2 {
                 let drive_spec = BiosDriveSpec(i);
-                devices.push(Int13Device::identity(drive_spec).unwrap());
+                devices.push(Int13Device::identify(drive_spec).unwrap());
             }
             for i in 0x80..0xff {
                 let drive_spec = BiosDriveSpec(i);
-                let Ok(device) = Int13Device::identity(drive_spec) else {
+                let Ok(device) = Int13Device::identify(drive_spec) else {
                     continue;
                 };
                 devices.push(device);
@@ -112,7 +112,7 @@ impl Int13Device {
         drive_spec.0 < 0x80
     }
 
-    unsafe fn identity(drive_spec: BiosDriveSpec) -> Result<Self, BlockIoError> {
+    unsafe fn identify(drive_spec: BiosDriveSpec) -> Result<Self, BlockIoError> {
         let mut device = Self {
             drive_spec,
             geometry: Geometry::EMPTY,
@@ -122,7 +122,7 @@ impl Int13Device {
 
         let mut regs = Vm86Context::default();
         if Self::is_floppy(drive_spec) {
-            let _ = device.reset_media(&mut regs);
+            // let _ = device.reset_media(&mut regs);
             Ok(device)
         } else {
             device.reset_media(&mut regs).map(|_| device)

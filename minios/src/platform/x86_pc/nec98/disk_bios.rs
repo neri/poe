@@ -45,14 +45,14 @@ impl DiskBios {
             let mut devices = Vec::new();
             for i in 0..2 {
                 let daua = DaUa(i).another_device(Da::FLOPPY);
-                devices.push(Int1BDevice::identity(daua).unwrap());
+                devices.push(Int1BDevice::identify(daua).unwrap());
             }
             for i in 0..4 {
                 if disk_equip & (1 << i) == 0 {
                     continue;
                 }
                 let daua = DaUa(i).another_device(Da::HD_RBA);
-                let Ok(device) = Int1BDevice::identity(daua) else {
+                let Ok(device) = Int1BDevice::identify(daua) else {
                     continue;
                 };
                 devices.push(device);
@@ -188,7 +188,7 @@ pub struct Int1BDevice {
 }
 
 impl Int1BDevice {
-    unsafe fn identity(drive_spec: DaUa) -> Result<Self, BlockIoError> {
+    unsafe fn identify(drive_spec: DaUa) -> Result<Self, BlockIoError> {
         let daua = drive_spec.representative();
         let mut device = Self {
             representative_daua: daua,
@@ -199,7 +199,7 @@ impl Int1BDevice {
 
         let mut regs = Vm86Context::default();
         if device.daua.is_floppy() {
-            let _ = device.reset_media(&mut regs);
+            // let _ = device.reset_media(&mut regs);
             Ok(device)
         } else {
             device.reset_media(&mut regs).map(|_| device)

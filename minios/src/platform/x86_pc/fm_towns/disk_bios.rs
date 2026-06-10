@@ -51,7 +51,7 @@ impl DiskBios {
                 match dev_type {
                     0 => {
                         // floppy
-                        if let Ok(device) = Int93Device::identity(FmBiosDriveSpec::new(
+                        if let Ok(device) = Int93Device::identify(FmBiosDriveSpec::new(
                             FmBiosDeviceType::FLOPPY,
                             unit_number,
                         )) {
@@ -64,12 +64,14 @@ impl DiskBios {
                     5 => {
                         // TODO: rom drive
                     }
-                    _ => {}
+                    _ => {
+                        // unknown device type, ignore
+                    }
                 }
             }
             for i in 0..1 {
                 let drive_spec = FmBiosDriveSpec::new(FmBiosDeviceType::CDROM, i);
-                if let Ok(device) = Int93Device::identity(drive_spec) {
+                if let Ok(device) = Int93Device::identify(drive_spec) {
                     devices.push(device);
                 }
             }
@@ -97,7 +99,7 @@ pub struct Int93Device {
 }
 
 impl Int93Device {
-    fn identity(drive_spec: FmBiosDriveSpec) -> Result<Self, BlockIoError> {
+    fn identify(drive_spec: FmBiosDriveSpec) -> Result<Self, BlockIoError> {
         let mut device = Self {
             drive_spec: drive_spec,
             geometry: Geometry::EMPTY,
@@ -106,7 +108,7 @@ impl Int93Device {
 
         let mut regs = Vm86Context::default();
         if device.drive_spec.is_floppy() {
-            let _ = device.reset_media(&mut regs);
+            // let _ = device.reset_media(&mut regs);
             Ok(device)
         } else {
             device.reset_media(&mut regs).map(|_| device)

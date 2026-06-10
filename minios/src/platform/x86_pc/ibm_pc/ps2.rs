@@ -3,7 +3,6 @@
 use core::cell::UnsafeCell;
 
 use bitflags::bitflags;
-use libhid::*;
 use x86::isolated_io::{LoIoPortRB, LoIoPortWB};
 
 use super::Irq;

@@ -201,7 +201,7 @@ impl BootSector {
     }
 
     /// Identifies the FAT type based on the given boot sector bytes.
-    pub fn identity(bytes: &[u8]) -> Option<FatType> {
+    pub fn identify(bytes: &[u8]) -> Option<FatType> {
         if bytes.len() < Self::PREFERRED_SIZE {
             return None;
         }
@@ -243,7 +243,7 @@ impl BootSector {
 
     #[inline]
     pub fn from_bytes<'a>(bytes: &'a [u8]) -> Option<&'a Self> {
-        Self::identity(bytes).map(|_| unsafe { &*(bytes.as_ptr() as *const Self) })
+        Self::identify(bytes).map(|_| unsafe { &*(bytes.as_ptr() as *const Self) })
     }
 
     #[inline]

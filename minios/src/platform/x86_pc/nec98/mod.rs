@@ -20,7 +20,6 @@ mod bios {
     pub const INT1B: BiosCallVector<0x1B> = BiosCallVector::new();
 }
 
-use libhid::{Modifier, Usage};
 use x86::isolated_io::{LoIoPortDummyB, LoIoPortWB};
 
 use super::pic::Irq;

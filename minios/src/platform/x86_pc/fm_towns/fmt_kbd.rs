@@ -2,7 +2,6 @@
 
 use core::cell::UnsafeCell;
 
-use libhid::*;
 use x86::isolated_io::{IoPortRB, IoPortWB};
 
 use crate::io::hid_mgr::{HidManager, KeyStroke};
