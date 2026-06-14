@@ -15,6 +15,7 @@ use super::device_path::{
     CdromMedia, GenericDevicePathNode, HardDriveMedia, PartitionSignature, Type,
 };
 use super::*;
+use crate::io::fs::media::*;
 
 static mut SHARED: UnsafeCell<BlockDeviceManager> = UnsafeCell::new(BlockDeviceManager::new());
 

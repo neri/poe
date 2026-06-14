@@ -9,6 +9,7 @@ use super::bios::INT13;
 use super::*;
 use crate::arch::lomem::ManagedLowMemory;
 use crate::arch::vm86::Vm86Context;
+use crate::io::fs::media::*;
 
 static mut SHARED: UnsafeCell<DiskBios> = UnsafeCell::new(DiskBios::new());
 

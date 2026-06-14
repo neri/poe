@@ -54,6 +54,21 @@ pub struct ExtendedBpb32 {
 }
 
 impl Bpb {
+    /// Predefined BPB for common floppy disk formats. (1.44mb, 80, 2, 18, 512)
+    pub const FLOPPY_1440: Self = Self::new(512, 1, 1, 2, 224, 0xF0, 9, 18, 2, 80);
+    /// Predefined BPB for common floppy disk formats. (1.2mb, 80, 2, 15, 512)
+    pub const FLOPPY_1200: Self = Self::new(512, 1, 1, 2, 224, 0xF9, 7, 15, 2, 80);
+    /// Predefined BPB for common floppy disk formats. (1.23mb, 77, 2, 8, 1024)
+    pub const FLOPPY_1232: Self = Self::new(1024, 1, 1, 2, 192, 0xFE, 2, 8, 2, 77);
+    /// Predefined BPB for common floppy disk formats. (720kb, 80, 2, 9, 512)
+    pub const FLOPPY_720: Self = Self::new(512, 2, 1, 2, 112, 0xF9, 3, 9, 2, 80);
+    /// Predefined BPB for common floppy disk formats. (640kb, 80, 2, 8, 512)
+    pub const FLOPPY_640: Self = Self::new(512, 2, 1, 2, 112, 0xFB, 2, 8, 2, 80);
+    /// Predefined BPB for common floppy disk formats. (320kb, 40, 2, 8, 512)
+    pub const FLOPPY_320: Self = Self::new(512, 2, 1, 2, 112, 0xFF, 2, 8, 2, 40);
+    /// Predefined BPB for common floppy disk formats. (160kb, 40, 1, 8, 512)
+    pub const FLOPPY_160: Self = Self::new(512, 1, 1, 2, 64, 0xFE, 1, 8, 1, 40);
+
     #[inline]
     pub const fn new(
         bytes_per_sector: u16,
@@ -83,19 +98,6 @@ impl Bpb {
             total_sectors32: 0,
         }
     }
-
-    // pub fn parse_type(opt: &str) -> Option<Self> {
-    //     match opt {
-    //         "2hd" | "1440" => Some(Self::new(512, 1, 1, 2, 224, 0xF0, 9, 18, 2, 80)),
-    //         "2hc" | "1200" => Some(Self::new(512, 1, 1, 2, 224, 0xF9, 7, 15, 2, 80)),
-    //         "nec" | "1232" => Some(Self::new(1024, 1, 1, 2, 192, 0xFE, 2, 8, 2, 77)),
-    //         "2dd" | "720" => Some(Self::new(512, 2, 1, 2, 112, 0xF9, 3, 9, 2, 80)),
-    //         "640" => Some(Self::new(512, 2, 1, 2, 112, 0xFB, 2, 8, 2, 80)),
-    //         "320" => Some(Self::new(512, 2, 1, 2, 112, 0xFF, 2, 8, 2, 40)),
-    //         "160" => Some(Self::new(512, 1, 1, 2, 64, 0xFE, 1, 8, 1, 40)),
-    //         _ => None,
-    //     }
-    // }
 
     pub fn total_sectors(&self) -> Option<u32> {
         if self.total_sectors != 0 {
@@ -146,7 +148,7 @@ pub struct BootSector {
     jumps: [u8; 3],
     oem_name: [u8; 8],
     ebpb: ExtendedBpb,
-    boot_code: [u8; 0x1C0],
+    boot_code: [u8; 0x1c0],
     boot_signature: [u8; 2],
 }
 
@@ -221,10 +223,12 @@ impl BootSector {
 
         let fat_type = boot_sector.fat_type()?;
 
-        // Additional checks for FAT12/16 and FAT32.
+        // Additional checks depending on the FAT type
         match fat_type {
             FatType::Fat12 | FatType::Fat16 => {
-                //
+                if bpb.root_entries_count == 0 {
+                    return None;
+                }
             }
             FatType::Fat32 => {
                 let ebpb32 = unsafe { &*(bytes.as_ptr().byte_add(0x0b) as *const ExtendedBpb32) };
@@ -232,6 +236,7 @@ impl BootSector {
                 if ebpb32.sectors_per_fat32 > 0x200000
                     || ebpb32.root_cluster == 0
                     || ebpb32.fs_info_sector == 0
+                    || bpb.root_entries_count != 0
                 {
                     return None;
                 }
@@ -269,10 +274,10 @@ impl Default for BootSector {
     #[inline]
     fn default() -> Self {
         Self {
-            jumps: [0xEB, 0xFE, 0x90],
+            jumps: [0xeb, 0xfe, 0x90],
             oem_name: [0; 8],
             ebpb: ExtendedBpb::default(),
-            boot_code: [0; 0x1C0],
+            boot_code: [0; 0x1c0],
             boot_signature: Self::BOOT_SIGNATURE,
         }
     }

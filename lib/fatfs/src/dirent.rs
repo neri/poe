@@ -1,11 +1,13 @@
+//! Directory entry in FAT filesystem
+
 /// Directory entry in FAT filesystem
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
-pub struct DosDirEnt {
+pub struct DirEnt {
     /// 11 bytes: 8 for name, 3 for extension
     pub name: [u8; 11],
     /// File attributes
-    pub attr: DosAttributes,
+    pub attr: Attributes,
     /// Reserved for Windows NT
     pub nt_reserved: u8,
     /// Creation time in milliseconds (0-199)
@@ -24,11 +26,12 @@ pub struct DosDirEnt {
     pub file_size: u32,
 }
 
+/// File attributes
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DosAttributes(u8);
+pub struct Attributes(u8);
 
-impl DosAttributes {
+impl Attributes {
     /// File is read-only
     pub const READONLY: Self = Self(0b0000_0001);
     /// File is hidden
@@ -50,22 +53,23 @@ impl DosAttributes {
     }
 }
 
+/// Type of directory entry
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DosDirEntType {
+pub enum DirEntType {
     File,
     Directory,
     VolumeLabel,
     LfnEntry,
 }
 
-impl DosDirEntType {
+impl DirEntType {
     #[inline]
-    pub fn from_attr(attr: DosAttributes) -> Self {
-        if attr == DosAttributes::LFN_ENTRY {
+    pub fn from_attr(attr: Attributes) -> Self {
+        if attr == Attributes::LFN_ENTRY {
             Self::LfnEntry
-        } else if (attr.0 & DosAttributes::LABEL.0) != 0 {
+        } else if (attr.0 & Attributes::LABEL.0) != 0 {
             Self::VolumeLabel
-        } else if (attr.0 & DosAttributes::SUBDIR.0) != 0 {
+        } else if (attr.0 & Attributes::SUBDIR.0) != 0 {
             Self::Directory
         } else {
             Self::File
@@ -102,12 +106,12 @@ impl DosFileTimeStamp {
     };
 }
 
-impl DosDirEnt {
+impl DirEnt {
     #[inline]
     pub const fn new() -> Self {
         Self {
             name: [0x20; 11],
-            attr: DosAttributes::empty(),
+            attr: Attributes::empty(),
             nt_reserved: 0,
             ctime_ms: 0,
             ctime: DosFileTimeStamp::EMPTY,
@@ -120,13 +124,13 @@ impl DosDirEnt {
     }
 
     #[inline]
-    pub fn entry_type(&self) -> DosDirEntType {
-        DosDirEntType::from_attr(self.attr)
+    pub fn entry_type(&self) -> DirEntType {
+        DirEntType::from_attr(self.attr)
     }
 
     pub fn volume_label(label: &str) -> Result<Self, ConvertError> {
         let mut result = Self::new();
-        result.attr = DosAttributes::LABEL;
+        result.attr = Attributes::LABEL;
 
         let mut label = label.chars();
         for i in 0..11 {
@@ -145,7 +149,7 @@ impl DosDirEnt {
 
     pub fn file_entry(name: &str) -> Result<Self, ConvertError> {
         let mut result = Self::new();
-        result.attr = DosAttributes::ARCHIVE;
+        result.attr = Attributes::ARCHIVE;
 
         let mut has_ext = true;
         let mut has_to_truncate = true;
@@ -240,15 +244,15 @@ impl DosDirEnt {
             0x20
             | 0x21
             | 0x23..=0x29
-            | 0x2D
+            | 0x2d
             | 0x30..=0x39
-            | 0x41..=0x5A
-            | 0x5E
-            | 0x5F
-            | 0x7B
-            | 0x7D
-            | 0x7E => Some(c),
-            0x61..=0x7A => Some(c - 0x20),
+            | 0x41..=0x5a
+            | 0x5e
+            | 0x5f
+            | 0x7b
+            | 0x7d
+            | 0x7e => Some(c),
+            0x61..=0x7a => Some(c - 0x20),
             _ => None,
         }
     }
@@ -258,21 +262,21 @@ impl DosDirEnt {
         match c {
             0x21
             | 0x23..=0x29
-            | 0x2D
+            | 0x2d
             | 0x30..=0x39
-            | 0x41..=0x5A
-            | 0x5E
-            | 0x5F
-            | 0x7B
-            | 0x7D
-            | 0x7E => Some(c),
-            0x61..=0x7A => Some(c - 0x20),
+            | 0x41..=0x5a
+            | 0x5e
+            | 0x5f
+            | 0x7b
+            | 0x7d
+            | 0x7e => Some(c),
+            0x61..=0x7a => Some(c - 0x20),
             _ => None,
         }
     }
 }
 
-impl Default for DosDirEnt {
+impl Default for DirEnt {
     fn default() -> Self {
         Self::new()
     }
@@ -282,4 +286,26 @@ impl Default for DosDirEnt {
 pub enum ConvertError {
     Empty,
     InvalidChar,
+}
+
+/// Long File Name (LFN) entry in FAT filesystem
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct LfnEntry {
+    /// Sequence number of this entry in the LFN sequence. The last entry has bit 6 (0x40) set.
+    pub seq_number: u8,
+    /// Name part 1 (5 UTF-16 characters)
+    pub name_part1: [u16; 5],
+    /// File attributes (always 0x0F for LFN entries)
+    pub attr: Attributes,
+    /// Type (always 0 for LFN entries)
+    pub type_: u8,
+    /// Checksum of the corresponding short name
+    pub check_sum: u8,
+    /// Name part 2 (6 UTF-16 characters)
+    pub name_part2: [u16; 6],
+    /// Reserved for compatibility
+    pub always_zero: u16,
+    /// Name part 3 (2 UTF-16 characters)
+    pub name_part3: [u16; 2],
 }

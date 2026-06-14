@@ -59,7 +59,7 @@ impl PlatformTrait for Platform {
             trap::init();
 
             let boot_info = System::boot_info_mut();
-            boot_info.platform = Platform::RaspberryPi;
+            boot_info.platform_type = PlatformType::RaspberryPi;
 
             let _end: u64;
             asm!("ldr {}, =_end", out(reg)_end);

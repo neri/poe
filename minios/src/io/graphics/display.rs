@@ -481,6 +481,9 @@ const PATTERN_LUT_8B: [u64; 256] = [
 ];
 
 impl Fb8 {
+    /// # Safety
+    ///
+    /// This function is unsafe because it dereferences a raw pointer.
     #[inline]
     unsafe fn from_graphics(current: &super::CurrentMode) -> Option<Box<dyn FrameBuffer>> {
         if current.info.pixel_format == PixelFormat::Indexed8 {
@@ -665,6 +668,9 @@ struct Fb32 {
 }
 
 impl Fb32 {
+    /// # Safety
+    ///
+    /// This function is unsafe because it dereferences a raw pointer.
     #[inline]
     unsafe fn from_graphics(current: &super::CurrentMode) -> Option<Box<dyn FrameBuffer>> {
         if current.info.pixel_format == PixelFormat::BGRX8888 {

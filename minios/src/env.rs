@@ -8,6 +8,7 @@ use core::panic::PanicInfo;
 use core::ptr::NonNull;
 use core::time::Duration;
 
+pub use bootprot::PlatformType;
 use guid::Guid;
 
 use crate::io::fonts;
@@ -77,7 +78,7 @@ impl System {
         unsafe {
             let mut shared = System {
                 info: SsblInfo {
-                    platform: Platform::DeviceTree,
+                    platform_type: PlatformType::DeviceTree,
                     bios_boot_drive: BiosDriveSpec(0),
                     x86_real_memory_size: 0,
                     reserved: 0,
@@ -115,7 +116,7 @@ impl System {
         unsafe {
             let shared = System {
                 info: SsblInfo {
-                    platform: Platform::UefiNative,
+                    platform_type: PlatformType::UefiNative,
                     bios_boot_drive: BiosDriveSpec(0),
                     x86_real_memory_size: 0,
                     reserved: 0,
@@ -168,10 +169,10 @@ impl System {
         }
     }
 
-    /// Returns current platform
+    /// Returns current platform type
     #[inline]
-    pub fn platform() -> Platform {
-        Self::boot_info().platform
+    pub fn platform_type() -> PlatformType {
+        Self::boot_info().platform_type
     }
 
     /// Returns device tree if available
@@ -339,7 +340,7 @@ fn panic(info: &PanicInfo) -> ! {
 #[derive(Debug, Clone)]
 pub struct SsblInfo {
     /// Platform type
-    pub platform: Platform,
+    pub platform_type: PlatformType,
     /// BIOS boot drive secifier (for x86 PC platforms)
     pub bios_boot_drive: BiosDriveSpec,
     /// Real memory size in paragraphs (for x86 PC platforms)

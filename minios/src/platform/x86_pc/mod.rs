@@ -27,14 +27,14 @@ impl PlatformTrait for Platform {
             )
             .unwrap();
 
-            match info.platform {
-                Platform::Nec98 => {
+            match info.platform_type {
+                PlatformType::Nec98 => {
                     nec98::init(&info);
                 }
-                Platform::PcBios => {
+                PlatformType::PcBios => {
                     ibm_pc::init(&info);
                 }
-                Platform::FmTowns => {
+                PlatformType::FmTowns => {
                     fm_towns::init(&info);
                 }
                 _ => unreachable!(),
@@ -44,15 +44,15 @@ impl PlatformTrait for Platform {
 
     unsafe fn exit() {
         unsafe {
-            let platform = System::platform();
+            let platform = System::platform_type();
             match platform {
-                Platform::Nec98 => {
+                PlatformType::Nec98 => {
                     nec98::exit();
                 }
-                Platform::PcBios => {
+                PlatformType::PcBios => {
                     ibm_pc::exit();
                 }
-                Platform::FmTowns => {
+                PlatformType::FmTowns => {
                     fm_towns::exit();
                 }
                 _ => unreachable!(),
@@ -62,14 +62,14 @@ impl PlatformTrait for Platform {
     }
 
     fn reset_system() -> ! {
-        match System::platform() {
-            Platform::Nec98 => {
+        match System::platform_type() {
+            PlatformType::Nec98 => {
                 nec98::reset_system();
             }
-            Platform::PcBios => {
+            PlatformType::PcBios => {
                 ibm_pc::reset_system();
             }
-            Platform::FmTowns => {
+            PlatformType::FmTowns => {
                 fm_towns::reset_system();
             }
             _ => unreachable!(),
@@ -92,8 +92,8 @@ impl PlatformTrait for Platform {
     }
 
     fn recommended_console_mode() -> RecommendedConsoleMode {
-        match System::platform() {
-            Platform::FmTowns => RecommendedConsoleMode::Graphics,
+        match System::platform_type() {
+            PlatformType::FmTowns => RecommendedConsoleMode::Graphics,
             _ => RecommendedConsoleMode::None,
         }
     }

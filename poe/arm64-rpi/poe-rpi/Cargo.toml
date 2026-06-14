@@ -13,3 +13,5 @@ minios = { path = "../../../minios/", features = ["rpi", "device_tree"] }
 lto = true
 opt-level = "z"
 panic = "abort"
+
+[workspace]

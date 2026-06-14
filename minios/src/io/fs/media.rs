@@ -45,7 +45,25 @@ impl AddAssign<u64> for LBA {
     }
 }
 
+impl Add<LBA> for LBA {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: LBA) -> Self::Output {
+        LBA(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign<LBA> for LBA {
+    #[inline]
+    fn add_assign(&mut self, rhs: LBA) {
+        self.0 += rhs.0;
+    }
+}
+
 /// CHRN geometry information.
+///
+/// Useful for floppy disk drives
 #[derive(Clone, Copy)]
 pub struct CHRN {
     pub n: u8,
@@ -174,6 +192,7 @@ impl core::fmt::Debug for Geometry {
     }
 }
 
+/// Media ID
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MediaId(pub u32);

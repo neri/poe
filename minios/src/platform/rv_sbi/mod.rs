@@ -7,7 +7,6 @@ use core::time::Duration;
 use sbi::Eid;
 
 use super::*;
-use crate::*;
 
 pub mod sbi_console;
 pub mod timer;
@@ -31,7 +30,7 @@ impl PlatformTrait for Platform {
             trap::init();
 
             let boot_info = System::boot_info_mut();
-            boot_info.platform = Platform::Sbi;
+            boot_info.platform_type = PlatformType::Sbi;
 
             let end = PhysicalAddress::new(&_end as *const _ as PhysicalAddressRepr);
             boot_info.start_conventional_memory = end.rounding_up_4k().as_repr() as u32;

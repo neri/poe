@@ -11,6 +11,7 @@ use x86::real::Far16Ptr;
 use super::*;
 use crate::arch::lomem::{LoMemoryManager, ManagedLowMemory};
 use crate::arch::vm86::{VM86, Vm86Context};
+use crate::io::fs::media::*;
 
 static mut SHARED: UnsafeCell<DiskBios> = UnsafeCell::new(DiskBios::new());
 

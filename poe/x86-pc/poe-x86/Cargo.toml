@@ -13,3 +13,5 @@ minios = { path = "../../../minios/", features = ["pc"] }
 lto = true
 opt-level = "z"
 panic = "abort"
+
+[workspace]

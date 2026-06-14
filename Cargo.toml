@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = [
+    "lib/acpi",
+    "lib/bootprot",
+    "lib/box_drawing",
+    "lib/edid",
+    "lib/elf",
+    "lib/fatfs",
+    "lib/fdt",
+    "lib/guid",
+    "lib/hid",
+    "lib/mar",
+    "lib/minilib",
+    "lib/minisbi",
+    "lib/riscv",
+    "lib/sbi",
+    "lib/simple_font",
+    "lib/smbios",
+    "lib/tui",
+    "lib/x86",
+    "minios",
+]
+
+[workspace.dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+paste = { version = "1.0" }

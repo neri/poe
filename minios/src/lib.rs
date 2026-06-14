@@ -32,7 +32,7 @@ pub mod prelude {
 
     pub use crate::arch::hal::*;
     pub use crate::env::*;
-    pub use crate::io::media::*;
+    pub use crate::io::fs::*;
     pub use crate::io::tty::*;
     pub use crate::platform::{Platform, PlatformTrait, RecommendedConsoleMode};
     pub use crate::task::event::*;

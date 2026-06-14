@@ -30,33 +30,47 @@ pub struct BootInfo {
 
 #[repr(u8)]
 #[non_exhaustive]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlatformType {
-    #[default]
-    Unspecified = 0,
+    // #[default]
+    // Unspecified = 0,
     /// IA32-Legacy NEC PC-98 Series Computer
     Nec98 = 1,
     /// IA32-Legacy IBM PC Compatible
-    PcCompatible = 2,
+    PcBios = 2,
     /// IA32-Legacy Fujitsu FM TOWNS
     FmTowns = 3,
-    /// Native UEFI
+    /// Native UEFI based platform
     UefiNative = 4,
-    /// Non native UEFI
+    /// Non native UEFI based platform
     UefiBridged = 5,
+    /// Device Tree based platforms
+    DeviceTree = 6,
+    /// Raspberry Pi
+    RaspberryPi = 7,
+    /// RISC-V with SBI
+    Sbi = 8,
 }
 
-impl fmt::Display for PlatformType {
+impl PlatformType {
     #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::PcCompatible => write!(f, "PC Compatible"),
-            Self::Nec98 => write!(f, "PC-98"),
-            Self::FmTowns => write!(f, "FM TOWNS"),
-            Self::UefiNative => write!(f, "UEFI"),
-            Self::UefiBridged => write!(f, "UEFI"),
-            _ => write!(f, "Unknown"),
+            Self::PcBios => "PC (BIOS)",
+            Self::Nec98 => "PC-98",
+            Self::FmTowns => "FM TOWNS",
+            Self::UefiNative => "UEFI",
+            Self::UefiBridged => "UEFI (Bridged)",
+            Self::DeviceTree => "Device Tree",
+            Self::RaspberryPi => "Raspberry Pi",
+            Self::Sbi => "RISC-V with SBI",
         }
+    }
+}
+
+impl core::fmt::Display for PlatformType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

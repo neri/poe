@@ -10,3 +10,4 @@ target
 /temp
 /bin
 *.bin
+/Cargo.lock
