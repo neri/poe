@@ -12,17 +12,10 @@ use crate::*;
 pub struct PegcBios {
     modes: Vec<ModeInfo>,
     current_mode: CurrentMode,
+    preferred_graphics_mode: PreferredGraphicsMode,
 }
 
 impl PegcBios {
-    #[inline]
-    const fn new() -> Self {
-        Self {
-            modes: Vec::new(),
-            current_mode: CurrentMode::empty(),
-        }
-    }
-
     pub(super) unsafe fn init() {
         unsafe {
             if (0x45c as *const u8).read_volatile() & 0x40 == 0 {
@@ -30,23 +23,27 @@ impl PegcBios {
                 return;
             }
 
-            let mut driver = Box::new(Self::new());
             let inner_mode = ModeInfo {
                 width: 640,
                 height: 480,
                 bytes_per_scanline: 640,
                 pixel_format: PixelFormat::Indexed8,
             };
-            driver.modes.push(inner_mode);
-            driver.current_mode = CurrentMode {
+            let modes = [inner_mode].into();
+            let current_mode = CurrentMode {
                 current: ModeIndex(0),
                 info: inner_mode,
                 fb: PhysicalAddress::from_usize(0x00f0_0000),
                 fb_size: 640 * 480,
             };
 
+            let driver = Box::new(Self {
+                modes,
+                current_mode,
+                preferred_graphics_mode: inner_mode.into(),
+            });
+
             System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
-            System::conctl().set_preferred_graphics_mode(inner_mode.into());
         }
     }
 }
@@ -58,6 +55,10 @@ impl GraphicsOutputDevice for PegcBios {
 
     fn current_mode(&self) -> &CurrentMode {
         &self.current_mode
+    }
+
+    fn preferred_graphics_mode(&self) -> Option<PreferredGraphicsMode> {
+        Some(self.preferred_graphics_mode)
     }
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {

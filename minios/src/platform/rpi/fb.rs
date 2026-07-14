@@ -10,6 +10,7 @@ use crate::*;
 pub struct Fb {
     modes: Vec<ModeInfo>,
     current_mode: CurrentMode,
+    preferred_graphics_mode: Option<PreferredGraphicsMode>,
 }
 
 #[allow(unused)]
@@ -18,6 +19,7 @@ impl Fb {
         let mut driver = Box::new(Self {
             modes: Vec::new(),
             current_mode: CurrentMode::empty(),
+            preferred_graphics_mode: None,
         });
 
         let _ = Self::set_overscan(0, 0, 0, 0);
@@ -46,7 +48,7 @@ impl Fb {
             pixel_format: PixelFormat::BGRX8888,
         };
         driver.modes.push(default_mode);
-        System::conctl().set_preferred_graphics_mode(default_mode.into());
+        driver.preferred_graphics_mode = Some(default_mode.into());
         for template in &[(320, 200), (320, 240), (640, 480), (800, 600), (1024, 768)] {
             driver.modes.push(ModeInfo {
                 width: template.0 as u16,
@@ -73,7 +75,6 @@ impl Fb {
         }
 
         System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
-        System::conctl().set_preferred_graphics_mode(default_mode.into());
     }
 
     /// Sets the resolution and pixel format.
@@ -222,6 +223,10 @@ impl GraphicsOutputDevice for Fb {
 
     fn current_mode(&self) -> &CurrentMode {
         &self.current_mode
+    }
+
+    fn preferred_graphics_mode(&self) -> Option<PreferredGraphicsMode> {
+        self.preferred_graphics_mode
     }
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {

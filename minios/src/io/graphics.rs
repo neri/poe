@@ -14,6 +14,11 @@ pub trait GraphicsOutputDevice {
     /// Gets the current video mode information.
     fn current_mode(&self) -> &CurrentMode;
 
+    /// Gets the preferred graphics mode, if available.
+    fn preferred_graphics_mode(&self) -> Option<PreferredGraphicsMode> {
+        None
+    }
+
     /// Sets the video mode to the specified mode index.
     ///
     /// Returns `Ok` if the mode was successfully set, or `Err` if failed.

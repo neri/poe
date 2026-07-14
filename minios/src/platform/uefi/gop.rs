@@ -14,16 +14,23 @@ pub struct UefiGop {
     modes: Vec<ModeInfo>,
     bios_modes: Vec<gop::Mode>,
     current_mode: CurrentMode,
+    preferred_graphics_mode: PreferredGraphicsMode,
 }
 
 impl UefiGop {
     #[inline]
-    const fn new(gop: Handle, modes: Vec<ModeInfo>, bios_modes: Vec<gop::Mode>) -> Self {
+    const fn new(
+        gop: Handle,
+        modes: Vec<ModeInfo>,
+        bios_modes: Vec<gop::Mode>,
+        preferred_graphics_mode: PreferredGraphicsMode,
+    ) -> Self {
         Self {
             gop,
             modes,
             bios_modes,
             current_mode: CurrentMode::empty(),
+            preferred_graphics_mode,
         }
     }
 
@@ -58,9 +65,13 @@ impl UefiGop {
                 .map(|mode| mode_info_from_gop_mode(mode.info()))
                 .collect::<Vec<_>>();
 
-            let driver = Box::new(Self::new(handle_gop, modes, bios_modes));
+            let driver = Box::new(Self::new(
+                handle_gop,
+                modes,
+                bios_modes,
+                preferred_graphics_mode,
+            ));
             System::conctl().set_graphics(driver as Box<dyn GraphicsOutputDevice>);
-            System::conctl().set_preferred_graphics_mode(preferred_graphics_mode);
         }
     }
 }
@@ -82,6 +93,10 @@ impl GraphicsOutputDevice for UefiGop {
 
     fn current_mode(&self) -> &CurrentMode {
         &self.current_mode
+    }
+
+    fn preferred_graphics_mode(&self) -> Option<PreferredGraphicsMode> {
+        Some(self.preferred_graphics_mode)
     }
 
     fn set_mode(&mut self, mode: ModeIndex) -> Result<(), ()> {

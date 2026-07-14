@@ -178,8 +178,12 @@ impl System {
     /// Returns device tree if available
     #[inline]
     pub fn device_tree<'a>() -> Option<&'a fdt::DeviceTree<'a>> {
-        let shared = Self::shared();
-        shared.device_tree.as_ref()
+        if cfg!(feature = "device_tree") {
+            let shared = Self::shared();
+            shared.device_tree.as_ref()
+        } else {
+            None
+        }
     }
 
     /// # Safety
@@ -436,7 +440,6 @@ pub struct ConsoleController {
     text_out: NonNull<dyn SimpleTextOutput>,
     graphics_out: Option<Box<dyn GraphicsOutputDevice>>,
     fbcon: Option<FbCon>,
-    preferred_graphics_mode: Option<PreferredGraphicsMode>,
 }
 
 impl ConsoleController {
@@ -447,7 +450,6 @@ impl ConsoleController {
             text_out: NonNull::new(&raw mut NULL).unwrap(),
             graphics_out: None,
             fbcon: None,
-            preferred_graphics_mode: None,
         }
     }
 
@@ -458,14 +460,12 @@ impl ConsoleController {
         self.graphics_out = Some(graphics_out);
     }
 
+    /// Returns preferred graphics mode if available
     #[inline]
-    pub fn set_preferred_graphics_mode(&mut self, mode: PreferredGraphicsMode) {
-        self.preferred_graphics_mode = Some(mode);
-    }
-
-    #[inline]
-    pub const fn preferred_graphics_mode(&self) -> Option<PreferredGraphicsMode> {
-        self.preferred_graphics_mode
+    pub fn preferred_graphics_mode(&self) -> Option<PreferredGraphicsMode> {
+        self.graphics_out
+            .as_ref()
+            .and_then(|g| g.preferred_graphics_mode())
     }
 
     /// Returns whether the console is in text mode
