@@ -18,15 +18,7 @@ impl EfiEventPoller {
                 None,
             )
             .unwrap();
-
-            let nanos = duration.as_nanos();
-            let timeout = if nanos < u64::MAX as u128 {
-                nanos as u64 / 100
-            } else {
-                (nanos as f64 / 100.0) as u64
-            };
-            uefi::boot::set_timer(&event, uefi::boot::TimerTrigger::Relative(timeout)).unwrap();
-
+            uefi::boot::set_timer(&event, uefi::boot::TimerTrigger::Relative(duration)).unwrap();
             Self { inner: event }
         }
     }

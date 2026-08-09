@@ -66,7 +66,7 @@ impl System {
 
             MemoryManager::init();
 
-            Platform::init(arg);
+            CurrentPlatform::init(arg);
         }
         Self::_init(main)
     }
@@ -96,7 +96,7 @@ impl System {
 
             let dt = Self::device_tree().unwrap();
 
-            Platform::init_dt_early(&dt, arg);
+            CurrentPlatform::init_dt_early(&dt, arg);
 
             MemoryManager::init_dt(&dt);
 
@@ -104,7 +104,7 @@ impl System {
                 System::add_config_table_entry(&fdt::DTB_TABLE_GUID, dt);
             }
 
-            Platform::init(arg);
+            CurrentPlatform::init(arg);
         }
         Self::_init(main)
     }
@@ -131,7 +131,7 @@ impl System {
             };
             (&mut *(&raw mut SYSTEM)).write(shared);
 
-            Platform::init(arg);
+            CurrentPlatform::init(arg);
         }
         Self::_init(main)
     }
@@ -193,7 +193,7 @@ impl System {
         unsafe {
             // let shared = Self::shared_mut();
 
-            Platform::exit();
+            CurrentPlatform::exit();
 
             *(&mut *(&raw mut SYSTEM)) = MaybeUninit::zeroed();
         }
@@ -319,7 +319,7 @@ impl System {
 
     /// Sets graphics mode if the platform recommends graphics mode
     pub fn set_graphics_mode_if_recommended() {
-        if Platform::recommended_console_mode() == RecommendedConsoleMode::Graphics
+        if CurrentPlatform::recommended_console_mode() == RecommendedConsoleMode::Graphics
             && let Some(mode) = Self::conctl().preferred_graphics_mode()
         {
             let _ = Self::conctl().set_graphics_mode(mode);

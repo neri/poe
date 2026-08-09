@@ -18,7 +18,7 @@ seq-macro = { version = "0.3" }
 num = { version = "0.4", default-features = false }
 embedded-graphics = { version = "0.8" }
 heapless = { version = "0.9", default-features = false }
-bitflags = { version = "2.11" }
+bitflags = { version = "2.13" }
 
 bootprot = {path = "../lib/bootprot/"}
 acpi = { path = "../lib/acpi/", features = ["guid"] }
@@ -32,7 +32,7 @@ simple_font = { path = "../lib/simple_font/" }
 smbios = { path = "../lib/smbios/", features = ["guid"] }
 tui = { path = "../lib/tui/" }
 
-uefi = { version="0.37", features = ['global_allocator', 'alloc'], optional = true }
+uefi = { version="0.39", features = ['global_allocator', 'alloc'], optional = true }
 # uefi-raw = { version="0.14" }
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]

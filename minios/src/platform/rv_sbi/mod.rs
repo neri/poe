@@ -16,7 +16,7 @@ unsafe extern "C" {
     unsafe static _end: c_void;
 }
 
-impl PlatformTrait for Platform {
+impl Platform for CurrentPlatform {
     unsafe fn init_dt_early(dt: &fdt::DeviceTree, arg: usize) {
         let hart_id = arg;
         unsafe {

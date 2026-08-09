@@ -15,7 +15,7 @@ pub mod device_path;
 pub mod event;
 pub mod gop;
 
-impl PlatformTrait for Platform {
+impl Platform for CurrentPlatform {
     unsafe fn init(_arg: usize) {
         unsafe {
             uefi::helpers::init().unwrap();
@@ -41,6 +41,8 @@ impl PlatformTrait for Platform {
     unsafe fn exit() {
         unsafe {
             let _mmap = uefi::boot::exit_boot_services(None);
+
+            todo!()
         }
     }
 
@@ -81,4 +83,16 @@ unsafe fn get_protocol<PROTOCOL: uefi::proto::ProtocolPointer + ?Sized>(
             uefi::boot::OpenProtocolAttributes::GetProtocol,
         )
     }
+}
+
+// To avoid link error
+#[unsafe(no_mangle)]
+pub extern "C" fn wcslen(s: *const u16) -> usize {
+    let mut len = 0;
+    unsafe {
+        while *s.add(len) != 0 {
+            len += 1;
+        }
+    }
+    len
 }

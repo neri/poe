@@ -24,9 +24,9 @@ pub mod uefi;
 #[cfg(feature = "uefi")]
 pub use uefi as current;
 
-pub struct Platform;
+pub struct CurrentPlatform;
 
-pub trait PlatformTrait {
+pub trait Platform {
     /// Initialize platform with device tree and other early initialization.
     #[cfg(feature = "device_tree")]
     unsafe fn init_dt_early(dt: &fdt::DeviceTree, arg: usize);
@@ -77,7 +77,7 @@ impl PollingEvent for MonotonicTimerPoller {
     fn poll(&mut self) -> PollResult {
         match self {
             Self::Timeout(deadline) => {
-                let result = Platform::monotonic().wrapping_sub(*deadline) as i64;
+                let result = CurrentPlatform::monotonic().wrapping_sub(*deadline) as i64;
                 if result >= 0 {
                     PollResult::Ready
                 } else {

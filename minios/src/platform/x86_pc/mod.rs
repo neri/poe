@@ -8,12 +8,12 @@ mod pit;
 
 use core::time::Duration;
 
-use super::{MonotonicTimerPoller, Platform, PlatformTrait};
+use super::{CurrentPlatform, MonotonicTimerPoller, Platform};
 use crate::arch::{cpu, gdt, idt, lomem, vm86};
 use crate::mem::{MemoryManager, MemoryType};
 use crate::*;
 
-impl PlatformTrait for Platform {
+impl Platform for CurrentPlatform {
     unsafe fn init(_arg: usize) {
         unsafe {
             let info = System::boot_info();

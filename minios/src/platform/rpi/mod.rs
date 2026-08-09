@@ -6,7 +6,7 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{Ordering, compiler_fence};
 use core::time::Duration;
 
-use super::{MonotonicTimerPoller, Platform, PlatformTrait};
+use super::{CurrentPlatform, MonotonicTimerPoller, Platform};
 use crate::*;
 
 pub mod fb;
@@ -16,7 +16,7 @@ pub mod trap;
 pub mod uart0;
 pub mod uart1;
 
-impl PlatformTrait for Platform {
+impl Platform for CurrentPlatform {
     unsafe fn init_dt_early(dt: &fdt::DeviceTree, _arg: usize) {
         unsafe {
             // detect machine type

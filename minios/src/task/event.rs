@@ -3,7 +3,7 @@
 // use super::*;
 use core::time::Duration;
 
-use crate::platform::{Platform, PlatformTrait};
+use crate::platform::{CurrentPlatform, Platform};
 use crate::*;
 
 // pub type EventCallback = *const fn(usize);
@@ -32,7 +32,7 @@ impl<'a> Event<'a> {
     pub fn with_timeout(duration: Duration) -> Self {
         Self {
             state: EventState::Idle,
-            poll: Some(Platform::create_timer_event(duration)),
+            poll: Some(CurrentPlatform::create_timer_event(duration)),
         }
     }
 }

@@ -236,7 +236,7 @@ unsafe fn _arch_handle_trap(ctx: &ExceptionContext) {
             ctx.s10, ctx.s11, ctx.sp,
         );
 
-        Platform::halt();
+        CurrentPlatform::halt();
     }
 }
 

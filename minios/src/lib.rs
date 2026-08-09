@@ -34,7 +34,7 @@ pub mod prelude {
     pub use crate::env::*;
     pub use crate::io::fs::*;
     pub use crate::io::tty::*;
-    pub use crate::platform::{Platform, PlatformTrait, RecommendedConsoleMode};
+    pub use crate::platform::{CurrentPlatform, Platform, RecommendedConsoleMode};
     pub use crate::task::event::*;
     pub use crate::{print, println};
 }
