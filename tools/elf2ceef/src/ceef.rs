@@ -13,7 +13,7 @@ pub enum CeefVersion {
     /// Version 0, segmented, not compressed
     #[default]
     V0 = 0,
-    /// Version 1, not segmented, compressed
+    /// Version 1, not segmented, compressed by STK1
     V1 = 1,
 }
 

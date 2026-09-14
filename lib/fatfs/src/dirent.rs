@@ -2,7 +2,7 @@
 
 /// Directory entry in FAT filesystem
 #[repr(C, packed)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct DirEnt {
     /// 11 bytes: 8 for name, 3 for extension
     pub name: [u8; 11],
@@ -277,6 +277,7 @@ impl DirEnt {
 }
 
 impl Default for DirEnt {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -290,7 +291,7 @@ pub enum ConvertError {
 
 /// Long File Name (LFN) entry in FAT filesystem
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct LfnEntry {
     /// Sequence number of this entry in the LFN sequence. The last entry has bit 6 (0x40) set.
     pub seq_number: u8,

@@ -144,6 +144,7 @@ impl ExtendedBpb32 {
 }
 
 #[repr(C, packed)]
+#[derive(Clone)]
 pub struct BootSector {
     jumps: [u8; 3],
     oem_name: [u8; 8],
@@ -254,19 +255,6 @@ impl BootSector {
     #[inline]
     pub fn bpb(&self) -> &Bpb {
         &self.ebpb.bpb
-    }
-}
-
-impl Clone for BootSector {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self {
-            jumps: self.jumps,
-            oem_name: self.oem_name,
-            ebpb: self.ebpb,
-            boot_code: self.boot_code,
-            boot_signature: self.boot_signature,
-        }
     }
 }
 

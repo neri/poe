@@ -2,17 +2,14 @@
 // Copyright(c) 2021 The MEG-OS Project
 
 pub mod fat;
-use fat::*;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::mem::size_of;
+use std::num::NonZeroU32;
+use std::path::Path;
+use std::{env, process};
 
-use std::{
-    env,
-    fs::File,
-    io::{Read, Write},
-    mem::size_of,
-    num::NonZeroU32,
-    path::Path,
-    process, usize,
-};
+use fat::*;
 
 fn usage() -> ! {
     let mut args = env::args_os();
