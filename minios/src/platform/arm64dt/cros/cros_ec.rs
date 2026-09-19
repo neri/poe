@@ -2,12 +2,13 @@
 //!
 //! Follows depthcharge (drivers/ec/cros/spi.c and ec.c) of the gru firmware.
 //! Every wait has a time limit, so that the boot continues even if the EC does not respond.
+//! The SPI controller is abstracted by [`SpiDevice`].
 
 use fdt::PropName;
 
 use super::ec_packet::{self, HEADER_SIZE, ResponseError};
-use super::rk_spi::RkSpi;
-use super::{counter_us, delay_us};
+use crate::platform::arm64dt::spi::SpiDevice;
+use crate::platform::arm64dt::{counter_us, delay_us, dt};
 
 const EC_CMD_PWM_SET_DUTY: u16 = 0x0025;
 const EC_CMD_MKBP_STATE: u16 = 0x0060;
@@ -64,32 +65,29 @@ impl Error {
     }
 }
 
-pub struct CrosEc {
-    spi: RkSpi,
-    cs: u32,
+/// Finds the EC on SPI in the device tree.
+///
+/// `spi_device` makes the SPI device from the controller node, its `reg` (CPU address, size)
+/// and the chip select of the EC. It returns `None` if the controller is not supported.
+pub fn find<S: SpiDevice>(
+    dt: &fdt::DeviceTree,
+    mut spi_device: impl FnMut(&fdt::Node, (usize, usize), u32) -> Option<S>,
+) -> Option<CrosEc<S>> {
+    dt::find_map(dt, |controller, map| {
+        let ec = controller
+            .children()
+            .find(|v| v.status_is_ok() && v.is_compatible_with("google,cros-ec-spi"))?;
+        let cs = ec.get_prop_u32(PropName::REG)?;
+        let reg = map.reg(controller, 0)?;
+        spi_device(controller, reg, cs).map(|spi| CrosEc { spi })
+    })
 }
 
-impl CrosEc {
-    /// Finds the EC on a Rockchip SPI controller in the device tree.
-    pub fn find(dt: &fdt::DeviceTree) -> Option<Self> {
-        for spi in dt.root().children() {
-            if !spi.status_is_ok() || !spi.is_compatible_with("rockchip,rk3066-spi") {
-                continue;
-            }
-            for ec in spi.children() {
-                if ec.status_is_ok() && ec.is_compatible_with("google,cros-ec-spi") {
-                    let base = spi.reg()?.next()?.0 as usize;
-                    let cs = ec.get_prop_u32(PropName::REG)?;
-                    return Some(Self {
-                        spi: RkSpi::new(base),
-                        cs,
-                    });
-                }
-            }
-        }
-        None
-    }
+pub struct CrosEc<S: SpiDevice> {
+    spi: S,
+}
 
+impl<S: SpiDevice> CrosEc<S> {
     /// Sets the brightness of the display backlight, the same way as depthcharge.
     pub unsafe fn set_display_backlight(&self, percent: u32) -> Result<(), Error> {
         let duty = (percent.min(100) * EC_PWM_MAX_DUTY / 100) as u16;
@@ -152,7 +150,7 @@ impl CrosEc {
     unsafe fn send_packet(&self, request: &[u8], response: &mut [u8]) -> Result<(), Error> {
         delay_us(CS_COOLDOWN_US);
         unsafe {
-            self.spi.select(self.cs);
+            self.spi.select();
             delay_us(WAKEUP_DELAY_US);
             let result = self.transact(request, response);
             self.spi.deselect();

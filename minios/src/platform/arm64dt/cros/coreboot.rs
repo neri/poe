@@ -8,7 +8,7 @@
 
 use fdt::{NodeName, PropName};
 
-use super::fb::Framebuffer;
+use crate::platform::arm64dt::fb::Framebuffer;
 use crate::*;
 
 const SIGNATURE: u32 = u32::from_le_bytes(*b"LBIO");

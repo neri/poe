@@ -9,20 +9,15 @@ pub mod x86_pc;
 #[cfg(feature = "pc")]
 pub use x86_pc as current;
 
-#[cfg(feature = "rpi")]
-pub mod rpi;
-#[cfg(feature = "rpi")]
-pub use rpi as current;
-
 #[cfg(feature = "sbi")]
 pub mod rv_sbi;
 #[cfg(feature = "sbi")]
 pub use rv_sbi as current;
 
-#[cfg(feature = "virt")]
-pub mod virt;
-#[cfg(feature = "virt")]
-pub use virt as current;
+#[cfg(feature = "arm64dt")]
+pub mod arm64dt;
+#[cfg(feature = "arm64dt")]
+pub use arm64dt as current;
 
 #[cfg(feature = "uefi")]
 pub mod uefi;

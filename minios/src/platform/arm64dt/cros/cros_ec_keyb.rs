@@ -3,19 +3,16 @@
 //! The EC is polled (without its interrupt) when the input is read,
 //! at most once per `POLL_INTERVAL_US`. Keys are not repeated.
 
-use core::cell::UnsafeCell;
-
-use super::counter_us;
 use super::cros_ec::{CrosEc, Error, KEY_MATRIX_SIZE};
 use super::keymatrix::KeyMatrix;
 use super::vpd::KeyboardLayout;
 use crate::io::hid_mgr::{HidManager, KeyStroke};
+use crate::platform::arm64dt::counter_us;
+use crate::platform::arm64dt::spi::SpiDevice;
 use crate::*;
 
-static mut KEYBOARD: UnsafeCell<Option<CrosEcKeyboard>> = UnsafeCell::new(None);
-
-pub struct CrosEcKeyboard {
-    ec: CrosEc,
+pub struct CrosEcKeyboard<S: SpiDevice> {
+    ec: CrosEc<S>,
     mode: Mode,
     matrix: KeyMatrix,
     key_buffer: heapless::Vec<KeyStroke, 16>,
@@ -31,7 +28,7 @@ enum Mode {
     State,
 }
 
-impl CrosEcKeyboard {
+impl<S: SpiDevice + 'static> CrosEcKeyboard<S> {
     const POLL_INTERVAL_US: u64 = 10_000;
     /// Interval after an EC error, not to slow down the system with timeouts
     const RETRY_INTERVAL_US: u64 = 1_000_000;
@@ -43,7 +40,7 @@ impl CrosEcKeyboard {
     /// Uses the keyboard as stdin, with the layout.
     ///
     /// Returns `false` if the EC does not answer.
-    pub unsafe fn install(ec: CrosEc, layout: KeyboardLayout) -> bool {
+    pub unsafe fn install(ec: CrosEc<S>, layout: KeyboardLayout) -> bool {
         // Discard the events queued so far (e.g. Ctrl+U at the firmware screen),
         // which also checks that the EC answers.
         let mut matrix = KeyMatrix::new();
@@ -59,25 +56,24 @@ impl CrosEcKeyboard {
             Err(_) => return false,
         };
 
+        let keyboard = Box::leak(Box::new(Self {
+            ec,
+            mode,
+            matrix,
+            key_buffer: heapless::Vec::new(),
+            next_poll: 0,
+        }));
         unsafe {
-            let shared = (&mut *(&raw mut KEYBOARD)).get_mut();
-            *shared = Some(Self {
-                ec,
-                mode,
-                matrix,
-                key_buffer: heapless::Vec::new(),
-                next_poll: 0,
-            });
             match layout {
                 KeyboardLayout::Japanese => HidManager::set_japanese_layout(),
                 KeyboardLayout::Us => {}
             }
-            System::set_stdin(shared.as_mut().unwrap());
+            System::set_stdin(keyboard);
         }
         true
     }
 
-    unsafe fn discard_stale_events(ec: &CrosEc, matrix: &mut KeyMatrix) -> Result<(), Error> {
+    unsafe fn discard_stale_events(ec: &CrosEc<S>, matrix: &mut KeyMatrix) -> Result<(), Error> {
         for _ in 0..Self::MAX_STALE_EVENTS {
             match unsafe { ec.next_key_matrix_event() }? {
                 Some(state) => matrix.reset(&state),
@@ -130,7 +126,7 @@ impl CrosEcKeyboard {
     }
 }
 
-impl SimpleTextInput for CrosEcKeyboard {
+impl<S: SpiDevice + 'static> SimpleTextInput for CrosEcKeyboard<S> {
     fn reset(&mut self) {
         self.key_buffer.clear();
     }

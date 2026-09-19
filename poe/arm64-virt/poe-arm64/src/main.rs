@@ -1,4 +1,5 @@
-//! Pre-OS Execution Environment for Arm virtual machine
+//! Pre-OS Execution Environment for 64-bit Arm machines with a device tree
+//! (QEMU virt, Raspberry Pi 3/4, RK3399 Chromebooks)
 #![no_std]
 #![no_main]
 
@@ -6,21 +7,16 @@ use core::arch::naked_asm;
 
 use poe::prelude::*;
 
-fn _arch_virt_start(dtb: usize) -> ! {
+fn _arch_arm64dt_start(dtb: usize) -> ! {
     unsafe {
-        minios::platform::virt::clean_dtb_cache(dtb);
-    }
-    #[cfg(feature = "diag")]
-    unsafe {
-        minios::platform::virt::diag::mark(0);
-        minios::platform::virt::diag::check_dtb(dtb);
+        minios::platform::arm64dt::clean_dtb_cache(dtb);
     }
     unsafe { System::init_dt(dtb, 0, poe::main) }
 }
 
 /// Entry point, placed after the Linux arm64 Image header.
 ///
-/// The boot loader (QEMU `-kernel`, U-Boot `booti`, depthcharge, ...) passes
+/// The boot loader (QEMU `-kernel`, U-Boot `booti`, depthcharge, Raspberry Pi firmware, ...) passes
 /// the physical address of the device tree blob in x0.
 ///
 /// The image is linked at 0 as a PIE and may be loaded at any 4KB aligned address.
@@ -131,6 +127,6 @@ unsafe extern "C" fn _start() -> ! {
         "",
         "9:  wfe",
         "    b       9b",
-        main = sym _arch_virt_start,
+        main = sym _arch_arm64dt_start,
     )
 }

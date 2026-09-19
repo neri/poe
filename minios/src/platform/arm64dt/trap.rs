@@ -1,12 +1,14 @@
 use core::arch::{asm, naked_asm};
 
-use crate::platform::rpi::timer_eoi;
+use super::irq;
+use crate::arch::gic::IRQ_CNTV;
 use crate::*;
 
 pub(super) unsafe fn init() {
     unsafe {
         asm!(
-            "ldr {0}, =_vector_table",
+            "adrp {0}, _vector_table",
+            "add {0}, {0}, :lo12:_vector_table",
             "msr vbar_el1, {0}",
             "isb",
             out(reg) _,
@@ -16,7 +18,6 @@ pub(super) unsafe fn init() {
 
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
-#[unsafe(link_section = ".text.boot")]
 #[allow(named_asm_labels)]
 unsafe extern "C" fn _vector_table_nkf() {
     naked_asm!(
@@ -115,13 +116,17 @@ unsafe extern "C" fn _vector_table_nkf() {
 
 fn _handle_irq(_ctx: &mut ExceptionContext) {
     unsafe {
-        let cntv_ctl_el0: usize;
-        asm!("mrs {}, cntv_ctl_el0", out(reg) cntv_ctl_el0);
-        if (cntv_ctl_el0 & 1) != 0 {
-            arch::timer::GenericTimer::advance_tick();
-            timer_eoi();
-        } else {
-            println!("unknown interrupt!");
+        let irq = irq::ack();
+        match irq {
+            IRQ_CNTV => {
+                arch::timer::GenericTimer::advance_tick();
+                irq::eoi(irq);
+            }
+            _ if irq.0 >= 1020 => {}
+            _ => {
+                println!("unknown interrupt {}", irq.0);
+                irq::eoi(irq);
+            }
         }
     }
 }

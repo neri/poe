@@ -4,17 +4,18 @@
 //! The clock, the SPI mode and the pins are left as configured by the firmware,
 //! the same as depthcharge does.
 
-use super::counter_us;
+use crate::platform::arm64dt::counter_us;
+use crate::platform::arm64dt::spi::{SpiDevice, SpiTimeout};
 
-/// Timed out waiting for the controller
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Timeout;
-
+/// A chip select of the Rockchip SPI controller
 pub struct RkSpi {
     base: usize,
+    cs: u32,
 }
 
 impl RkSpi {
+    pub const COMPATIBLE: &str = "rockchip,rk3066-spi";
+
     const CTRLR0: usize = 0x0000;
     const CTRLR1: usize = 0x0004;
     const ENR: usize = 0x0008;
@@ -39,23 +40,68 @@ impl RkSpi {
 
     const TIMEOUT_US: u64 = 100_000;
 
+    /// The chip select `cs` of the controller at `base`
     #[inline]
-    pub const fn new(base: usize) -> Self {
-        Self { base }
+    pub const fn new(base: usize, cs: u32) -> Self {
+        Self { base, cs }
     }
 
-    /// Asserts the chip select.
-    pub unsafe fn select(&self, cs: u32) {
-        unsafe { self.write_reg(Self::SER, 1 << cs) };
+    unsafe fn begin(&self, tmod: u32, frames: usize) {
+        unsafe {
+            self.write_reg(Self::ENR, 0);
+            let ctrlr0 = (self.read_reg(Self::CTRLR0) & !Self::CTRLR0_TMOD_MASK)
+                | Self::CTRLR0_HALF_WORD_TX
+                | (tmod << Self::CTRLR0_TMOD_SHIFT);
+            self.write_reg(Self::CTRLR0, ctrlr0);
+            self.write_reg(Self::CTRLR1, (frames - 1) as u32);
+            self.write_reg(Self::ENR, 1);
+        }
+    }
+
+    unsafe fn end(&self) -> Result<(), SpiTimeout> {
+        unsafe {
+            let start = counter_us();
+            while (self.read_reg(Self::SR) & Self::SR_BUSY) != 0 {
+                self.check_timeout(start)?;
+            }
+            self.write_reg(Self::ENR, 0);
+        }
+        Ok(())
+    }
+
+    /// Disables the controller and returns `Err` if the timeout has expired.
+    unsafe fn check_timeout(&self, start: u64) -> Result<(), SpiTimeout> {
+        if counter_us().wrapping_sub(start) > Self::TIMEOUT_US {
+            unsafe { self.write_reg(Self::ENR, 0) };
+            Err(SpiTimeout)
+        } else {
+            core::hint::spin_loop();
+            Ok(())
+        }
+    }
+
+    #[inline]
+    unsafe fn read_reg(&self, offset: usize) -> u32 {
+        unsafe { ((self.base + offset) as *const u32).read_volatile() }
+    }
+
+    #[inline]
+    unsafe fn write_reg(&self, offset: usize, value: u32) {
+        unsafe { ((self.base + offset) as *mut u32).write_volatile(value) }
+    }
+}
+
+impl SpiDevice for RkSpi {
+    unsafe fn select(&self) {
+        unsafe { self.write_reg(Self::SER, 1 << self.cs) };
     }
 
     /// Deasserts all chip selects.
-    pub unsafe fn deselect(&self) {
+    unsafe fn deselect(&self) {
         unsafe { self.write_reg(Self::SER, 0) };
     }
 
-    /// Transmits `data` (the received data is discarded).
-    pub unsafe fn write(&self, data: &[u8]) -> Result<(), Timeout> {
+    unsafe fn write(&self, data: &[u8]) -> Result<(), SpiTimeout> {
         if data.is_empty() {
             return Ok(());
         }
@@ -73,8 +119,7 @@ impl RkSpi {
         }
     }
 
-    /// Receives `buf.len()` bytes.
-    pub unsafe fn read(&self, buf: &mut [u8]) -> Result<(), Timeout> {
+    unsafe fn read(&self, buf: &mut [u8]) -> Result<(), SpiTimeout> {
         if buf.is_empty() {
             return Ok(());
         }
@@ -99,49 +144,5 @@ impl RkSpi {
             }
             self.end()
         }
-    }
-
-    unsafe fn begin(&self, tmod: u32, frames: usize) {
-        unsafe {
-            self.write_reg(Self::ENR, 0);
-            let ctrlr0 = (self.read_reg(Self::CTRLR0) & !Self::CTRLR0_TMOD_MASK)
-                | Self::CTRLR0_HALF_WORD_TX
-                | (tmod << Self::CTRLR0_TMOD_SHIFT);
-            self.write_reg(Self::CTRLR0, ctrlr0);
-            self.write_reg(Self::CTRLR1, (frames - 1) as u32);
-            self.write_reg(Self::ENR, 1);
-        }
-    }
-
-    unsafe fn end(&self) -> Result<(), Timeout> {
-        unsafe {
-            let start = counter_us();
-            while (self.read_reg(Self::SR) & Self::SR_BUSY) != 0 {
-                self.check_timeout(start)?;
-            }
-            self.write_reg(Self::ENR, 0);
-        }
-        Ok(())
-    }
-
-    /// Disables the controller and returns `Err` if the timeout has expired.
-    unsafe fn check_timeout(&self, start: u64) -> Result<(), Timeout> {
-        if counter_us().wrapping_sub(start) > Self::TIMEOUT_US {
-            unsafe { self.write_reg(Self::ENR, 0) };
-            Err(Timeout)
-        } else {
-            core::hint::spin_loop();
-            Ok(())
-        }
-    }
-
-    #[inline]
-    unsafe fn read_reg(&self, offset: usize) -> u32 {
-        unsafe { ((self.base + offset) as *const u32).read_volatile() }
-    }
-
-    #[inline]
-    unsafe fn write_reg(&self, offset: usize, value: u32) {
-        unsafe { ((self.base + offset) as *mut u32).write_volatile(value) }
     }
 }

@@ -3,7 +3,7 @@
 //! depthcharge puts the VOP used for the firmware screen into standby when it hands off
 //! to the OS, so the framebuffer is not displayed until the VOP is woken up.
 
-use super::find_reg;
+use crate::platform::arm64dt::dt::find_reg;
 
 const REG_CFG_DONE: usize = 0x0000;
 const SYS_CTRL: usize = 0x0008;

@@ -1,6 +1,5 @@
 {
     "rust-analyzer.linkedProjects": [
-        "./poe/arm64-rpi/poe-rpi/Cargo.toml",
         "./poe/arm64-virt/poe-arm64/Cargo.toml",
         "./poe/rv32-virt/poe-rv32/Cargo.toml",
         "./poe/rv64-virt/poe-rv64/Cargo.toml",

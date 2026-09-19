@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run test apps kernel update kpart usb
+.PHONY: love all default clean install full run run-el2 run-rpi3 run-rpi4 test apps kernel update kpart usb
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -15,15 +15,18 @@ DEVKEYS		?= /usr/share/vboot/devkeys
 POE_SRC		= ./poe-arm64
 POE_LD		= $(POE_SRC)/target/aarch64-unknown-none/release/poe-arm64
 POE_BIN		= $(BIN)/kernel.img
-TARGETS		= poe $(POE_BIN)
+# The same image, named for the Raspberry Pi firmware
+RPI_BIN		= $(BIN)/kernel8.img
+TARGETS		= poe $(POE_BIN) $(RPI_BIN)
 
 IMG_SOURCES	= $(POE_BIN)
 
-# DIAG=1: boot progress markers on the screen of RK3399 Chromebooks (minios/src/platform/virt/diag.rs)
-CARGO_FEATURES	= $(if $(DIAG),--features diag)
 
 # GIC version of the QEMU virt machine (2 or 3)
 GIC			?= 2
+
+# Device tree blobs of Raspberry Pi (from the Raspberry Pi firmware)
+DTB_PATH	= ./dtb
 
 # Kernel partition image for Chromebooks (depthcharge)
 # BOARD_DTB can be replaced with a full device tree blob of the board.
@@ -38,7 +41,7 @@ default: $(BIN) $(TARGETS)
 
 all: test default
 
-install: $(POE_BIN)
+install: $(POE_BIN) $(RPI_BIN)
 
 clean:
 	(cd $(POE_SRC) && cargo clean)
@@ -58,19 +61,33 @@ run-el2:
 		-nographic \
 		-kernel $(POE_BIN)
 
+run-rpi3:
+	qemu-system-aarch64 -M raspi3b -dtb $(DTB_PATH)/bcm2710-rpi-3-b.dtb \
+		-kernel $(POE_BIN) \
+		-serial mon:stdio
+
+# Needs QEMU 9.0 or later
+run-rpi4:
+	qemu-system-aarch64 -M raspi4b -dtb $(DTB_PATH)/bcm2711-rpi-4-b.dtb \
+		-kernel $(POE_BIN) \
+		-serial mon:stdio
+
 test: poe
 
 $(BIN):
 	mkdir -p $@
 
 poe:
-	(cd $(POE_SRC) && cargo build --release $(CARGO_FEATURES))
+	(cd $(POE_SRC) && cargo build --release)
 
 # _start only applies R_AARCH64_RELATIVE, so reject any other relocation type
 $(POE_BIN): poe $(BIN)
 	@if $(READELF) -r $(POE_LD) | grep R_AARCH64_ | grep -qv R_AARCH64_RELATIVE; then \
 		echo "error: unsupported relocation type in $(POE_LD)"; exit 1; fi
 	$(OBJCOPY) -O binary $(POE_LD) $(POE_BIN)
+
+$(RPI_BIN): $(POE_BIN)
+	cp $(POE_BIN) $(RPI_BIN)
 
 kpart: $(KPART)
 

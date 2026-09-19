@@ -21,6 +21,8 @@ impl Pl011 {
 
     const DR: usize = 0x00;
     const FR: usize = 0x18;
+    const IBRD: usize = 0x24;
+    const FBRD: usize = 0x28;
     const LCRH: usize = 0x2c;
     const CR: usize = 0x30;
     const IMSC: usize = 0x38;
@@ -47,9 +49,9 @@ impl Pl011 {
 
     /// Initialize the UART at `base`.
     ///
-    /// The baud rate is left as configured by the firmware,
-    /// since the reference clock is not known here.
-    pub unsafe fn init(base: usize) -> &'static mut Self {
+    /// `baud_rate` is (reference clock, baud rate) if the platform knows the clock.
+    /// If `None`, the baud rate is left as configured by the firmware.
+    pub unsafe fn init(base: usize, baud_rate: Option<(u32, u32)>) -> &'static mut Self {
         let shared = Self::shared_raw();
         shared.base = base;
         unsafe {
@@ -61,6 +63,16 @@ impl Pl011 {
 
             // Clear pending interrupts.
             shared.write_reg(Self::ICR, 0x7ff);
+
+            // Divider in 1/64 units = clock / (16 * baud rate), rounded.
+            // It takes effect on the following write to LCRH.
+            if let Some((clock, baud_rate)) = baud_rate
+                && baud_rate > 0
+            {
+                let divider = (clock as u64 * 4 + baud_rate as u64 / 2) / baud_rate as u64;
+                shared.write_reg(Self::IBRD, (divider >> 6) as u32);
+                shared.write_reg(Self::FBRD, (divider & 0x3f) as u32);
+            }
 
             // Enable FIFO & 8 bit data transmission (1 stop bit, no parity).
             shared.write_reg(Self::LCRH, 0x0070);

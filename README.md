@@ -21,9 +21,10 @@
   * IBM PC Compatible
   * NEC PC-98 Series Computer
   * Fujitsu FM TOWNS
-* arm64
+* arm64 (one kernel image for all of them)
   * Raspberry Pi 3 & 4
   * virt machine
+  * RK3399 Chromebook (ASUS Chromebook Flip C101PA)
 
 * **NOTE**: It may not work or may need to be adjusted as it has not been fully verified on actual hardware.
 

@@ -5,13 +5,9 @@ version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-# Boot progress markers on the screen of RK3399 Chromebooks
-diag = ["minios/diag_rk3399"]
-
 [dependencies]
 poe = { path = "../../poe/", features = ["device_tree"] }
-minios = { path = "../../../minios/", features = ["virt"] }
+minios = { path = "../../../minios/", features = ["arm64dt"] }
 
 [profile.release]
 lto = true

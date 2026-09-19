@@ -1,8 +1,14 @@
-# POE for arm64 virt
+# POE for arm64
+
+One kernel image (`bin/kernel.img`) for 64-bit Arm machines with a device tree.
+Devices are discovered from the device tree passed by the boot loader.
 
 ## Requirements
 
 * QEMU `virt` machine (GICv2 or GICv3, PL011 UART)
+* Raspberry Pi 3 / Raspberry Pi Zero 2 / Raspberry Pi 4 (Raspberry Pi 5 is not supported)
+  * The console is on UART0 (PL011, GPIO 14/15, 115200 bps) and the screen (graphics console).
+* Chromebooks with RK3399 (ASUS Chromebook Flip C101PA)
 * Without UART in the device tree, the console output is discarded.
 * On Chromebooks, the display backlight (turned off by the firmware before booting the OS) is turned on
   through the ChromeOS EC on SPI.
@@ -34,6 +40,17 @@ $ make run
 
 Use `make run-el2` to boot at EL2, and `make run GIC=3` to use GICv3.
 
+```
+$ make run-rpi3
+```
+
+`make run-rpi4` needs QEMU 9.0 or later. The device trees of Raspberry Pi are in `dtb/`.
+
+### Raspberry Pi
+
+Copy `bin/kernel8.img` (the same image as `bin/kernel.img`) to the boot partition of the SD card,
+with the Raspberry Pi firmware.
+
 ### Chromebook kernel partition (depthcharge)
 
 ```
@@ -58,13 +75,3 @@ $ make usb DEV=/dev/sdX
 * `make usb DEV=<file>.img` creates a disk image file instead.
 * On the Chromebook (developer mode), enable USB boot once with `sudo crossystem dev_boot_usb=1`.
   Insert the disk, wait a few seconds at the warning screen, then press Ctrl+U.
-
-### Diagnostic build (RK3399 Chromebooks)
-
-```
-$ make usb DEV=/dev/sdX DIAG=1
-```
-
-Each boot stage draws a white band on the screen (from the top), so the stage where the boot stops can be seen
-without UART. See `minios/src/platform/virt/diag.rs` for the meaning of the bands.
-It uses the hardcoded VOP address of RK3399; do not use it on other machines.

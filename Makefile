@@ -4,7 +4,6 @@ default:
 
 clean:
 	-rm -rf minios/target poe/**/target tools/target lib/target
-	(cd poe/arm64-rpi && make clean)
 	(cd poe/arm64-virt && make clean)
 	(cd poe/rv32-virt && make clean)
 	(cd poe/rv64-virt && make clean)
@@ -13,7 +12,6 @@ clean:
 
 update: clean
 	-rm -rf minios/Cargo.lock lib/Cargo.lock lib/target tools/target tools/Cargo.lock
-	(cd poe/arm64-rpi && make update)
 	(cd poe/arm64-virt && make update)
 	(cd poe/rv32-virt && make update)
 	(cd poe/rv64-virt && make update)
