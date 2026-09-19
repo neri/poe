@@ -12,6 +12,8 @@ pub const IRQ_CNTV: Irq = Irq(27);
 pub const IRQ_CNTPNS: Irq = Irq(29);
 /// Common IRQ for ARM Generic Timer (Physical Secure)
 pub const IRQ_CNTPS: Irq = Irq(30);
+/// Spurious interrupt ID returned by [`Gic::ack`] when no interrupt is pending
+pub const IRQ_SPURIOUS: Irq = Irq(1023);
 
 /// Arm Generic Interrupt Controller (GIC)
 pub struct Gic {
@@ -66,6 +68,17 @@ impl Gic {
                 .gicd(GicD::ISENABLER)
                 .add(reg_index as usize)
                 .write_volatile(1 << bit_index);
+        }
+    }
+
+    /// Acknowledge the highest priority pending interrupt.
+    ///
+    /// Returns [`IRQ_SPURIOUS`] if no interrupt is pending.
+    #[inline]
+    pub unsafe fn ack() -> Irq {
+        unsafe {
+            let shared = Self::shared();
+            Irq(shared.gicc(GicC::IAR).read_volatile() & 0x3ff)
         }
     }
 

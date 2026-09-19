@@ -11,6 +11,9 @@ device_tree = []
 pc = []
 rpi = ["device_tree"]
 sbi = []
+virt = ["device_tree"]
+# Boot progress markers on the screen of RK3399 Chromebooks (see platform/virt/diag.rs)
+diag_rk3399 = ["virt"]
 
 [dependencies]
 paste = { version = "1.0" }

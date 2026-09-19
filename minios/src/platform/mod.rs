@@ -19,6 +19,11 @@ pub mod rv_sbi;
 #[cfg(feature = "sbi")]
 pub use rv_sbi as current;
 
+#[cfg(feature = "virt")]
+pub mod virt;
+#[cfg(feature = "virt")]
+pub use virt as current;
+
 #[cfg(feature = "uefi")]
 pub mod uefi;
 #[cfg(feature = "uefi")]

@@ -330,6 +330,10 @@ impl System {
 /// Panic handler
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    #[cfg(feature = "diag_rk3399")]
+    unsafe {
+        crate::platform::virt::diag::mark(crate::platform::virt::diag::STAGE_PANIC);
+    }
     let stdout = System::stdout();
     stdout.set_attribute(0xcf);
     println!("{}", info);

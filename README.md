@@ -23,6 +23,7 @@
   * Fujitsu FM TOWNS
 * arm64
   * Raspberry Pi 3 & 4
+  * virt machine
 
 * **NOTE**: It may not work or may need to be adjusted as it has not been fully verified on actual hardware.
 

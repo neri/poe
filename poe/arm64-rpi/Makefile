@@ -32,14 +32,14 @@ clean:
 update: clean
 	(cd $(POE_SRC) && cargo update)
 
-run: run3
+run: run-rpi3
 
-run3:
+run-rpi3:
 	qemu-system-aarch64 -M raspi3b -dtb $(DTB_PATH)/bcm2710-rpi-3-b.dtb \
 		-kernel $(POE_BIN) \
 		-serial mon:stdio
 
-run4:
+run-rpi4:
 	qemu-system-aarch64 -M raspi4b -dtb $(DTB_PATH)/bcm2711-rpi-4-b.dtb \
 		-kernel $(POE_BIN) \
 		-serial mon:stdio

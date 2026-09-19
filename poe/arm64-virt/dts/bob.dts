@@ -1,0 +1,97 @@
+// Minimal device tree for ASUS Chromebook Flip C101PA (bob, RK3399)
+//
+// Only the nodes POE uses are described.
+// Addresses are taken from Linux arch/arm64/boot/dts/rockchip/rk3399-base.dtsi.
+// The memory node and /chosen/bootargs are added by depthcharge at boot.
+
+/dts-v1/;
+
+/ {
+	model = "Google Bob";
+	compatible = "google,bob-rev13", "google,bob-rev12",
+		     "google,bob-rev11", "google,bob-rev10",
+		     "google,bob-rev9", "google,bob-rev8",
+		     "google,bob-rev7", "google,bob-rev6",
+		     "google,bob-rev5", "google,bob-rev4",
+		     "google,bob", "google,gru", "rockchip,rk3399";
+	interrupt-parent = <&gic>;
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	aliases {
+		serial2 = &uart2;
+	};
+
+	chosen {
+		stdout-path = "serial2:115200n8";
+	};
+
+	// depthcharge adds /firmware/coreboot without #address-cells / #size-cells
+	firmware {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+	};
+
+	psci {
+		compatible = "arm,psci-1.0";
+		method = "smc";
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		// GIC_PPI 13, 14, 11 (virtual timer, IRQ 27), 10; IRQ_TYPE_LEVEL_LOW
+		interrupts = <1 13 8 0>, <1 14 8 0>, <1 11 8 0>, <1 10 8 0>;
+	};
+
+	gic: interrupt-controller@fee00000 {
+		compatible = "arm,gic-v3";
+		#interrupt-cells = <4>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+
+		reg = <0x0 0xfee00000 0 0x10000>, /* GICD */
+		      <0x0 0xfef00000 0 0xc0000>, /* GICR */
+		      <0x0 0xfff00000 0 0x10000>, /* GICC */
+		      <0x0 0xfff10000 0 0x10000>, /* GICH */
+		      <0x0 0xfff20000 0 0x10000>; /* GICV */
+	};
+
+	uart2: serial@ff1a0000 {
+		compatible = "rockchip,rk3399-uart", "snps,dw-apb-uart";
+		reg = <0x0 0xff1a0000 0x0 0x100>;
+		// GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH
+		interrupts = <0 100 4 0>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+	};
+
+	// ChromeOS EC (display backlight, keyboard, power), configured by the firmware
+	spi5: spi@ff200000 {
+		compatible = "rockchip,rk3399-spi", "rockchip,rk3066-spi";
+		reg = <0x0 0xff200000 0x0 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cros_ec: ec@0 {
+			compatible = "google,cros-ec-spi";
+			reg = <0>;
+			spi-max-frequency = <3000000>;
+		};
+	};
+
+	// Used by coreboot for the firmware screen
+	vopb: vop@ff900000 {
+		compatible = "rockchip,rk3399-vop-big";
+		reg = <0x0 0xff900000 0x0 0x2000>, <0x0 0xff902000 0x0 0x1000>;
+	};
+
+	// Not used by the firmware; may be powered off, so do not access it
+	vopl: vop@ff8f0000 {
+		compatible = "rockchip,rk3399-vop-lit";
+		reg = <0x0 0xff8f0000 0x0 0x2000>, <0x0 0xff8f2000 0x0 0x400>;
+		status = "disabled";
+	};
+};

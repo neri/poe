@@ -1,0 +1,44 @@
+/*
+ * FIT image for depthcharge (ChromeOS bootloader)
+ *
+ * depthcharge picks the configuration whose DTB matches the board
+ * (google,<board>-rev<N>), or the default one if nothing matches.
+ * @KERNEL@ and @DTB@ are replaced by the Makefile.
+ */
+
+/dts-v1/;
+
+/ {
+	description = "POE for arm64";
+	#address-cells = <1>;
+
+	images {
+		kernel-1 {
+			description = "POE";
+			data = /incbin/("@KERNEL@");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "none";
+			load = <0>;
+			entry = <0>;
+		};
+
+		fdt-1 {
+			description = "Device tree";
+			data = /incbin/("@DTB@");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+		};
+	};
+
+	configurations {
+		default = "conf-1";
+
+		conf-1 {
+			kernel = "kernel-1";
+			fdt = "fdt-1";
+		};
+	};
+};

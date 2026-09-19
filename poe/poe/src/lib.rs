@@ -28,127 +28,137 @@ static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 pub fn main() {
     System::set_graphics_mode_if_recommended();
 
-    let mut exit_flag = false;
-    loop {
-        let stdout = System::stdout();
-        stdout.reset();
-        stdout.enable_cursor(false);
-
-        let scr_size = Size::new(
-            stdout.current_mode().columns as i32,
-            stdout.current_mode().rows as i32,
-        );
-
-        let mut title_bar = TuiWindowBufferA::new(
-            Rect::new(Point::new(0, 0), Size::new(scr_size.width, 1)),
-            Inset::default(),
-            TuiAttribute(0xf0),
-        );
-        // title_bar.put_string_at(Point::new(1, 0), SYSTEM_NAME, title_bar.default_attr);
-        title_bar.draw_simple_title(SYSTEM_NAME, None, title_bar.default_attr);
-        title_bar.draw_to(stdout);
-
-        #[allow(unused_mut)]
-        let mut status_bar = TuiWindowBufferA::new(
-            Rect::new(
-                Point::new(0, scr_size.height - 1),
-                Size::new(scr_size.width, 1),
-            ),
-            Inset::default(),
-            TuiAttribute(0xf0),
-        );
-        // status_bar.fill_rect(
-        //     status_bar.bounds(),
-        //     AsciiExt::from_char('@').unwrap(),
-        //     status_bar.default_attr,
-        // );
-        status_bar.draw_to(stdout);
-
-        let menu_items = [
-            MainMenuItem::Start,
-            MainMenuItem::TextMode,
-            MainMenuItem::GraphicsMode,
-        ];
-
-        let mut menu_window = TuiWindowBufferA::new(
-            Rect::new(Point::new(2, 2), Size::new(20, menu_items.len() as i32 + 4)),
-            Inset::new(2, 2, 2, 2),
-            TuiAttribute(0xf0),
-        );
-        menu_window.draw_box(menu_window.bounds(), menu_window.default_attr);
-        menu_window.draw_simple_title(" Option ", None, menu_window.default_attr);
-
-        menu_window.draw_to(stdout);
-
-        let stdin = System::stdin();
-        let mut needs_redraw = true;
-        let mut selected_item = 0;
+    if true {
+        let mut exit_flag = false;
         loop {
-            if needs_redraw {
-                for (i, item) in menu_items.iter().enumerate() {
-                    let attr = if selected_item == i {
-                        menu_window.default_attr.reversed()
-                    } else {
-                        menu_window.default_attr
-                    };
-                    menu_window.put_string_at(Point::new(2, 2 + i as i32), item.as_str(), attr);
-                }
-                menu_window.redraw_if_needed(stdout);
-                needs_redraw = false;
-            }
+            let stdout = System::stdout();
+            stdout.reset();
+            stdout.enable_cursor(false);
 
-            stdin.event_for_key().wait();
-            if let Some(key) = stdin.read_key_stroke() {
-                let usage = key.get().key_stroke().usage;
-                match usage {
-                    Usage::KEY_UP_ARROW => {
-                        if selected_item > 0 {
-                            selected_item -= 1;
-                            needs_redraw = true;
-                        }
+            let scr_size = Size::new(
+                stdout.current_mode().columns as i32,
+                stdout.current_mode().rows as i32,
+            );
+
+            let mut title_bar = TuiWindowBufferA::new(
+                Rect::new(Point::new(0, 0), Size::new(scr_size.width, 1)),
+                Inset::default(),
+                TuiAttribute(0xf0),
+            );
+            // title_bar.put_string_at(Point::new(1, 0), SYSTEM_NAME, title_bar.default_attr);
+            title_bar.draw_simple_title(SYSTEM_NAME, None, title_bar.default_attr);
+            title_bar.draw_to(stdout);
+
+            #[allow(unused_mut)]
+            let mut status_bar = TuiWindowBufferA::new(
+                Rect::new(
+                    Point::new(0, scr_size.height - 1),
+                    Size::new(scr_size.width, 1),
+                ),
+                Inset::default(),
+                TuiAttribute(0xf0),
+            );
+            // status_bar.fill_rect(
+            //     status_bar.bounds(),
+            //     AsciiExt::from_char('@').unwrap(),
+            //     status_bar.default_attr,
+            // );
+            status_bar.draw_to(stdout);
+
+            let menu_items = [
+                MainMenuItem::Start,
+                MainMenuItem::TextMode,
+                MainMenuItem::GraphicsMode,
+            ];
+
+            let mut menu_window = TuiWindowBufferA::new(
+                Rect::new(Point::new(2, 2), Size::new(20, menu_items.len() as i32 + 4)),
+                Inset::new(2, 2, 2, 2),
+                TuiAttribute(0xf0),
+            );
+            menu_window.draw_box(menu_window.bounds(), menu_window.default_attr);
+            menu_window.draw_simple_title(" Option ", None, menu_window.default_attr);
+
+            menu_window.draw_to(stdout);
+
+            let stdin = System::stdin();
+            let mut needs_redraw = true;
+            let mut selected_item = 0;
+            loop {
+                if needs_redraw {
+                    for (i, item) in menu_items.iter().enumerate() {
+                        let attr = if selected_item == i {
+                            menu_window.default_attr.reversed()
+                        } else {
+                            menu_window.default_attr
+                        };
+                        menu_window.put_string_at(Point::new(2, 2 + i as i32), item.as_str(), attr);
                     }
-                    Usage::KEY_DOWN_ARROW => {
-                        if selected_item < menu_items.len() - 1 {
-                            selected_item += 1;
-                            needs_redraw = true;
-                        }
-                    }
-                    Usage::KEY_ENTER => {
-                        let selected = menu_items[selected_item];
-                        match selected {
-                            MainMenuItem::TextMode => {
-                                System::conctl().set_text_mode();
-                                break;
+                    menu_window.redraw_if_needed(stdout);
+                    needs_redraw = false;
+                }
+
+                stdin.event_for_key().wait();
+                if let Some(key) = stdin.read_key_stroke() {
+                    let usage = key.get().key_stroke().usage;
+                    match usage {
+                        Usage::KEY_UP_ARROW => {
+                            if selected_item > 0 {
+                                selected_item -= 1;
+                                needs_redraw = true;
                             }
-                            MainMenuItem::GraphicsMode => {
-                                stdout.reset();
-                                if let Some(mode) = System::conctl().preferred_graphics_mode() {
-                                    let _ = System::conctl().set_graphics_mode(mode);
-                                } else {
-                                    let _ = System::conctl().set_graphics_mode_from_list(&[
-                                        // PreferredGraphicsMode::new(1920, 1080, PixelFormat::BGRX8888),
-                                        // PreferredGraphicsMode::new(1280, 720, PixelFormat::BGRX8888),
-                                        // PreferredGraphicsMode::new(800, 600, PixelFormat::BGRX8888),
-                                        // PreferredGraphicsMode::new(800, 600, PixelFormat::Indexed8),
-                                        PreferredGraphicsMode::new(640, 480, PixelFormat::Indexed8),
-                                        PreferredGraphicsMode::new(320, 200, PixelFormat::Indexed8),
-                                    ]);
+                        }
+                        Usage::KEY_DOWN_ARROW => {
+                            if selected_item < menu_items.len() - 1 {
+                                selected_item += 1;
+                                needs_redraw = true;
+                            }
+                        }
+                        Usage::KEY_ENTER => {
+                            let selected = menu_items[selected_item];
+                            match selected {
+                                MainMenuItem::TextMode => {
+                                    System::conctl().set_text_mode();
+                                    break;
                                 }
-                                break;
-                            }
-                            MainMenuItem::Start => {
-                                exit_flag = true;
-                                break;
+                                MainMenuItem::GraphicsMode => {
+                                    stdout.reset();
+                                    if let Some(mode) = System::conctl().preferred_graphics_mode() {
+                                        let _ = System::conctl().set_graphics_mode(mode);
+                                    } else {
+                                        let _ = System::conctl().set_graphics_mode_from_list(&[
+                                            // PreferredGraphicsMode::new(1920, 1080, PixelFormat::BGRX8888),
+                                            // PreferredGraphicsMode::new(1280, 720, PixelFormat::BGRX8888),
+                                            // PreferredGraphicsMode::new(800, 600, PixelFormat::BGRX8888),
+                                            // PreferredGraphicsMode::new(800, 600, PixelFormat::Indexed8),
+                                            PreferredGraphicsMode::new(
+                                                640,
+                                                480,
+                                                PixelFormat::Indexed8,
+                                            ),
+                                            PreferredGraphicsMode::new(
+                                                320,
+                                                200,
+                                                PixelFormat::Indexed8,
+                                            ),
+                                        ]);
+                                    }
+                                    break;
+                                }
+                                MainMenuItem::Start => {
+                                    exit_flag = true;
+                                    break;
+                                }
                             }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
-        }
 
-        if exit_flag {
-            break;
+            if exit_flag {
+                break;
+            }
         }
     }
     #[allow(unreachable_code)]
