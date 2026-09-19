@@ -1,0 +1,145 @@
+// Test data for `fdt::bus`. Compiled to `bus.dtb` (see README.md).
+/dts-v1/;
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <1>;
+	compatible = "test,bus";
+
+	// At the root: no translation
+	root-dev@10000000 {
+		compatible = "test,root-dev";
+		reg = <0x0 0x10000000 0x100>, <0x0 0x10001000 0x200>;
+	};
+
+	disabled-dev@11000000 {
+		compatible = "test,disabled-dev";
+		reg = <0x0 0x11000000 0x100>;
+		status = "disabled";
+	};
+
+	// The same compatible as above, found instead of the disabled one
+	enabled-dev@12000000 {
+		compatible = "test,disabled-dev";
+		reg = <0x0 0x12000000 0x100>;
+		status = "okay";
+	};
+
+	// The identity map
+	identity-bus {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <1>;
+		ranges;
+
+		identity-dev@13000000 {
+			compatible = "test,identity-dev";
+			reg = <0x0 0x13000000 0x100>;
+		};
+	};
+
+	// 32-bit bus at 0x7e000000 mapped to 0x1_3f000000, with a second range
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x7e000000 0x1 0x3f000000 0x1000000>,
+			 <0x40000000 0x0 0x40000000 0x1000>;
+
+		uart@7e201000 {
+			compatible = "test,uart";
+			reg = <0x7e201000 0x200>;
+		};
+
+		intc@40000000 {
+			compatible = "test,intc";
+			reg = <0x40000000 0x100>;
+		};
+
+		// Not in any range of the bus
+		unmapped@50000000 {
+			compatible = "test,unmapped";
+			reg = <0x50000000 0x100>;
+		};
+
+		// Not memory mapped: the children are not searched
+		spi@7e204000 {
+			compatible = "test,spi";
+			reg = <0x7e204000 0x200>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ec@0 {
+				compatible = "test,spi-child";
+				reg = <0>;
+			};
+		};
+
+		// Nested bus: 0x0 of this bus is 0x7e800000 of the parent
+		sub-bus@7e800000 {
+			compatible = "test,sub-bus";
+			reg = <0x7e800000 0x10000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0x0 0x7e800000 0x10000>;
+
+			nested-dev@1000 {
+				compatible = "test,nested-dev";
+				reg = <0x1000 0x100>;
+			};
+
+			level3-bus {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges;
+
+				level3-dev@2000 {
+					compatible = "test,level3-dev";
+					reg = <0x2000 0x100>;
+				};
+
+				// Deeper than MAX_DEPTH (3 buses)
+				level4-bus {
+					#address-cells = <1>;
+					#size-cells = <1>;
+					ranges;
+
+					level4-dev@3000 {
+						compatible = "test,level4-dev";
+						reg = <0x3000 0x100>;
+					};
+				};
+			};
+		};
+	};
+
+	// The children of a disabled bus are not searched
+	disabled-bus {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <1>;
+		ranges;
+		status = "disabled";
+
+		hidden-dev@14000000 {
+			compatible = "test,hidden-dev";
+			reg = <0x0 0x14000000 0x100>;
+		};
+	};
+
+	// Found instead of the unmapped one in `soc`
+	unmapped-fallback@16000000 {
+		compatible = "test,unmapped";
+		reg = <0x0 0x16000000 0x100>;
+	};
+
+	// `ranges` cannot be parsed without `#address-cells` and `#size-cells`
+	no-cells-bus {
+		ranges = <0x0 0x0 0x15000000 0x1000>;
+
+		no-cells-dev@0 {
+			compatible = "test,no-cells-dev";
+			reg = <0x0 0x100>;
+		};
+	};
+};

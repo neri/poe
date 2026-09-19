@@ -2,7 +2,7 @@
 //!
 //! Raspberry Pi specific parts: the peripheral base address, the pins and the clock of UART0
 //! (PL011, driven by the common driver), the framebuffer through the VideoCore mailbox,
-//! and the local interrupt controller of Raspberry Pi 3.
+//! the local interrupt controller of Raspberry Pi 3, and the reset through the watchdog.
 
 use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
@@ -10,12 +10,19 @@ use core::sync::atomic::{Ordering, compiler_fence};
 
 use gpio::{Gpio, Pull};
 use mbox::{ClockId, Mbox, Tag};
+use pm::Pm;
+
+use super::dt;
 
 pub mod fb;
 pub mod gpio;
 pub mod local_intc;
 pub mod mbox;
+pub mod pm;
 pub mod uart1;
+
+/// Bus address of the peripherals (`/soc`)
+const PERIPHERAL_BUS_BASE: u64 = 0x7e00_0000;
 
 /// Clock of UART0 set through the mailbox
 pub const UART0_CLOCK: u32 = 3_000_000;
@@ -38,17 +45,8 @@ pub unsafe fn init_early(dt: &fdt::DeviceTree) -> bool {
     unsafe {
         (&mut *(&raw mut CURRENT_MACHINE_TYPE)).write(machine_type);
 
-        if let Some(simple_bus) = root
-            .children()
-            .find(|v| v.status_is_ok() && v.is_compatible_with("simple-bus"))
-            && let Some(ranges) = simple_bus.ranges()
-        {
-            for item in ranges {
-                if item.child == 0x7e00_0000 {
-                    set_mmio_base(item.parent as usize);
-                    break;
-                }
-            }
+        if let Some(base) = dt::translate_bus_address(dt, &["simple-bus"], PERIPHERAL_BUS_BASE) {
+            set_mmio_base(base);
         }
 
         if mmio_base() == 0 {
@@ -57,6 +55,11 @@ pub unsafe fn init_early(dt: &fdt::DeviceTree) -> bool {
                 _ => 0x00_3f00_0000,
             });
         }
+
+        let pm_base = dt::find_reg(dt, &[Pm::COMPATIBLE], 0)
+            .map(|(base, _size)| base)
+            .unwrap_or(mmio_base() + Pm::DEFAULT_OFFSET);
+        Pm::init(pm_base);
     }
     true
 }
@@ -74,6 +77,13 @@ pub unsafe fn init_uart0() -> Option<(u32, u32)> {
         .ok()?;
     mbox.call().ok()?;
     Some((UART0_CLOCK, UART0_BAUD_RATE))
+}
+
+/// Resets the system with the watchdog. Returns if the machine is not a supported Raspberry Pi.
+pub unsafe fn reset_system() {
+    unsafe {
+        Pm::reset_system();
+    }
 }
 
 /// Registers the framebuffer of the VideoCore as the graphics output device.

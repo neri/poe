@@ -307,10 +307,14 @@ pub fn main() {
     loop {
         print!("poe>");
         if let Some(line) = line_input(64) {
-            if line.is_empty() {
+            let mut args = line.split_whitespace();
+            let Some(cmd) = args.next() else {
                 continue;
+            };
+            match cmd {
+                "reboot" => System::reset_system(),
+                _ => println!("{:?}: Bad command or file name.", cmd),
             }
-            println!("{:?}: Bad command or file name.", line);
         }
     }
 }

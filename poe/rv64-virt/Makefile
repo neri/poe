@@ -10,11 +10,12 @@ ELF2BIN		= cargo run --manifest-path $(TOOLS)/Cargo.toml -p elf2ceef --
 MKINITRD	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkinitrd --
 MKKRNIMG	= cargo run --manifest-path $(TOOLS)/Cargo.toml -p mkkrnimg --
 OBJCOPY		= llvm-objcopy
+READELF		= llvm-readelf
 
 POE_TARGET	= riscv64gc-unknown-none-elf
 POE_SRC		= ./poe-rv64
 POE_LD		= $(POE_SRC)/target/$(POE_TARGET)/release/poe-rv64
-POE_BIN		= $(BIN)/kernel.elf
+POE_BIN		= $(BIN)/kernel.img
 TARGETS		= poe $(POE_BIN)
 
 IMG_SOURCES	= $(POE_BIN)
@@ -48,5 +49,8 @@ $(BIN):
 poe: $(POE_SRC)/src/link.ld
 	(cd $(POE_SRC) && cargo build --release --target $(POE_TARGET))
 
+# _start only applies R_RISCV_RELATIVE, so reject any other relocation type
 $(POE_BIN): poe $(BIN)
-	cp $(POE_LD) $(POE_BIN)
+	@if $(READELF) -r $(POE_LD) | grep R_RISCV_ | grep -qv R_RISCV_RELATIVE; then \
+		echo "error: unsupported relocation type in $(POE_LD)"; exit 1; fi
+	$(OBJCOPY) -O binary $(POE_LD) $(POE_BIN)

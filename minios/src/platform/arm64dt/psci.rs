@@ -8,6 +8,12 @@ use super::dt;
 
 const PSCI_SYSTEM_RESET: u32 = 0x8400_0009;
 
+/// PSCI 0.2 or later, which has the standard function IDs including SYSTEM_RESET
+///
+/// Some device trees have only `arm,psci-1.0` (e.g. RK3399), others list both.
+/// PSCI 0.1 (`arm,psci`) is not supported, since it does not have SYSTEM_RESET.
+const COMPATIBLE: &[&str] = &["arm,psci-1.0", "arm,psci-0.2"];
+
 static mut CONDUIT: Conduit = Conduit::None;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +27,7 @@ enum Conduit {
 /// Finds the conduit (`hvc` or `smc`) in the device tree.
 pub unsafe fn init(dt: &fdt::DeviceTree) {
     let conduit = dt::find_map(dt, |node, _| {
-        node.is_compatible_with("arm,psci-0.2").then(|| {
+        dt::is_compatible(node, COMPATIBLE).then(|| {
             match node.get_prop_str(PropName::new("method")) {
                 Some("hvc") => Conduit::Hvc,
                 Some("smc") => Conduit::Smc,

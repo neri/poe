@@ -199,6 +199,11 @@ impl System {
         }
     }
 
+    /// Resets the system
+    pub fn reset_system() {
+        CurrentPlatform::reset_system();
+    }
+
     /// Get current stdin
     #[inline]
     pub fn stdin<'a>() -> &'a mut dyn SimpleTextInput {

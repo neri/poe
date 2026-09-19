@@ -5,7 +5,7 @@
 //!
 //! - QEMU virt machine
 //! - Raspberry Pi 3 / 4 (`rpi`: peripheral base, UART0 pins and clock, mailbox framebuffer,
-//!   local interrupt controller of Raspberry Pi 3)
+//!   local interrupt controller of Raspberry Pi 3, reset through the watchdog)
 //! - Chromebooks (`cros`: coreboot table, VPD, ChromeOS EC) with RK3399 (`rk3399`: SPI, VOP)
 //!
 //! Requirements: GICv2, GICv3 or the local interrupt controller of Raspberry Pi 3, Generic Timer.
@@ -127,6 +127,8 @@ impl Platform for CurrentPlatform {
     fn reset_system() -> ! {
         unsafe {
             psci::system_reset();
+            // The standard firmware of Raspberry Pi does not provide PSCI
+            rpi::reset_system();
         }
         Self::halt();
     }

@@ -9,6 +9,8 @@ use core::ptr::null;
 use core::slice::{self, Iter};
 use core::{fmt, str};
 
+pub mod bus;
+
 /// EFI GUID of the Device Tree Table
 #[cfg(feature = "guid")]
 pub const DTB_TABLE_GUID: guid::Guid = guid::guid!("b1b621d5-f19c-41a5-830b-d9152c69aae0");
@@ -470,6 +472,14 @@ impl<'a> Node<'a> {
             return false;
         };
         compatible.any(|v| v == target)
+    }
+
+    /// Returns whether the node is compatible with any of `targets`.
+    pub fn is_compatible_with_any(&self, targets: &[&str]) -> bool {
+        let Some(mut compatible) = self.compatible() else {
+            return false;
+        };
+        compatible.any(|v| targets.contains(&v))
     }
 
     /// Well-known property name `reg`
