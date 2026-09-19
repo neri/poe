@@ -30,60 +30,27 @@
 
 ## Status
 
-* [ ] platform
-  * [ ] pc-bios
-  * [ ] nec pc-98
-  * [ ] fm towns
-  * [ ] uefi
-  * [ ] riscv64 virt
-  * [ ] riscv32 virt
-  * [ ] raspberry pi
-    * [ ] rpi3
-    * [ ] rpi4
-    * [ ] rpi5
-* [x] arch
-  * [x] x86-32
-  * [ ] x86-64
-  * [x] rv64gc
-  * [x] rv32imac
-    * [x] minisbi
-  * [x] rpi
-* [x] simple console i/o
-  * [x] x86-32
-  * [x] riscv-sbi
-  * [x] rpi-uart
-  * [x] uefi
-  * [x] vt100
-  * [x] graphical console
-    * [x] console controller
-    * [x] vesa driver
-    * [x] pegc driver
-    * [x] fmtowns-svga driver
-    * [x] rpi driver
-    * [x] uefi-gop driver
-* [ ] memory manager
-  * [ ] better memory manager
-  * [ ] uefi after exit_boot_services
-  * [ ] paging
-* [x] simple panic handler
-  * [x] x86-32
-  * [ ] x86-64
-  * [x] riscv64
-  * [x] riscv32
-  * [x] rpi
-* [x] timer
-  * [x] x86-32
-  * [x] riscv64
-  * [x] riscv32
-  * [x] rpi
-  * [x] uefi
-* [ ] tui
-* [ ] filesystem
-  * [ ] block device
-    * [ ] uefi
-    * [ ] pc-bios
-    * [ ] nec-98
-    * [ ] fm towns
+✅ implemented / ❌ not yet / — not applicable
+
+| Feature           | PC/AT      | PC-98      | FM TOWNS   | UEFI (x64) | RV64 virt | RV32 virt | arm64 virt | RPi 3/4    | Chromebook bob |
+|-------------------|:----------:|:----------:|:----------:|:----------:|:---------:|:---------:|:----------:|:----------:|:--------------:|
+| Boot              | ✅         | ✅         | ✅         | ✅         | ✅        | ✅        | ✅         | ✅         | ✅             |
+| Text console      | ✅ CGA     | ✅         | ✅         | ✅         | ✅ SBI    | ✅ SBI    | ✅ PL011   | ✅ PL011   | ✅             |
+| Graphical console | ✅ VESA    | ✅ PEGC    | ✅ SVGA    | ✅ GOP     | —         | —         | ❌         | ✅ mailbox | ✅ coreboot FB |
+| Keyboard input    | ✅ PS/2    | ✅ BIOS    | ✅         | ✅         | ✅ SBI    | ✅ SBI    | ✅ PL011   | ✅ PL011   | ✅ ChromeOS EC |
+| Timer             | ✅ PIT     | ✅ PIT     | ✅ PIT     | ✅         | ✅        | ✅        | ✅         | ✅         | ✅             |
+| Panic handler     | ✅         | ✅         | ✅         | ❌         | ✅        | ✅        | ✅         | ✅         | ✅             |
+| Block device      | ✅ INT 13h | ✅ INT 1Bh | ✅ INT 93h | ✅         | ❌        | ❌        | ❌         | ❌         | ❌             |
+
+* RV32 virt runs on minisbi, the bundled SBI implementation.
+* Raspberry Pi 5 is not supported.
+
+### Not yet
+
+* [ ] Better memory manager
+* [ ] Paging
+* [ ] Running after `ExitBootServices` on UEFI
+* [ ] Filesystem
 
 ## History
 

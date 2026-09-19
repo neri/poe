@@ -9,8 +9,8 @@ version = "0.1.0"
 poe = { path = "../../poe/", features = ["uefi"] }
 minios = { path = "../../../minios/", features = ["uefi"] }
 
-uefi = { version="0.39", features = ['global_allocator'] }
-uefi-raw = { version="0.15" }
+uefi = { version="0.40", features = ['global_allocator'] }
+uefi-raw = { version="0.16" }
 
 [profile.release]
 lto = true
