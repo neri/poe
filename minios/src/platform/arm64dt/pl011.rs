@@ -6,6 +6,10 @@ use crate::vt100::VT100;
 use crate::*;
 
 static mut PL011: Pl011 = Pl011::new(Pl011::DEFAULT_BASE);
+/// False until `init` has pointed the driver at a UART the device tree
+/// actually describes. Until then the base address is only a guess and must
+/// not be written to: on a board without a PL011 it is not memory.
+static mut INITIALIZED: bool = false;
 
 static mut SHARED: UnsafeCell<VT100> = UnsafeCell::new(VT100::new(Pl011::shared_raw()));
 
@@ -51,9 +55,15 @@ impl Pl011 {
     ///
     /// `baud_rate` is (reference clock, baud rate) if the platform knows the clock.
     /// If `None`, the baud rate is left as configured by the firmware.
+    /// True once a UART from the device tree has been initialized.
+    pub fn is_initialized() -> bool {
+        unsafe { INITIALIZED }
+    }
+
     pub unsafe fn init(base: usize, baud_rate: Option<(u32, u32)>) -> &'static mut Self {
         let shared = Self::shared_raw();
         shared.base = base;
+        unsafe { INITIALIZED = true };
         unsafe {
             // Wait for the firmware's output to drain, then disable UART.
             while (shared.read_reg(Self::FR) & Self::FR_BUSY) != 0 {

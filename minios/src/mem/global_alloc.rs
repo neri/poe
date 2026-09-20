@@ -1,4 +1,5 @@
 //! Global Allocator
+#![cfg(not(test))]
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;

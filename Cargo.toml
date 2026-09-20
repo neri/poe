@@ -18,6 +18,7 @@ members = [
     "lib/simple_font",
     "lib/smbios",
     "lib/tui",
+    "lib/usb",
     "lib/x86",
     "minios",
 ]

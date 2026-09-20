@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 poe = { path = "../../poe/", features = ["device_tree"] }
-minios = { path = "../../../minios/", features = ["arm64dt"] }
+minios = { path = "../../../minios/", features = ["arm64dt", "usb"] }
 
 [profile.release]
 lto = true

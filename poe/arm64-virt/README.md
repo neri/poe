@@ -44,12 +44,24 @@ Use `make run-el2` to boot at EL2, and `make run GIC=3` to use GICv3.
 $ make run-rpi3
 ```
 
+The Raspberry Pi 3 target attaches an emulated USB hub and Boot Protocol
+keyboard. The serial log should contain `USB: hub ...` followed by
+`USB: Boot keyboard ready ...`; the keyboard can then operate the POE menu.
+Keep the QEMU display open because Raspberry Pi framebuffer initialization is
+part of normal boot. QEMU validates enumeration and interrupt flow, but not the
+Pi firmware/PHY or high-speed-hub split transactions used by the real LAN9514.
+
 `make run-rpi4` needs QEMU 9.0 or later. The device trees of Raspberry Pi are in `dtb/`.
 
 ### Raspberry Pi
 
 Copy `bin/kernel8.img` (the same image as `bin/kernel.img`) to the boot partition of the SD card,
 with the Raspberry Pi firmware.
+
+On a Raspberry Pi 3 Model B, connect a USB Boot Protocol keyboard to the
+on-board LAN9514 hub and keep UART0 available at 115200 baud. Verify cold boot,
+hot-plug, removal/reconnection, modifiers and held keys; USB failure must leave
+the UART console usable.
 
 ### Chromebook kernel partition (depthcharge)
 

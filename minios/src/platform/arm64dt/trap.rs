@@ -116,16 +116,28 @@ unsafe extern "C" fn _vector_table_nkf() {
 
 fn _handle_irq(_ctx: &mut ExceptionContext) {
     unsafe {
-        let irq = irq::ack();
-        match irq {
-            IRQ_CNTV => {
-                arch::timer::GenericTimer::advance_tick();
-                irq::eoi(irq);
+        let mut last = None;
+        for _ in 0..32 {
+            let pending = irq::ack();
+            if last == Some(pending) {
+                // Level-triggered cascades may need a few peripheral clock
+                // cycles to deassert after their leaf source is acknowledged.
+                // Do not spin on the same source in exception context.
+                break;
             }
-            _ if irq.0 >= 1020 => {}
-            _ => {
-                println!("unknown interrupt {}", irq.0);
-                irq::eoi(irq);
+            last = Some(pending);
+            match pending {
+                IRQ_CNTV => {
+                    arch::timer::GenericTimer::advance_tick();
+                    irq::eoi(pending);
+                }
+                _ if pending.0 >= 1020 => break,
+                _ if irq::dispatch(pending) => irq::eoi(pending),
+                _ => {
+                    println!("unknown interrupt {}", pending.0);
+                    irq::eoi(pending);
+                    break;
+                }
             }
         }
     }

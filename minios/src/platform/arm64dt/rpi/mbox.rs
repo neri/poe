@@ -326,6 +326,7 @@ pub enum ClockId {
 
 #[allow(dead_code)]
 pub enum Tag<'a> {
+    SetPower(PowerDevice, PowerState),
     SetClockRate(ClockId, u32, u32),
     GetPhysicalWH,
     SetPhysicalWH(u32, u32),
@@ -347,6 +348,7 @@ impl Tag<'_> {
     #[inline]
     const fn info(&self) -> (RawTag, u32) {
         match self {
+            Tag::SetPower(_, _) => (RawTag::SetPower, 8),
             Tag::SetClockRate(_, _, _) => (RawTag::SetClockRate, 12),
             Tag::GetPhysicalWH => (RawTag::GetPhysicalWH, 8),
             Tag::SetPhysicalWH(_, _) => (RawTag::SetPhysicalWH, 8),
@@ -377,6 +379,7 @@ impl Tag<'_> {
         let result = slice._push(0)?;
 
         let index = match self {
+            Tag::SetPower(device, state) => slice._push_slice(&[*device as u32, state.bits()]),
             Tag::SetClockRate(x, y, z) => slice._push_slice(&[*x as u32, *y, *z]),
             Tag::SetPhysicalWH(x, y) => slice._push_slice(&[*x, *y]),
             Tag::SetVirtualWH(x, y) => slice._push_slice(&[*x, *y]),
@@ -399,6 +402,40 @@ impl Tag<'_> {
         assert_eq!(new_len, index);
 
         Ok(result)
+    }
+}
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerDevice {
+    UsbHcd = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PowerState {
+    on: bool,
+    wait: bool,
+}
+impl PowerState {
+    pub const ON_WAIT: Self = Self {
+        on: true,
+        wait: true,
+    };
+    const fn bits(self) -> u32 {
+        (self.on as u32) | ((self.wait as u32) << 1)
+    }
+}
+
+/// Powers the USB controller and verifies the firmware response.
+pub fn power_usb_hcd() -> Result<(), ()> {
+    let mut request = Mbox::PROP.fixed::<8>();
+    let response_index = request.append(Tag::SetPower(PowerDevice::UsbHcd, PowerState::ON_WAIT))?;
+    let response = request.call()?;
+    let values = response.response_slice::<2>(response_index);
+    if values[0] == PowerDevice::UsbHcd as u32 && values[1] & 1 != 0 && values[1] & 2 == 0 {
+        Ok(())
+    } else {
+        Err(())
     }
 }
 

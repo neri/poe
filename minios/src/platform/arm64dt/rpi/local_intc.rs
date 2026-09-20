@@ -2,6 +2,7 @@
 //!
 //! Only the virtual timer interrupt of core 0 is supported.
 
+use super::armctrl::Armctrl;
 use crate::arch::gic::{IRQ_CNTV, IRQ_SPURIOUS, Irq};
 
 static mut BASE: usize = 0;
@@ -17,6 +18,7 @@ impl LocalIntc {
     const IRQ_SOURCE0: usize = 0x60;
 
     const CNTVIRQ: u32 = 1 << 3;
+    const GPU_IRQ: u32 = 1 << 8;
 
     pub unsafe fn init(base: usize) {
         unsafe {
@@ -25,17 +27,23 @@ impl LocalIntc {
     }
 
     pub unsafe fn enable(irq: Irq) {
-        assert_eq!(irq, IRQ_CNTV, "LocalIntc: unsupported IRQ {}", irq.0);
         unsafe {
-            let reg = Self::reg(Self::TIMER_CNTRL0);
-            reg.write_volatile(reg.read_volatile() | Self::CNTVIRQ);
+            if irq == IRQ_CNTV {
+                let reg = Self::reg(Self::TIMER_CNTRL0);
+                reg.write_volatile(reg.read_volatile() | Self::CNTVIRQ)
+            } else {
+                Armctrl::enable(irq)
+            }
         }
     }
 
     /// Returns [`IRQ_SPURIOUS`] if the virtual timer interrupt is not pending.
     pub unsafe fn ack() -> Irq {
-        if (unsafe { Self::reg(Self::IRQ_SOURCE0).read_volatile() } & Self::CNTVIRQ) != 0 {
+        let source = unsafe { Self::reg(Self::IRQ_SOURCE0).read_volatile() };
+        if source & Self::CNTVIRQ != 0 {
             IRQ_CNTV
+        } else if source & Self::GPU_IRQ != 0 && Armctrl::is_initialized() {
+            unsafe { Armctrl::ack() }
         } else {
             IRQ_SPURIOUS
         }

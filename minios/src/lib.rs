@@ -56,3 +56,16 @@ macro_rules! println {
         let _ = writeln!(System::stdout(), $($arg)*);
     }};
 }
+
+/// `println!` for the USB stack, silent unless the `usb_debug` feature is on.
+///
+/// The arguments are still compiled, so they keep working when the feature is
+/// turned back on, but nothing is evaluated or printed without it.
+#[macro_export]
+macro_rules! usb_println {
+    ($($arg:tt)*) => {{
+        if cfg!(feature = "usb_debug") {
+            $crate::io::usb::log::write(format_args!($($arg)*));
+        }
+    }};
+}

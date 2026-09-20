@@ -105,6 +105,13 @@ impl Platform for CurrentPlatform {
             Hal::cpu().enable_interrupt();
 
             if let Some(dt) = System::device_tree() {
+                #[cfg(feature = "usb")]
+                if rpi::current_machine_type() == rpi::MachineType::RaspberryPi3 {
+                    if let Err(reason) = rpi::usb::init(dt) {
+                        println!("USB disabled: {}", reason);
+                    }
+                }
+
                 // The keyboard of Chromebooks is used in preference to UART
                 if let Some(ec) = find_cros_ec(dt) {
                     cros::install_keyboard(dt, ec);
@@ -221,7 +228,7 @@ pub unsafe fn clean_dtb_cache(dtb: usize) {
 const MAX_DTB_SIZE: usize = 0x20_0000;
 
 /// Microseconds from the counter, available without the timer interrupt
-fn counter_us() -> u64 {
+pub(super) fn counter_us() -> u64 {
     let cntvct: u64;
     unsafe {
         asm!("isb", "mrs {}, cntvct_el0", out(reg) cntvct);

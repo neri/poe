@@ -64,12 +64,15 @@ run-el2:
 run-rpi3:
 	qemu-system-aarch64 -M raspi3b -dtb $(DTB_PATH)/bcm2710-rpi-3-b.dtb \
 		-kernel $(POE_BIN) \
+		-device usb-hub,id=hub1,bus=usb-bus.0,port=1 \
+		-device usb-kbd,id=kbd1,bus=usb-bus.0,port=1.1 \
 		-serial mon:stdio
 
 # Needs QEMU 9.0 or later
 run-rpi4:
 	qemu-system-aarch64 -M raspi4b -dtb $(DTB_PATH)/bcm2711-rpi-4-b.dtb \
 		-kernel $(POE_BIN) \
+		-device usb-kbd \
 		-serial mon:stdio
 
 test: poe
@@ -77,8 +80,10 @@ test: poe
 $(BIN):
 	mkdir -p $@
 
+# FEATURES passes extra cargo features, e.g. make FEATURES=minios/usb_debug
+FEATURES ?=
 poe:
-	(cd $(POE_SRC) && cargo build --release)
+	(cd $(POE_SRC) && cargo build --release $(if $(FEATURES),--features $(FEATURES),))
 
 # _start only applies R_AARCH64_RELATIVE, so reject any other relocation type
 $(POE_BIN): poe $(BIN)

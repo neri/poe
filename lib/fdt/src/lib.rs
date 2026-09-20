@@ -524,6 +524,23 @@ impl<'a> Node<'a> {
             size_cells,
         })
     }
+
+    /// Returns the bus-to-parent DMA address mappings from `dma-ranges`.
+    /// The tuple has the same cell layout as `ranges`, but describes addresses
+    /// observed by DMA-capable children rather than CPU MMIO addresses.
+    pub fn dma_ranges(&'a self) -> Option<impl Iterator<Item = RangeTriple> + 'a> {
+        let ranges = self.get_prop(PropName::DMA_RANGES)?;
+        let parent_address_cells = self.address_cells;
+        let child_address_cells = self.address_cells()?;
+        let size_cells = self.size_cells()?;
+
+        Some(RangeTripleIter {
+            iter: ranges.words().iter(),
+            parent_address_cells,
+            child_address_cells,
+            size_cells,
+        })
+    }
 }
 
 pub struct RootNode<'a> {

@@ -14,12 +14,17 @@ use pm::Pm;
 
 use super::dt;
 
+pub mod armctrl;
+#[cfg(feature = "usb")]
+pub mod dwc2;
 pub mod fb;
 pub mod gpio;
 pub mod local_intc;
 pub mod mbox;
 pub mod pm;
 pub mod uart1;
+#[cfg(feature = "usb")]
+pub mod usb;
 
 /// Bus address of the peripherals (`/soc`)
 const PERIPHERAL_BUS_BASE: u64 = 0x7e00_0000;

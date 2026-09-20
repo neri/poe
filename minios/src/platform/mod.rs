@@ -57,6 +57,24 @@ pub trait Platform {
     }
 }
 
+#[cfg(not(any(feature = "pc", feature = "sbi", feature = "arm64dt", feature = "uefi")))]
+impl Platform for CurrentPlatform {
+    unsafe fn init(_arg: usize) {}
+    unsafe fn exit() {}
+    fn reset_system() -> ! {
+        panic!("reset_system in host test")
+    }
+    fn halt() -> ! {
+        panic!("halt in host test")
+    }
+    fn monotonic() -> u64 {
+        0
+    }
+    fn create_timer_event(_duration: Duration) -> Box<dyn PollingEvent> {
+        Box::new(MonotonicTimerPoller::Timeout(0))
+    }
+}
+
 /// Recommended console mode for a platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecommendedConsoleMode {

@@ -3,6 +3,7 @@
 //! GICv3, GICv2, or the ARM local interrupt controller of BCM2836/BCM2837 (Raspberry Pi 2/3).
 
 use super::dt::find_reg;
+use super::rpi::armctrl::Armctrl;
 use super::rpi::local_intc::LocalIntc;
 use crate::arch::gic::{Gic, Irq};
 use crate::arch::gicv3::GicV3;
@@ -50,6 +51,9 @@ pub unsafe fn init(dt: &fdt::DeviceTree) -> heapless::String<64> {
             );
         } else if let Some((base, _)) = find_reg(dt, &[LocalIntc::COMPATIBLE], 0) {
             LocalIntc::init(base);
+            if let Some((armctrl, _)) = find_reg(dt, &[Armctrl::COMPATIBLE], 0) {
+                Armctrl::init(armctrl)
+            }
             IRQ_CONTROLLER = IrqController::LocalIntc;
             let _ = write!(info, "Local interrupt controller: {:08x}", base);
         } else {
@@ -57,6 +61,35 @@ pub unsafe fn init(dt: &fdt::DeviceTree) -> heapless::String<64> {
         }
     }
     info
+}
+
+#[cfg(feature = "usb")]
+static mut USB_IRQ: Option<(Irq, fn())> = None;
+
+#[cfg(feature = "usb")]
+pub unsafe fn register_usb_handler(irq: Irq, handler: fn()) {
+    unsafe {
+        USB_IRQ = Some((irq, handler));
+        enable(irq)
+    }
+}
+
+#[cfg(feature = "usb")]
+pub fn dispatch(irq: Irq) -> bool {
+    unsafe {
+        if let Some((expected, handler)) = USB_IRQ
+            && irq == expected
+        {
+            handler();
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(not(feature = "usb"))]
+pub fn dispatch(_irq: Irq) -> bool {
+    false
 }
 
 pub unsafe fn enable(irq: Irq) {

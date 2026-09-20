@@ -4,6 +4,7 @@ use core::fmt;
 use core::iter::Iterator;
 use core::mem::MaybeUninit;
 use core::ops::Range;
+#[cfg(not(test))]
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
 use core::time::Duration;
@@ -23,6 +24,10 @@ use crate::task::event::{Event, PollResult};
 use crate::*;
 
 static mut SYSTEM: MaybeUninit<System> = MaybeUninit::zeroed();
+// This environment currently runs services on one foreground core.  Avoid an
+// atomic RMW here: before the MMU establishes Normal-memory attributes,
+// AArch64 exclusive accesses to RAM raise a data abort on real Raspberry Pis.
+static mut SERVICES_POLLING: bool = false;
 
 static mut NULL: NullTty = NullTty {};
 
@@ -36,6 +41,61 @@ pub struct System {
     console_controller: ConsoleController,
 
     device_tree: Option<fdt::DeviceTree<'static>>,
+    services: ServiceRegistry,
+}
+
+/// A bounded background service. Implementations must return promptly and must
+/// not register or remove services while they are being polled.
+pub trait SystemService {
+    fn poll(&mut self) -> Result<(), ServiceError>;
+
+    /// Returns true when the service cannot make progress while the CPU is
+    /// asleep waiting for an interrupt.
+    fn requires_continuous_polling(&self) -> bool {
+        false
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceError {
+    Failed,
+    Busy,
+}
+
+#[derive(Default)]
+struct ServiceRegistry {
+    services: Vec<Box<dyn SystemService>>,
+    polling: bool,
+    failures: u64,
+}
+
+impl ServiceRegistry {
+    fn register(&mut self, service: Box<dyn SystemService>) -> Result<(), ServiceError> {
+        if self.polling {
+            return Err(ServiceError::Busy);
+        }
+        self.services.push(service);
+        Ok(())
+    }
+
+    fn poll(&mut self) {
+        if self.polling {
+            return;
+        }
+        self.polling = true;
+        for service in &mut self.services {
+            if service.poll().is_err() {
+                self.failures = self.failures.saturating_add(1);
+            }
+        }
+        self.polling = false;
+    }
+
+    fn requires_continuous_polling(&self) -> bool {
+        self.services
+            .iter()
+            .any(|service| service.requires_continuous_polling())
+    }
 }
 
 /// Configuration table entry
@@ -60,6 +120,7 @@ impl System {
                 stdout: NonNull::new(&raw mut NULL).unwrap(),
                 console_controller: ConsoleController::new(),
                 device_tree: None,
+                services: ServiceRegistry::default(),
             };
 
             (&mut *(&raw mut SYSTEM)).write(env);
@@ -90,6 +151,7 @@ impl System {
                 stdout: NonNull::new(&raw mut NULL).unwrap(),
                 console_controller: ConsoleController::new(),
                 device_tree: None,
+                services: ServiceRegistry::default(),
             };
             shared.device_tree = fdt::DeviceTree::parse(dtb as *const u8).ok();
             (&mut *(&raw mut SYSTEM)).write(shared);
@@ -128,6 +190,7 @@ impl System {
                 stdout: NonNull::new(&raw mut NULL).unwrap(),
                 console_controller: ConsoleController::new(),
                 device_tree: None,
+                services: ServiceRegistry::default(),
             };
             (&mut *(&raw mut SYSTEM)).write(shared);
 
@@ -237,6 +300,7 @@ impl System {
         events: &'a mut [&'b mut Event<'c>],
     ) -> &'a mut &'b mut Event<'c> {
         let index = 'main: loop {
+            Self::poll_services();
             for (i, event) in events.iter_mut().enumerate() {
                 match event.poll() {
                     PollResult::Ready => {
@@ -245,9 +309,43 @@ impl System {
                     PollResult::Pending => {}
                 }
             }
-            Hal::cpu().wait_for_interrupt();
+            if Self::shared().services.requires_continuous_polling() {
+                // A polled device has no interrupt with which to wake us.
+                // Keep giving services foreground time while an input event
+                // is pending instead of sleeping forever in WFI.
+                core::hint::spin_loop();
+            } else {
+                Hal::cpu().wait_for_interrupt();
+            }
+            Self::poll_services();
         };
         events.get_mut(index).unwrap()
+    }
+
+    /// Registers a background service. Registration during polling is rejected.
+    pub fn register_service(service: Box<dyn SystemService>) -> Result<(), ServiceError> {
+        unsafe {
+            if SERVICES_POLLING {
+                return Err(ServiceError::Busy);
+            }
+        }
+        unsafe { Self::shared_mut().services.register(service) }
+    }
+
+    /// Gives each registered service one bounded foreground polling opportunity.
+    pub fn poll_services() {
+        unsafe {
+            if SERVICES_POLLING {
+                return;
+            }
+            SERVICES_POLLING = true;
+            Self::shared_mut().services.poll();
+            SERVICES_POLLING = false;
+        }
+    }
+
+    pub fn service_failure_count() -> u64 {
+        Self::shared().services.failures
     }
 
     /// Returns configuration table entries
@@ -333,6 +431,7 @@ impl System {
 }
 
 /// Panic handler
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     let stdout = System::stdout();
@@ -341,6 +440,72 @@ fn panic(info: &PanicInfo) -> ! {
 
     loop {
         Hal::cpu().halt();
+    }
+}
+
+#[cfg(test)]
+mod service_tests {
+    use alloc::boxed::Box;
+    use alloc::rc::Rc;
+    use core::cell::Cell;
+
+    use super::*;
+
+    struct Counter(Rc<Cell<u32>>, bool);
+    impl SystemService for Counter {
+        fn poll(&mut self) -> Result<(), ServiceError> {
+            self.0.set(self.0.get() + 1);
+            if self.1 {
+                Err(ServiceError::Failed)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    struct Continuous;
+    impl SystemService for Continuous {
+        fn poll(&mut self) -> Result<(), ServiceError> {
+            Ok(())
+        }
+
+        fn requires_continuous_polling(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn one_failure_does_not_skip_other_services() {
+        let count = Rc::new(Cell::new(0));
+        let mut registry = ServiceRegistry::default();
+        registry
+            .register(Box::new(Counter(count.clone(), true)))
+            .unwrap();
+        registry
+            .register(Box::new(Counter(count.clone(), false)))
+            .unwrap();
+        registry.poll();
+        assert_eq!(count.get(), 2);
+        assert_eq!(registry.failures, 1);
+    }
+
+    #[test]
+    fn registration_is_rejected_while_polling() {
+        let mut registry = ServiceRegistry::default();
+        registry.polling = true;
+        let count = Rc::new(Cell::new(0));
+        assert_eq!(
+            registry.register(Box::new(Counter(count, false))),
+            Err(ServiceError::Busy)
+        );
+    }
+
+    #[test]
+    fn continuous_polling_requirement_is_reported() {
+        let mut registry = ServiceRegistry::default();
+        assert!(!registry.requires_continuous_polling());
+        registry.register(Box::new(Continuous)).unwrap();
+        assert!(registry.requires_continuous_polling());
     }
 }
 
