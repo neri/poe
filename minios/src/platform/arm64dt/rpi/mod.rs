@@ -21,6 +21,8 @@ pub mod fb;
 pub mod gpio;
 pub mod local_intc;
 pub mod mbox;
+#[cfg(feature = "usb")]
+pub mod pcie;
 pub mod pm;
 pub mod uart1;
 #[cfg(feature = "usb")]

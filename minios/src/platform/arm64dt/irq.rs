@@ -92,6 +92,21 @@ pub fn dispatch(_irq: Irq) -> bool {
     false
 }
 
+/// True if the interrupt controller in use can enable `irq`.
+///
+/// The GICv3 driver here only handles SGIs and PPIs, so a driver that finds a
+/// shared peripheral interrupt in the device tree has to ask before enabling
+/// it — [`enable`] asserts rather than failing, and a device that can fall
+/// back to polling would otherwise take the whole boot down with it.
+pub fn can_enable(irq: Irq) -> bool {
+    unsafe {
+        match IRQ_CONTROLLER {
+            IrqController::GicV3 => irq.0 < 32,
+            IrqController::GicV2 | IrqController::LocalIntc => true,
+        }
+    }
+}
+
 pub unsafe fn enable(irq: Irq) {
     unsafe {
         match IRQ_CONTROLLER {

@@ -6,5 +6,6 @@ pub mod hcd;
 pub mod input;
 pub mod log;
 pub mod manager;
+pub mod xhci;
 
 pub use manager::UsbManager;

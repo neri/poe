@@ -29,12 +29,16 @@ pub mod cros;
 pub mod dt;
 pub mod fb;
 pub mod irq;
+#[cfg(feature = "usb")]
+pub mod pci;
 pub mod pl011;
 pub mod psci;
 pub mod rk3399;
 pub mod rpi;
 pub mod spi;
 pub mod trap;
+#[cfg(feature = "usb")]
+pub mod xhci_pci;
 
 unsafe extern "C" {
     unsafe static _end: c_void;
@@ -109,6 +113,23 @@ impl Platform for CurrentPlatform {
                 if rpi::current_machine_type() == rpi::MachineType::RaspberryPi3 {
                     if let Err(reason) = rpi::usb::init(dt) {
                         println!("USB disabled: {}", reason);
+                    }
+                } else if rpi::current_machine_type() == rpi::MachineType::RaspberryPi4 {
+                    // Bring the BCM2711's PCIe link up and start USB on the
+                    // VL805 (stage 5 of docs/USB_HOST_RPI4_PLAN.md, proven on
+                    // a Raspberry Pi 400).  Diagnostic builds first print what
+                    // the firmware left behind; the report is what found that
+                    // the bootloader hands the bridge over in reset.
+                    rpi::pcie::report(dt);
+                    if let Err(reason) = rpi::pcie::init_usb(dt) {
+                        println!("USB disabled: {}", reason);
+                    }
+                } else if xhci_pci::is_available(dt) {
+                    // Only reported when the machine actually has an xHCI on
+                    // its PCI bus, so a board without one stays quiet.
+                    // Keyboards on it feed the console like the Pi 4's do.
+                    if let Err(reason) = xhci_pci::init(dt) {
+                        println!("xHCI disabled: {}", reason);
                     }
                 }
 

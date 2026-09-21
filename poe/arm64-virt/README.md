@@ -53,10 +53,77 @@ Pi firmware/PHY or high-speed-hub split transactions used by the real LAN9514.
 
 `make run-rpi4` needs QEMU 9.0 or later. The device trees of Raspberry Pi are in `dtb/`.
 
+```
+$ make FEATURES=minios/usb_debug
+$ make run-xhci
+```
+
+The xHCI target is the `virt` machine with `qemu-xhci` and a Boot Protocol
+keyboard, and is where the Raspberry Pi 4 USB work is developed: QEMU's
+`raspi4b` has no PCIe root port, so it cannot exercise the controller behind
+the Pi 4's USB-A ports. See `docs/USB_HOST_RPI4_PLAN.md`.
+
+The keyboard operates the POE menu and shell, the same way the Raspberry Pi 3
+target's does. The serial log should contain `xHCI self test: No-Op command
+completed`, then `boot keyboard on interface ...`, then either `xHCI completion
+mode: interrupt (IRQ n)` or `polling`. Build with `FEATURES=minios/usb_debug`
+to see any of it; without that feature the stack is silent but still works.
+
+Hot-plug, removal and moving the keyboard to another port are all handled, on
+a root port or behind one tier of USB 2.0 hub (`-device usb-hub,bus=xhci.0`
+with the keyboard on, say, `port=1.1`). Up to four keyboard interfaces feed
+the console at once; a fifth waits until one of them goes away. A hub behind a
+hub and anything that is not a keyboard are enumerated once and then left
+alone.
+
+On a GICv3 machine (`make run-xhci GIC=3`) the controller falls back to
+polling, because the GICv3 driver here does not route shared peripheral
+interrupts yet. Input works either way.
+
+```
+$ make test-usb
+```
+
+runs the QEMU tests of the xHCI stack (`tools/usb-test.py`): typing and
+modifiers, the controller behind a PCIe root port, twenty reconnects with the
+memory checked each time, hot-plug and removal behind a hub, several keyboards,
+the fifth-keyboard wait, a mass storage device enumerated only once, GICv3
+polling, a machine without xHCI, and the Raspberry Pi 3 path. It needs
+`qemu-system-aarch64` and Python 3, and rebuilds `bin/kernel.img` with
+`minios/usb_debug`, so run `make` again before installing.
+`make test-usb USB_TESTS="replug no-room"` runs only the scenarios named.
+
 ### Raspberry Pi
 
 Copy `bin/kernel8.img` (the same image as `bin/kernel.img`) to the boot partition of the SD card,
 with the Raspberry Pi firmware.
+
+#### Raspberry Pi 4 / 400: USB
+
+The image brings up the BCM2711 PCIe link and drives the VL805 xHCI behind it,
+so a USB Boot Protocol keyboard on the USB-A ports (or the Pi 400's built-in
+keyboard) operates the menu and shell. Up to four keyboards work at once, and
+they can be plugged in and pulled out at any time, including behind a hub.
+If the bring-up fails, the boot log says `USB disabled: <reason>` and the UART
+console stays usable.
+
+The controller's DMA reaches only the RAM the device tree's `dma-ranges`
+gives it (the first 3 GB on the stock device tree); the stack checks that every
+buffer it hands the controller lies there.
+
+To see what happens, build with the diagnostics and capture the UART:
+
+```
+$ make FEATURES=minios/usb_debug
+```
+
+Put `enable_uart=1` in `config.txt` so the PL011 is on GPIO 14/15, and capture
+the serial console at 115200 baud. The log first shows what the firmware left
+the PCIe host in (between `--- BCM2711 PCIe report ---` and
+`--- end of PCIe report ---`), then the link bring-up and the `xHCI ...` lines.
+Each step announces itself before it touches the hardware, so a board that
+stops says where. QEMU's `raspi4b` has no PCIe, so this part is only tested on
+hardware.
 
 On a Raspberry Pi 3 Model B, connect a USB Boot Protocol keyboard to the
 on-board LAN9514 hub and keep UART0 available at 115200 baud. Verify cold boot,

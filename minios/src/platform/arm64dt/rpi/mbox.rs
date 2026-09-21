@@ -279,6 +279,8 @@ pub enum RawTag {
     GetClockRate = 0x00030002,
     SetClockRate = 0x00038002,
     GetEdid = 0x00030020,
+    /// Asks the VideoCore to load the VL805's firmware after a PCIe reset.
+    NotifyXhciReset = 0x00030058,
 
     GetFb = 0x00040001,
     GetPhysicalWH = 0x00040003,
@@ -342,6 +344,8 @@ pub enum Tag<'a> {
     SetOverscan(u32, u32, u32, u32),
     GetPalette,
     SetPalette(&'a [u32; 256]),
+    /// The PCI address of the VL805, encoded bus << 20 | slot << 15 | func << 12.
+    NotifyXhciReset(u32),
 }
 
 impl Tag<'_> {
@@ -364,6 +368,7 @@ impl Tag<'_> {
             Tag::GetEdid(_) => (RawTag::GetEdid, 136),
             Tag::GetPalette => (RawTag::GetPalette, 1024),
             Tag::SetPalette(_) => (RawTag::SetPalette, 1032),
+            Tag::NotifyXhciReset(_) => (RawTag::NotifyXhciReset, 4),
         }
     }
 
@@ -394,6 +399,7 @@ impl Tag<'_> {
             Tag::SetOverscan(a, b, c, d) => slice._push_slice(&[*a, *b, *c, *d]),
             Tag::GetEdid(x) => slice._push(*x).and_then(|_| slice._push_dummy(33)),
             Tag::GetPalette => slice._push_dummy(256),
+            Tag::NotifyXhciReset(address) => slice._push(*address),
             Tag::SetPalette(data) => slice
                 ._push_slice(&[0, 256])
                 .and_then(|_| slice._push_slice(*data)),
@@ -437,6 +443,19 @@ pub fn power_usb_hcd() -> Result<(), ()> {
     } else {
         Err(())
     }
+}
+
+/// Asks the firmware to (re)load the VL805's firmware.
+///
+/// After a PCIe reset the VL805 on a Raspberry Pi 4 or 400 has no firmware
+/// unless it has its own EEPROM, and the VideoCore holds both the blob and the
+/// loader.  Linux's `reset-raspberrypi` driver does exactly this, with the
+/// device hard-wired at 01:00.0, then waits up to a millisecond.
+pub fn notify_xhci_reset(pci_address: u32) -> Result<(), ()> {
+    let mut request = Mbox::PROP.fixed::<8>();
+    request.append(Tag::NotifyXhciReset(pci_address))?;
+    request.call()?;
+    Ok(())
 }
 
 #[allow(unused)]

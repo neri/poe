@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run run-el2 run-rpi3 run-rpi4 test apps kernel update kpart usb
+.PHONY: love all default clean install full run run-el2 run-xhci run-rpi3 run-rpi4 test test-usb apps kernel update kpart usb
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -55,6 +55,25 @@ run:
 		-nographic \
 		-kernel $(POE_BIN)
 
+# USB on xHCI, per docs/USB_HOST_RPI4_PLAN.md.  The Raspberry Pi 4 machine of
+# QEMU has no PCIe root port, so the xHCI work is verified on virt instead.
+# Build with FEATURES=minios/usb_debug to see what the probe found.
+run-xhci:
+	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M \
+		-nographic \
+		-kernel $(POE_BIN) \
+		-device qemu-xhci,id=xhci \
+		-device usb-kbd,id=kbd1,bus=xhci.0
+
+# QEMU tests of the xHCI stack (tools/usb-test.py).  They read its diagnostic
+# lines, so this rebuilds bin/kernel.img with minios/usb_debug and leaves that
+# image behind; run make again without FEATURES before installing.
+# USB_TESTS picks scenarios, e.g. make test-usb USB_TESTS="replug no-room"
+USB_TESTS ?=
+test-usb:
+	$(MAKE) FEATURES=minios/usb_debug $(POE_BIN)
+	python3 tools/usb-test.py --kernel $(POE_BIN) --dtb-dir $(DTB_PATH) $(USB_TESTS)
+
 # EL2 entry (like depthcharge / U-Boot on real hardware)
 run-el2:
 	qemu-system-aarch64 -M virt,gic-version=$(GIC),virtualization=on -cpu cortex-a53 -m 512M \
@@ -72,7 +91,6 @@ run-rpi3:
 run-rpi4:
 	qemu-system-aarch64 -M raspi4b -dtb $(DTB_PATH)/bcm2711-rpi-4-b.dtb \
 		-kernel $(POE_BIN) \
-		-device usb-kbd \
 		-serial mon:stdio
 
 test: poe
