@@ -208,6 +208,9 @@ pub unsafe fn init_with<C: ConfigAccess>(host: &mut PciHost<C>) -> Result<(), &'
         }
     }
 
+    // Mass storage sessions and the block devices over them share this
+    // clock for their deadlines.
+    crate::io::usb::class::msc::registry::with_global(|r| r.set_clock(counter_us));
     let mut usb = XhciUsb::new(controller);
     usb_println!(
         "xHCI: managing USB 2.0 root ports {:#06x} of {}",

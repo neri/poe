@@ -76,6 +76,17 @@ the console at once; a fifth waits until one of them goes away. A hub behind a
 hub and anything that is not a keyboard are enumerated once and then left
 alone.
 
+USB mass storage (Bulk-Only Transport, read-only, LUN 0) is taken on both
+the Raspberry Pi 3's DWC2 and xHCI; see `docs/USB_MSC_RPI_PLAN.md`. The POE
+shell has diagnostic commands for it: `usbblk` lists the devices, `usbread
+<dev> <lba> [count]` reads raw blocks and prints their CRC-32, `usbwrite <dev>
+<lba>` shows that writes are refused, and `usbbench <dev> <seconds> [blocks]`
+reads sequentially and reports the rate and the errors. File systems are not
+read. `make run-msc DISK=<raw image>` boots with a USB 2.0-only xHCI (QEMU
+would put `usb-storage` on a SuperSpeed port otherwise, and SuperSpeed is not
+driven) and the image as a USB stick. `make test-usb` includes the mass
+storage scenarios (`msc-*`), which also run on the `raspi3b` machine.
+
 On a GICv3 machine (`make run-xhci GIC=3`) the controller falls back to
 polling, because the GICv3 driver here does not route shared peripheral
 interrupts yet. Input works either way.

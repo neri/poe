@@ -10,19 +10,19 @@ use libusb::{
 use super::class::hid::{IDLE_DURATION_4MS, set_idle, set_protocol_boot};
 use super::class::hid_keyboard::{BOOT_REPORT_SIZE, BootKeyboard};
 use super::class::hub::{HubPort, MAX_DOWNSTREAM_PORTS};
+use super::class::msc::{self, registry};
 use super::control::{ControlRequestContext, ControlTransfer};
 use super::hcd::{
     HostController, RootPortState, SplitTarget, TransferCompletion, TransferRequest, TransferToken,
     UsbRoute,
 };
+use super::storage::{ControlOwner, Storage};
 use crate::env::{ServiceError, SystemService};
 
 pub const MAX_DEVICES: usize = 16;
 pub const MAX_CONFIGURATION_DESCRIPTOR: usize = 512;
 pub const COMPLETION_BUDGET: usize = 32;
 const HUB_MONITOR_INTERVAL_US: u64 = 1_000_000;
-/// How often the keyboard session reports its counters, with `usb_debug` on.
-const HID_STATS_INTERVAL_US: u64 = 10_000_000;
 const TT_RECOVERY_DELAY_US: u64 = 2_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -222,7 +222,6 @@ struct HidSession {
     reports: u64,
     naks: u64,
     errors: u64,
-    next_stats_us: u64,
 }
 
 struct AddressAllocator {
@@ -280,6 +279,10 @@ pub struct UsbManager {
     last_reset_status: Option<(UsbAddress, u8, u16, u16)>,
     last_reset_error: Option<(UsbAddress, u8, u32)>,
     fallback_probe: Option<(UsbAddress, u8, UsbSpeed)>,
+    /// Mass storage interfaces in use, and which of them the control pipe
+    /// is working for, if any.
+    storage: Vec<Storage>,
+    storage_control: Option<ControlOwner>,
 }
 
 impl UsbManager {
@@ -309,6 +312,8 @@ impl UsbManager {
             last_reset_status: None,
             last_reset_error: None,
             fallback_probe: None,
+            storage: Vec::new(),
+            storage_control: None,
         }
     }
     pub fn allocate_device(
@@ -337,6 +342,7 @@ impl UsbManager {
         Ok(address)
     }
     pub fn detach(&mut self, address: UsbAddress) {
+        self.detach_storage(address);
         if let Some(i) = self.devices.iter().position(|d| d.address == address) {
             self.devices.remove(i);
             self.addresses.release(address);
@@ -385,6 +391,10 @@ impl UsbManager {
                 .is_some_and(|session| session.token == Some(c.token))
             {
                 self.complete_hid(c, now);
+            } else if let Some(index) = self.storage.iter().position(|s| s.owns(c.token)) {
+                let hcd = &mut *self.hcd;
+                let storage = &mut self.storage[index];
+                registry::with_global(|r| storage.complete(hcd, c, now, r));
             } else if self.control.owns(c.token) {
                 if let Some(done) = self.control.complete(&mut *self.hcd, c, now) {
                     control_done = Some(done);
@@ -395,7 +405,9 @@ impl UsbManager {
             }
         }
         if let Some(done) = control_done {
-            if self.child_scan != ChildScan::Idle && self.child_scan != ChildScan::Running {
+            if let Some(owner) = self.storage_control.take() {
+                self.storage_control_done(owner, done, now);
+            } else if self.child_scan != ChildScan::Idle && self.child_scan != ChildScan::Running {
                 self.advance_child(done, now);
             } else if self.hub_scan == HubScan::Idle {
                 self.advance_enumeration(done, now);
@@ -610,45 +622,6 @@ impl UsbManager {
                 self.child_scan = ChildScan::ReadingFirst { hub, port, speed };
             }
         }
-        if let Some(session) = self.hid.as_mut()
-            && now >= session.next_stats_us
-        {
-            session.next_stats_us = now.saturating_add(HID_STATS_INTERVAL_US);
-            crate::usb_println!(
-                "USB: keyboard t={} polls={} reports={} naks={} errors={} blocked={}",
-                now / 1_000,
-                session.polls,
-                session.reports,
-                session.naks,
-                session.errors,
-                self.hid_blocked,
-            );
-            crate::usb_println!(
-                "USB: keys delivered={} rollover={} kbd_dropped={} console_dropped={}",
-                session.keyboard.delivered(),
-                session.keyboard.rollover_count(),
-                session.keyboard.dropped(),
-                super::input::dropped(),
-            );
-            let hcd = self.hcd.snapshot();
-            crate::usb_println!(
-                "USB: split csplit_retries={} expired={} exhausted={} naks={} deferrals={} | completed={} stalls={} timeouts={} xact={}",
-                hcd.split_csplit_retries,
-                hcd.split_expired,
-                hcd.split_exhausted,
-                hcd.split_naks,
-                hcd.split_deferrals,
-                hcd.completed,
-                hcd.stalls,
-                hcd.timeouts,
-                hcd.transaction_errors,
-            );
-            crate::usb_println!(
-                "USB: periodic by start uframe: started={:?} lost={:?}",
-                hcd.periodic_starts,
-                hcd.periodic_losses,
-            );
-        }
         if self
             .hid
             .as_ref()
@@ -664,7 +637,162 @@ impl UsbManager {
                 let _ = self.submit_hid(now);
             }
         }
+        self.poll_storage(now);
         self.last_root_state = root;
+    }
+
+    // ---- mass storage ------------------------------------------------------
+
+    /// Publishes the mass storage interfaces of a device that has just been
+    /// configured.  The configuration it was given is the one whose
+    /// descriptor was read, so the interfaces are there as found.
+    fn bind_storage(&mut self, address: UsbAddress, route: UsbRoute, ep0_max_packet: u16) {
+        let Some(record) = self.devices.iter().find(|d| d.address == address) else {
+            return;
+        };
+        let found = match msc::find_interfaces(&record.descriptor) {
+            Ok(found) => found,
+            Err(_) => return,
+        };
+        for rejected in &found.rejected {
+            crate::usb_println!(
+                "USB: device {} mass storage interface {} not used: {}",
+                address.get(),
+                rejected.number,
+                rejected.reason
+            );
+        }
+        let (vendor_id, product_id) = (
+            record.vendor_id.unwrap_or(0),
+            record.product_id.unwrap_or(0),
+        );
+        let hub_port = match record.location {
+            DeviceLocation::Hub { port, .. } => Some(port),
+            DeviceLocation::Root => None,
+        };
+        for interface in found.interfaces {
+            let mut info = registry::DeviceInfo::new(
+                registry::Backend::Dwc2,
+                address.get(),
+                hub_port,
+                interface.number,
+            );
+            info.vendor_id = vendor_id;
+            info.product_id = product_id;
+            let Some(handle) = registry::with_global(|r| r.attach(info)) else {
+                crate::usb_println!(
+                    "USB: device {} mass storage interface {} refused, {} already in use",
+                    address.get(),
+                    interface.number,
+                    registry::MAX_DEVICES
+                );
+                continue;
+            };
+            crate::usb_println!(
+                "USB: device {} mass storage interface {} ({} byte packets) is USB block device {}",
+                address.get(),
+                interface.number,
+                interface.bulk_in.max_packet_size,
+                handle.index
+            );
+            self.storage.push(Storage::new(
+                address,
+                route,
+                ep0_max_packet,
+                interface,
+                handle,
+            ));
+        }
+    }
+
+    /// Withdraws the mass storage interfaces of a device that has gone.
+    fn detach_storage(&mut self, address: UsbAddress) {
+        let mut index = 0;
+        while index < self.storage.len() {
+            if self.storage[index].address != address {
+                index += 1;
+                continue;
+            }
+            let mut storage = self.storage.swap_remove(index);
+            if self
+                .storage_control
+                .is_some_and(|owner| owner.handle == storage.handle())
+            {
+                self.storage_control = None;
+                self.control.cancel(&mut *self.hcd);
+            }
+            let hcd = &mut *self.hcd;
+            registry::with_global(|r| storage.detach(hcd, r));
+        }
+    }
+
+    /// Whether the control pipe can be lent to a mass storage interface now
+    /// without holding up enumeration, the hub or the keyboard.
+    fn storage_may_use_control(&self, now: u64) -> bool {
+        !self.control.is_active()
+            && !self.storage.iter().any(Storage::bulk_active)
+            && self.storage_control.is_none()
+            && self.tt_recovery.is_none()
+            && matches!(self.child_scan, ChildScan::Idle | ChildScan::Running)
+            && matches!(
+                self.root_scan,
+                RootScan::Idle | RootScan::Configured | RootScan::Debouncing { .. }
+            )
+            && !self.hid_poll_due(now)
+    }
+
+    /// Gives each mass storage interface its turn: bulk stages go straight
+    /// to the controller, requests on endpoint zero share the control pipe.
+    fn poll_storage(&mut self, now: u64) {
+        for index in 0..self.storage.len() {
+            let bulk_allowed = !self.control.is_active();
+            let hcd = &mut *self.hcd;
+            let storage = &mut self.storage[index];
+            let Some(transfer) = registry::with_global(|r| storage.poll(hcd, now, r, bulk_allowed))
+            else {
+                continue;
+            };
+            if !self.storage_may_use_control(now) {
+                continue;
+            }
+            let storage = &mut self.storage[index];
+            let Some((setup, owner)) = storage.control_request(transfer) else {
+                continue;
+            };
+            let (address, route, max_packet) =
+                (storage.address, storage.route, storage.ep0_max_packet);
+            match self
+                .control
+                .start_routed(&mut *self.hcd, address, route, max_packet, setup, now)
+            {
+                Ok(()) => {
+                    self.storage[index].control_started(now);
+                    self.storage_control = Some(owner);
+                }
+                Err(error) => {
+                    // Started and failed at once: the session still hears
+                    // about it exactly once.
+                    let storage = &mut self.storage[index];
+                    storage.control_started(now);
+                    registry::with_global(|r| {
+                        storage.control_complete(owner, Err(error), &[], now, r)
+                    });
+                }
+            }
+        }
+    }
+
+    fn storage_control_done(
+        &mut self,
+        owner: ControlOwner,
+        result: Result<usize, UsbError>,
+        now: u64,
+    ) {
+        let Some(storage) = self.storage.iter_mut().find(|s| s.handle() == owner.handle) else {
+            return;
+        };
+        let data = &self.control.data;
+        registry::with_global(|r| storage.control_complete(owner, result, data, now, r));
     }
 
     fn start_descriptor(
@@ -827,6 +955,13 @@ impl UsbManager {
                             })
                         })
                     });
+                if !is_hub {
+                    let route = UsbRoute {
+                        device_speed: self.root_speed,
+                        translator: None,
+                    };
+                    self.bind_storage(address, route, self.ep0_packet_size);
+                }
                 if is_hub {
                     crate::usb_println!("USB: hub configured at address {}", address.get());
                     // Hub descriptors have variable-length removable/power
@@ -968,7 +1103,9 @@ impl UsbManager {
     }
 
     fn arm_child_after_reset(&mut self, hub: UsbAddress, port: u8, speed: UsbSpeed, now: u64) {
-        if self.child_scan == ChildScan::Idle {
+        // `Running` only says a keyboard is bound; its polling is separate
+        // from enumeration, so another port's device can still be taken on.
+        if matches!(self.child_scan, ChildScan::Idle | ChildScan::Running) {
             self.tt_recovery = None;
             self.tt_recovery_attempts = 0;
             self.child_scan = ChildScan::ResetRecovery {
@@ -1162,6 +1299,23 @@ impl UsbManager {
                     }
                     if was_connected && !connected {
                         self.detach_hub_port(hub, port);
+                    } else if was_connected && connected && change & 1 != 0 {
+                        // Connected at both scans, but the connection
+                        // changed in between: unplugged and plugged back.
+                        // The device there now is a new one, in its
+                        // default state, and whatever was known about the
+                        // old one — its address, a mass storage session —
+                        // no longer applies.
+                        crate::usb_println!(
+                            "USB: hub {} port {} reconnected (status {:04x})",
+                            hub.get(),
+                            port,
+                            status
+                        );
+                        self.detach_hub_port(hub, port);
+                        if let Some(managed) = self.hub_ports.get_mut(port as usize - 1) {
+                            managed.connection_changed(true, now);
+                        }
                     }
                 }
                 if change & 1 != 0
@@ -1735,17 +1889,32 @@ impl UsbManager {
                 if let Some(record) = self.devices.iter_mut().find(|d| d.address == address) {
                     record.configuration = Some(value);
                 }
+                let route = self.child_route(hub, port, speed);
+                self.bind_storage(address, route, self.child_ep0);
                 let Some(record) = self.devices.iter().find(|d| d.address == address) else {
                     self.child_failed();
                     return;
                 };
-                let Some((interface, endpoint)) = Self::find_boot_keyboard(&record.descriptor)
-                else {
-                    crate::usb_println!("USB: device {} configured (non-keyboard)", address.get());
-                    // This port is Active, so returning to Idle permits a
+                let keyboard = Self::find_boot_keyboard(&record.descriptor);
+                let Some((interface, endpoint)) = keyboard.filter(|_| self.hid.is_none()) else {
+                    crate::usb_println!(
+                        "USB: device {} configured ({})",
+                        address.get(),
+                        if keyboard.is_some() {
+                            "a keyboard is already bound"
+                        } else {
+                            "non-keyboard"
+                        }
+                    );
+                    // This port is Active, so leaving enumeration permits a
                     // different connected hub port to be enumerated without
-                    // revisiting this device.
-                    self.child_scan = ChildScan::Idle;
+                    // revisiting this device.  The keyboard, if one is bound,
+                    // keeps running.
+                    self.child_scan = if self.hid.is_some() {
+                        ChildScan::Running
+                    } else {
+                        ChildScan::Idle
+                    };
                     return;
                 };
                 let route = self.child_route(hub, port, speed);
@@ -1823,7 +1992,6 @@ impl UsbManager {
                     reports: 0,
                     naks: 0,
                     errors: 0,
-                    next_stats_us: now.saturating_add(HID_STATS_INTERVAL_US),
                 });
                 self.fallback_probe = None;
                 ChildScan::Running
@@ -1953,7 +2121,9 @@ impl SystemService for UsbManager {
     }
 
     fn requires_continuous_polling(&self) -> bool {
-        self.hcd.requires_foreground_polling()
+        // A mass storage stage re-arms each NAKed packet from here, and its
+        // deadlines are shorter than a tick apart.
+        self.hcd.requires_foreground_polling() || self.storage.iter().any(Storage::busy)
     }
 }
 

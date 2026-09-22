@@ -990,6 +990,44 @@ mod tests {
     }
 
     #[test]
+    fn a_device_replugged_between_two_port_scans_is_enumerated_again() {
+        // The port reads "connected" on both sides of the swap; only its
+        // connection-change bit says anything happened.  On a Raspberry Pi 3
+        // a mass storage device pulled and pushed back during a long read
+        // was never seen again.  The second keyboard stands in for it: it is
+        // configured but gets no session, so no failing poll gives the swap
+        // away.
+        let bus = FakeHcd::pi3_topology();
+        let mut manager = UsbManager::new(Box::new(bus.clone()), now_us);
+        assert!(run_until(&mut manager, &bus, |manager, bus| {
+            manager.keyboard_ready()
+                && bus.is_configured(FULL_SPEED_PORT)
+                && bus.is_configured(LOW_SPEED_PORT)
+        }));
+        let old = bus.bus().assigned_address(FULL_SPEED_PORT).unwrap();
+        let bound = manager.devices().len();
+        {
+            let mut b = bus.bus();
+            let device = b.child_of(FULL_SPEED_PORT).unwrap();
+            b.unplug(FULL_SPEED_PORT);
+            b.plug(FULL_SPEED_PORT, device);
+        }
+        assert!(
+            run_until(&mut manager, &bus, |manager, bus| {
+                bus.is_configured(FULL_SPEED_PORT)
+                    && bus
+                        .assigned_address(FULL_SPEED_PORT)
+                        .is_some_and(|address| address != old)
+                    && !manager.devices().iter().any(|d| d.address.get() == old)
+            }),
+            "the replugged device was not enumerated again; devices: {:?}",
+            manager.devices()
+        );
+        assert_eq!(manager.devices().len(), bound);
+        assert!(manager.keyboard_ready(), "the other keyboard is untouched");
+    }
+
+    #[test]
     fn the_hub_survives_a_child_disconnect() {
         let (mut manager, bus) = with_keyboard_on(LOW_SPEED_PORT);
         bus.bus().unplug(LOW_SPEED_PORT);

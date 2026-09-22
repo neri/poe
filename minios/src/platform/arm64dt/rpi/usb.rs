@@ -113,6 +113,7 @@ pub unsafe fn init(tree: &fdt::DeviceTree) -> Result<(), &'static str> {
     install_interrupt(probe.mmio_base, probe.irq);
     unsafe { irq::register_usb_handler(probe.irq, interrupt_handler) };
     usb_println!("USB completion mode: interrupt (IRQ {})", probe.irq.0);
+    crate::io::usb::class::msc::registry::with_global(|r| r.set_clock(counter_us));
     let mut manager = UsbManager::new(Box::new(controller), counter_us);
 
     // Give initial enumeration a bounded foreground window while the UART is

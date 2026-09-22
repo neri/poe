@@ -24,16 +24,22 @@
 //! interface gets its own key state.  A hub behind a hub and anything with no
 //! Boot Protocol keyboard interface are enumerated and then left alone.
 
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+
 use libusb::{
     ConfigurationDescriptor, DescriptorIter, DeviceDescriptor, Direction, EndpointAddress,
     EndpointDescriptor, InterfaceDescriptor, SetupPacket, TransferType, UsbError, UsbSpeed,
 };
 
 use super::hub::{self, HubDescriptor};
-use super::{DeviceRoute, Xhci, XhciEnv, XhciSnapshot};
+use super::{BULK_BUFFER_BYTES, DeviceRoute, Xhci, XhciEnv, XhciSnapshot};
 use crate::env::{ServiceError, SystemService};
 use crate::io::usb::class::hid;
 use crate::io::usb::class::hid_keyboard::{BOOT_REPORT_SIZE, BootKeyboard};
+use crate::io::usb::class::msc::bot::{Pipe, Transfer};
+use crate::io::usb::class::msc::registry::{self, Backend, DeviceInfo};
+use crate::io::usb::class::msc::{self, MAX_INTERFACES_PER_DEVICE, MscInterface, MscSession};
 use crate::usb_println;
 
 /// Root ports this tracks.  The Raspberry Pi 4's VL805 has four USB-A ports
@@ -78,8 +84,14 @@ pub const MAX_KEYBOARDS: usize = 4;
 const MAX_INTERFACES: usize = 4;
 
 /// Largest configuration descriptor this reads.  A Boot Protocol keyboard's is
-/// tens of bytes; anything beyond this is outside the scope of the plan.
+/// tens of bytes, a mass storage device's a few dozen; anything beyond this
+/// is outside the scope of the plan.
 const MAX_CONFIGURATION_BYTES: usize = 256;
+
+/// Transfers a mass storage interface may start or finish in one poll.  Enough
+/// to keep a read moving between system ticks, few enough that one interface
+/// does not hold up the keyboards and the others.
+const STORAGE_STEPS_PER_POLL: usize = 8;
 
 /// What a root port is doing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -134,6 +146,10 @@ enum Step {
     SetIdle {
         index: u8,
     },
+    /// Per mass storage interface: its pair of bulk endpoints.
+    ConfigureBulk {
+        index: u8,
+    },
     /// A hub has to have its configuration set before its ports answer.
     HubSetConfiguration {
         value: u8,
@@ -166,6 +182,27 @@ struct Keyboard {
     errors: u8,
     /// The endpoint has halted and is waiting to be brought back.
     halted: bool,
+}
+
+/// A mass storage interface found in a configuration, and the device context
+/// indexes its endpoints were given once configured.
+#[derive(Clone, Copy, Debug)]
+struct PendingStorage {
+    interface: MscInterface,
+    dci_in: u8,
+    dci_out: u8,
+}
+
+/// One mass storage interface in use.  The session decides what to do; this
+/// carries it out on the controller.
+struct Storage {
+    at: Bound,
+    slot: u8,
+    dci_in: u8,
+    dci_out: u8,
+    session: Box<MscSession>,
+    /// The bulk transfer in flight, the endpoint it is on and its deadline.
+    in_flight: Option<(u8, u64)>,
 }
 
 /// Where a device is attached.  Used both to remember where the console's
@@ -269,6 +306,7 @@ pub struct DeviceSnapshot {
     pub hubs_configured: u64,
     pub hub_connects: u64,
     pub hub_disconnects: u64,
+    pub storage_bound: u64,
 }
 
 /// Enumeration and input binding for one xHCI controller.
@@ -281,8 +319,11 @@ pub struct XhciUsb<'e, E: XhciEnv> {
     /// its class, which decides whether the hub path or the keyboard path
     /// runs once the configuration descriptor has been read.
     pending: [Option<KeyboardInterface>; MAX_INTERFACES],
+    pending_storage: [Option<PendingStorage>; MAX_INTERFACES_PER_DEVICE],
     pending_class: u8,
+    pending_ids: (u16, u16),
     keyboards: [Option<Keyboard>; MAX_KEYBOARDS],
+    storage: Vec<Storage>,
     hub: Option<HubState>,
     /// Consecutive failed attempts per root port, cleared when the device is
     /// unplugged or the enumeration finally succeeds.
@@ -309,8 +350,11 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
             ports: [PortState::Idle; MAX_ROOT_PORTS],
             managed,
             pending: [None; MAX_INTERFACES],
+            pending_storage: [None; MAX_INTERFACES_PER_DEVICE],
             pending_class: 0,
+            pending_ids: (0, 0),
             keyboards: [const { None }; MAX_KEYBOARDS],
+            storage: Vec::new(),
             hub: None,
             attempts: [0; MAX_ROOT_PORTS],
             snapshot: DeviceSnapshot::default(),
@@ -389,7 +433,11 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     | PortState::Failed { .. }
             )
         });
-        let recovering = self.keyboards.iter().flatten().any(|k| k.halted);
+        let recovering = self.keyboards.iter().flatten().any(|k| k.halted)
+            || self
+                .storage
+                .iter()
+                .any(|s| s.in_flight.is_some() || s.session.busy());
         // A hub is swept by polling, so it always wants foreground time —
         // except while it is quiet with a keyboard already running behind it,
         // which is the state a system with a hub spends its life in.
@@ -475,6 +523,7 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
 
         self.poll_hub();
         self.poll_keyboards();
+        self.poll_storage();
         if !self.enumerating() {
             self.recover_one_keyboard();
         }
@@ -582,13 +631,19 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
 
     fn start_enumeration(&mut self) {
         self.pending = [None; MAX_INTERFACES];
+        self.pending_storage = [None; MAX_INTERFACES_PER_DEVICE];
         self.pending_class = 0;
+        self.pending_ids = (0, 0);
     }
 
     /// Moves the keyboard interfaces just configured on `slot` into the set
     /// that feeds the console.
     fn bind(&mut self, at: Bound, slot: u8) {
+        self.bind_storage(at, slot);
         let pending = core::mem::replace(&mut self.pending, [None; MAX_INTERFACES]);
+        if pending.iter().all(Option::is_none) {
+            return;
+        }
         for interface in pending.into_iter().flatten() {
             let Some(free) = self.keyboards.iter().position(Option::is_none) else {
                 break;
@@ -611,9 +666,75 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         );
     }
 
-    /// Stops using every keyboard interface of `slot`.  Returns true if there
-    /// were any.
+    /// Publishes the mass storage interfaces just configured on `slot`.
+    fn bind_storage(&mut self, at: Bound, slot: u8) {
+        let pending =
+            core::mem::replace(&mut self.pending_storage, [None; MAX_INTERFACES_PER_DEVICE]);
+        let (vendor_id, product_id) = self.pending_ids;
+        for found in pending.into_iter().flatten() {
+            let mut info = DeviceInfo::new(
+                Backend::Xhci,
+                match at {
+                    Bound::Root(port) => port,
+                    Bound::Hub(_) => self.hub.as_ref().map_or(0, |hub| hub.root_port),
+                },
+                match at {
+                    Bound::Root(_) => None,
+                    Bound::Hub(port) => Some(port),
+                },
+                found.interface.number,
+            );
+            info.vendor_id = vendor_id;
+            info.product_id = product_id;
+            let Some(handle) = registry::with_global(|r| r.attach(info)) else {
+                usb_println!(
+                    "xHCI {}: mass storage interface {} refused, {} already in use",
+                    at,
+                    found.interface.number,
+                    registry::MAX_DEVICES
+                );
+                continue;
+            };
+            usb_println!(
+                "xHCI {}: mass storage interface {} is USB block device {}",
+                at,
+                found.interface.number,
+                handle.index
+            );
+            self.snapshot.storage_bound += 1;
+            self.storage.push(Storage {
+                at,
+                slot,
+                dci_in: found.dci_in,
+                dci_out: found.dci_out,
+                session: Box::new(MscSession::new(
+                    handle,
+                    found.interface.number,
+                    BULK_BUFFER_BYTES,
+                )),
+                in_flight: None,
+            });
+        }
+    }
+
+    /// Withdraws every mass storage interface of `slot`.  The slot is about
+    /// to be disabled, which is what stops the controller using its buffers.
+    fn unbind_storage(&mut self, slot: u8) {
+        let mut index = 0;
+        while index < self.storage.len() {
+            if self.storage[index].slot == slot {
+                let mut storage = self.storage.swap_remove(index);
+                registry::with_global(|r| storage.session.detach(r));
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    /// Stops using every keyboard interface of `slot`, and every mass storage
+    /// interface.  Returns true if there were keyboards.
     fn unbind(&mut self, slot: u8) -> bool {
+        self.unbind_storage(slot);
         let mut any = false;
         for entry in self.keyboards.iter_mut() {
             if entry.as_ref().is_some_and(|k| k.slot == slot) {
@@ -624,13 +745,20 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         any
     }
 
-    /// The slot of the device on hub port `port` whose keyboards are bound.
+    /// The slot of the device on hub port `port` whose keyboards or mass
+    /// storage interfaces are bound.
     fn bound_on_hub_port(&self, port: u8) -> Option<u8> {
         self.keyboards
             .iter()
             .flatten()
             .find(|k| k.at == Bound::Hub(port))
             .map(|k| k.slot)
+            .or_else(|| {
+                self.storage
+                    .iter()
+                    .find(|s| s.at == Bound::Hub(port))
+                    .map(|s| s.slot)
+            })
     }
 
     fn advance_enumeration(&mut self, port: u8, slot: u8, speed: UsbSpeed, step: Step) {
@@ -726,6 +854,7 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     &mut bytes,
                 )?;
                 let device = DeviceDescriptor::parse(&bytes)?;
+                self.pending_ids = (device.vendor_id, device.product_id);
                 usb_println!(
                     "xHCI {}: {:04x}:{:04x} USB {:04x} class {:02x}/{:02x}/{:02x} EP0 {}",
                     at,
@@ -773,31 +902,36 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     &mut bytes[..total],
                 )?;
                 let found = find_boot_keyboards(&bytes[..read])?;
+                let storage = self.find_storage(at, &bytes[..read]);
                 let count = found.iter().flatten().count();
-                if count == 0 {
+                if count == 0 && storage == 0 {
                     return Ok(Outcome::NotForUs);
                 }
                 let room = self.keyboards.iter().filter(|k| k.is_none()).count();
-                if room == 0 {
+                self.pending = [None; MAX_INTERFACES];
+                if count > 0 && room == 0 {
                     usb_println!(
                         "xHCI {}: {} keyboard interface(s), but {} are already in use",
                         at,
                         count,
                         MAX_KEYBOARDS
                     );
-                    return Ok(Outcome::NoRoom);
+                    if storage == 0 {
+                        return Ok(Outcome::NoRoom);
+                    }
                 }
-                self.pending = [None; MAX_INTERFACES];
                 for (slot_index, interface) in found.into_iter().flatten().take(room).enumerate() {
                     self.pending[slot_index] = Some(interface);
                 }
-                Ok(Outcome::Continue(Step::SetConfiguration {
-                    value: self.pending[0].map(|k| k.configuration).unwrap_or(1),
-                }))
+                let value = self.pending[0]
+                    .map(|k| k.configuration)
+                    .or(self.pending_storage[0].map(|s| s.interface.configuration))
+                    .unwrap_or(1);
+                Ok(Outcome::Continue(Step::SetConfiguration { value }))
             }
             Step::SetConfiguration { value } => {
                 self.control_out(slot, SetupPacket::set_configuration(value))?;
-                Ok(Outcome::Continue(Step::ConfigureEndpoint { index: 0 }))
+                Ok(self.after_keyboard(None))
             }
             Step::ConfigureEndpoint { index } => {
                 let keyboard = self.pending_interface(index)?;
@@ -835,9 +969,44 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     keyboard.interval,
                     speed
                 );
+                Ok(self.after_keyboard(Some(index)))
+            }
+            Step::ConfigureBulk { index } => {
+                let pending = self
+                    .pending_storage
+                    .get(index as usize)
+                    .copied()
+                    .flatten()
+                    .ok_or(UsbError::InvalidRequest)?;
+                let interface = pending.interface;
+                let (dci_in, dci_out) = self.controller.configure_bulk_pair(
+                    slot,
+                    (interface.bulk_in.address, interface.bulk_in.max_packet_size),
+                    (
+                        interface.bulk_out.address,
+                        interface.bulk_out.max_packet_size,
+                    ),
+                )?;
+                usb_println!(
+                    "xHCI {}: mass storage interface {}, bulk {:#04x}/{:#04x}, {} bytes ({:?})",
+                    at,
+                    interface.number,
+                    interface.bulk_in.address.raw(),
+                    interface.bulk_out.address.raw(),
+                    interface.bulk_in.max_packet_size,
+                    speed
+                );
+                if let Some(entry) = self.pending_storage[index as usize].as_mut() {
+                    entry.dci_in = dci_in;
+                    entry.dci_out = dci_out;
+                }
                 let next = index + 1;
-                if self.pending.get(next as usize).is_some_and(Option::is_some) {
-                    Ok(Outcome::Continue(Step::ConfigureEndpoint { index: next }))
+                if self
+                    .pending_storage
+                    .get(next as usize)
+                    .is_some_and(Option::is_some)
+                {
+                    Ok(Outcome::Continue(Step::ConfigureBulk { index: next }))
                 } else {
                     Ok(Outcome::Bound)
                 }
@@ -869,6 +1038,60 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                 Ok(Outcome::Hub(descriptor))
             }
         }
+    }
+
+    /// What comes after keyboard interface `done` (or after SET_CONFIGURATION,
+    /// when `None`): the next keyboard, then the mass storage interfaces.
+    fn after_keyboard(&self, done: Option<u8>) -> Outcome {
+        let next = done.map_or(0, |index| index + 1);
+        if self.pending.get(next as usize).is_some_and(Option::is_some) {
+            Outcome::Continue(Step::ConfigureEndpoint { index: next })
+        } else if self.pending_storage[0].is_some() {
+            Outcome::Continue(Step::ConfigureBulk { index: 0 })
+        } else {
+            Outcome::Bound
+        }
+    }
+
+    /// Notes the mass storage interfaces of a configuration for binding, as
+    /// many as there is room for.  Returns how many were taken.
+    fn find_storage(&mut self, at: Bound, configuration: &[u8]) -> usize {
+        self.pending_storage = [None; MAX_INTERFACES_PER_DEVICE];
+        let found = match msc::find_interfaces(configuration) {
+            Ok(found) => found,
+            Err(error) => {
+                usb_println!("xHCI {}: configuration descriptor: {:?}", at, error);
+                return 0;
+            }
+        };
+        for rejected in &found.rejected {
+            usb_println!(
+                "xHCI {}: mass storage interface {} not used: {}",
+                at,
+                rejected.number,
+                rejected.reason
+            );
+        }
+        let room = registry::with_global(|r| r.free_places());
+        if found.interfaces.len() > room {
+            usb_println!(
+                "xHCI {}: {} mass storage interface(s) refused, {} already in use",
+                at,
+                found.interfaces.len() - room,
+                registry::MAX_DEVICES
+            );
+            registry::with_global(|r| r.note_rejected(found.interfaces.len() - room));
+        }
+        let mut taken = 0;
+        for interface in found.interfaces.into_iter().take(room) {
+            self.pending_storage[taken] = Some(PendingStorage {
+                interface,
+                dci_in: 0,
+                dci_out: 0,
+            });
+            taken += 1;
+        }
+        taken
     }
 
     // ---- the hub's downstream ports --------------------------------------
@@ -1254,11 +1477,16 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
     /// Releases the keyboard device on hub port `port`.
     fn detach_hub_device(&mut self, port: u8) {
         if let Some(slot) = self.bound_on_hub_port(port) {
-            self.unbind(slot);
+            let keyboards = self.unbind(slot);
             let _ = self.controller.disable_slot(slot);
             self.snapshot.hub_disconnects += 1;
-            usb_println!("xHCI hub port {}: keyboard detached", port);
-            self.room_freed();
+            if keyboards {
+                usb_println!("xHCI hub port {}: keyboard detached", port);
+                self.room_freed();
+            } else {
+                usb_println!("xHCI hub port {}: device detached", port);
+                self.report_memory();
+            }
         }
     }
 
@@ -1448,6 +1676,106 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         self.room_freed();
     }
 
+    // ---- mass storage -----------------------------------------------------
+
+    /// Carries out what each mass storage session asks for, a bounded number
+    /// of transfers per interface per poll.
+    fn poll_storage(&mut self) {
+        for index in 0..self.storage.len() {
+            for _ in 0..STORAGE_STEPS_PER_POLL {
+                if !self.step_storage(index) {
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Advances one interface by one transfer.  Returns false when there is
+    /// nothing more to do for it in this poll.
+    fn step_storage(&mut self, index: usize) -> bool {
+        let now = self.now();
+        let Self {
+            controller,
+            storage,
+            ..
+        } = self;
+        let Some(storage) = storage.get_mut(index) else {
+            return false;
+        };
+        registry::with_global(|r| storage.session.poll(now, r));
+        let slot = storage.slot;
+        if let Some((dci, deadline)) = storage.in_flight {
+            let result = match controller.poll_bulk(slot, dci, storage.session.in_buffer()) {
+                Some(result) => result,
+                None if now.wrapping_sub(deadline) < i64::MAX as u64 => {
+                    // The session's deadline has passed.  The transfer is
+                    // stopped before it is reported, so its buffer is free
+                    // again; if it cannot be stopped the endpoint is
+                    // quarantined and every later transfer on it fails.
+                    let _ = controller.cancel_bulk(slot, dci);
+                    Err(UsbError::Timeout)
+                }
+                None => return false,
+            };
+            storage.in_flight = None;
+            registry::with_global(|r| storage.session.complete(result, now, r));
+            return true;
+        }
+        let Some(transfer) = storage.session.wanted() else {
+            return false;
+        };
+        let deadline = storage.session.start(now);
+        let result = match transfer {
+            Transfer::BulkOut { len } => {
+                let dci = storage.dci_out;
+                match controller.submit_bulk(slot, dci, len, storage.session.out_data()) {
+                    Ok(()) => {
+                        storage.in_flight = Some((dci, deadline));
+                        return true;
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            Transfer::BulkIn { len } => {
+                let dci = storage.dci_in;
+                match controller.submit_bulk(slot, dci, len, &[]) {
+                    Ok(()) => {
+                        storage.in_flight = Some((dci, deadline));
+                        return true;
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            // Control transfers run to completion here, bounded by the
+            // controller's own one-second wait, the same as enumeration's.
+            Transfer::Control { setup } => controller.control_transfer(
+                slot,
+                setup.to_bytes(),
+                storage.session.in_buffer(),
+                setup.direction(),
+            ),
+            Transfer::ClearHalt { pipe } => {
+                let dci = match pipe {
+                    Pipe::In => storage.dci_in,
+                    Pipe::Out => storage.dci_out,
+                };
+                controller.reset_bulk(slot, dci).and_then(|()| {
+                    let endpoint = controller
+                        .bulk_endpoint_address(slot, dci)
+                        .ok_or(UsbError::InvalidRequest)?;
+                    controller.control_transfer(
+                        slot,
+                        msc::wire::clear_endpoint_halt(endpoint).to_bytes(),
+                        &mut [],
+                        Direction::Out,
+                    )
+                })
+            }
+        };
+        registry::with_global(|r| storage.session.complete(result, now, r));
+        true
+    }
+
     // ---- teardown --------------------------------------------------------
 
     /// Releases everything held for a root port and returns it to `Idle`.
@@ -1467,6 +1795,8 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         let freed = matches!(state, PortState::Bound { slot } if self.unbind(slot));
         if freed {
             usb_println!("xHCI port {}: keyboard detached", port);
+        } else if matches!(state, PortState::Bound { .. }) {
+            usb_println!("xHCI port {}: device detached", port);
         }
         match state {
             PortState::Enumerating { slot, .. }
@@ -1484,6 +1814,7 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
             self.snapshot.disconnects += 1;
         }
         self.pending = [None; MAX_INTERFACES];
+        self.pending_storage = [None; MAX_INTERFACES_PER_DEVICE];
         if freed {
             self.room_freed();
         } else if state != PortState::Idle {

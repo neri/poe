@@ -344,6 +344,13 @@ impl System {
         }
     }
 
+    /// True while [`Self::poll_services`] is running a service.  Code that
+    /// would otherwise wait for a service to make progress has to fail
+    /// instead: the service it is waiting for cannot run until it returns.
+    pub fn is_polling_services() -> bool {
+        unsafe { SERVICES_POLLING }
+    }
+
     pub fn service_failure_count() -> u64 {
         Self::shared().services.failures
     }

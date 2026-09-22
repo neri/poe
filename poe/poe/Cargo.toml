@@ -12,6 +12,8 @@ pc = []
 rpi = ["device_tree"]
 sbi = []
 uefi = []
+# Diagnostic commands for USB block devices
+usb = ["minios/usb"]
 
 [dependencies]
 minios = { path = "../../minios/" }

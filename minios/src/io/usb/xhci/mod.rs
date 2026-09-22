@@ -57,6 +57,16 @@ const MAX_INTERRUPT_ENDPOINTS: usize = 4;
 /// is eight; the rest is headroom for a device that declares a larger packet.
 const INTERRUPT_BUFFER_BYTES: usize = 64;
 
+/// Bulk endpoints one device may have configured: a mass storage interface
+/// has two, and a device is taken with up to four of them.
+const MAX_BULK_ENDPOINTS: usize = 8;
+
+/// Bytes of the DMA buffer behind one bulk endpoint, and so the largest bulk
+/// transfer.  One page: a TRB's buffer must not cross a 64 KiB boundary,
+/// which a page-aligned page never does, and it is a multiple of every bulk
+/// packet size.
+pub const BULK_BUFFER_BYTES: usize = 4096;
+
 /// How long a controller has to finish a reset or come out of `CNR`.
 const RESET_TIMEOUT_US: u64 = 1_000_000;
 
@@ -344,6 +354,23 @@ struct InterruptEndpoint<'e, E: XhciEnv> {
     completed: Option<Trb>,
 }
 
+/// One bulk endpoint of a device, with its own ring and buffer.
+struct BulkEndpoint<'e, E: XhciEnv> {
+    dci: u8,
+    direction: Direction,
+    ring: Ring<'e, E>,
+    buffer: Dma<'e, E, u8>,
+    max_packet_size: u16,
+    /// Address and length of the TRB of the transfer in flight.
+    in_flight: Option<(u64, usize)>,
+    /// The completion for that transfer, once it has arrived.
+    completed: Option<Trb>,
+    /// A transfer could not be stopped.  The controller may still own the
+    /// buffer, so the endpoint is not used again; its memory goes with the
+    /// slot, and only once Disable Slot has completed.
+    quarantined: bool,
+}
+
 /// A device that has been given a slot.
 struct DeviceSlot<'e, E: XhciEnv> {
     device_context: Dma<'e, E, u32>,
@@ -354,6 +381,7 @@ struct DeviceSlot<'e, E: XhciEnv> {
     /// second one for media keys, a receiver that is a keyboard and a mouse at
     /// once — so each is addressed by its device context index.
     interrupt_in: [Option<InterruptEndpoint<'e, E>>; MAX_INTERRUPT_ENDPOINTS],
+    bulk: [Option<BulkEndpoint<'e, E>>; MAX_BULK_ENDPOINTS],
     root_port: u8,
     speed: UsbSpeed,
     max_packet_size: u16,
@@ -872,6 +900,26 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
         if event.endpoint_id() != context::DCI_CONTROL
             && let Some(device) = self.slots.get_mut(slot).and_then(|s| s.as_mut())
             && let Some(endpoint) = device
+                .bulk
+                .iter_mut()
+                .flatten()
+                .find(|e| e.dci == event.endpoint_id())
+        {
+            // Only the completion of the TRB in flight counts.  A Stop
+            // Endpoint can leave an event behind for a TRB already given up.
+            if endpoint
+                .in_flight
+                .is_some_and(|(address, _)| address & !0xf == event.parameter & !0xf)
+            {
+                endpoint.completed = Some(event);
+            } else {
+                self.snapshot.unexpected_events += 1;
+            }
+            return;
+        }
+        if event.endpoint_id() != context::DCI_CONTROL
+            && let Some(device) = self.slots.get_mut(slot).and_then(|s| s.as_mut())
+            && let Some(endpoint) = device
                 .interrupt_in
                 .iter_mut()
                 .flatten()
@@ -1063,6 +1111,7 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
             input_context,
             control_ring,
             interrupt_in: [const { None }; MAX_INTERRUPT_ENDPOINTS],
+            bulk: [const { None }; MAX_BULK_ENDPOINTS],
             root_port: route.root_port,
             speed,
             max_packet_size,
@@ -1454,6 +1503,393 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
                 Some(Err(error))
             }
         }
+    }
+
+    fn bulk_endpoint(&self, slot: u8, dci: u8) -> Option<&BulkEndpoint<'e, E>> {
+        self.slots
+            .get(slot as usize)?
+            .as_ref()?
+            .bulk
+            .iter()
+            .flatten()
+            .find(|e| e.dci == dci)
+    }
+
+    fn bulk_endpoint_mut(&mut self, slot: u8, dci: u8) -> Option<&mut BulkEndpoint<'e, E>> {
+        self.slots
+            .get_mut(slot as usize)?
+            .as_mut()?
+            .bulk
+            .iter_mut()
+            .flatten()
+            .find(|e| e.dci == dci)
+    }
+
+    /// Adds a pair of bulk endpoints to `slot` in one Configure Endpoint and
+    /// returns their device context indexes, IN first.
+    ///
+    /// Endpoints already running on the slot — a keyboard interface of the
+    /// same device, say — are neither added again nor dropped.
+    pub fn configure_bulk_pair(
+        &mut self,
+        slot: u8,
+        bulk_in: (EndpointAddress, u16),
+        bulk_out: (EndpointAddress, u16),
+    ) -> Result<(u8, u8), UsbError> {
+        let pair = [(bulk_in, Direction::In), (bulk_out, Direction::Out)];
+        for ((endpoint, max_packet_size), direction) in pair {
+            if endpoint.direction() != direction
+                || endpoint.number() == 0
+                || max_packet_size == 0
+                || BULK_BUFFER_BYTES % max_packet_size as usize != 0
+            {
+                return Err(UsbError::InvalidRequest);
+            }
+        }
+        let index = slot as usize;
+        let Some(device) = self.slots.get(index).and_then(|s| s.as_ref()) else {
+            return Err(UsbError::InvalidRequest);
+        };
+        let dci_in = context::device_context_index(bulk_in.0.number(), Direction::In);
+        let dci_out = context::device_context_index(bulk_out.0.number(), Direction::Out);
+        let taken = |dci: u8| {
+            device.bulk.iter().flatten().any(|e| e.dci == dci)
+                || device.interrupt_in.iter().flatten().any(|e| e.dci == dci)
+        };
+        if taken(dci_in) || taken(dci_out) {
+            return Err(UsbError::InvalidRequest);
+        }
+        let mut free = device
+            .bulk
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.is_none())
+            .map(|(i, _)| i);
+        let (Some(free_in), Some(free_out)) = (free.next(), free.next()) else {
+            return Err(UsbError::ResourceExhausted);
+        };
+
+        let mut made = [None, None];
+        for (i, ((_, max_packet_size), direction)) in pair.into_iter().enumerate() {
+            made[i] = Some(BulkEndpoint {
+                dci: if direction == Direction::In {
+                    dci_in
+                } else {
+                    dci_out
+                },
+                direction,
+                ring: Ring::new(self.env).ok_or(UsbError::Dma)?,
+                buffer: Dma::new(self.env, BULK_BUFFER_BYTES, 4096).ok_or(UsbError::Dma)?,
+                max_packet_size,
+                in_flight: None,
+                completed: None,
+                quarantined: false,
+            });
+        }
+
+        let device = self.slots[index].as_mut().ok_or(UsbError::Disconnected)?;
+        let input = &device.input_context;
+        // As for an interrupt endpoint: the Slot Context comes along so that
+        // Context Entries covers the new endpoints, and everything else in it
+        // is copied from what the controller owns.
+        for word in 0..4 {
+            let value = device
+                .device_context
+                .read(self.layout.device_slot_word(word));
+            input.write(self.layout.input_slot_word(word), value);
+        }
+        let dw0 = input.read(self.layout.input_slot_word(0));
+        let entries = ((dw0 >> 27) as u8).max(dci_in).max(dci_out);
+        input.write(
+            self.layout.input_slot_word(0),
+            (dw0 & 0x07ff_ffff) | ((entries as u32) << 27),
+        );
+        input.write(self.layout.input_control_word(0), 0);
+        input.write(
+            self.layout.input_control_word(1),
+            1 | (1 << dci_in) | (1 << dci_out),
+        );
+        for endpoint in made.iter().flatten() {
+            let words = Self::bulk_context(endpoint).words();
+            for (word, value) in words.iter().enumerate() {
+                input.write(self.layout.input_endpoint_word(endpoint.dci, word), *value);
+            }
+        }
+        let input_address = input.device_address();
+        self.env.write_barrier();
+        let [made_in, made_out] = made;
+        device.bulk[free_in] = made_in;
+        device.bulk[free_out] = made_out;
+
+        let result = self.run_command(Trb {
+            parameter: input_address,
+            status: 0,
+            control: trb_flags::trb_type(trb_type::CONFIGURE_ENDPOINT) | ((slot as u32) << 24),
+        });
+        if result.is_err()
+            && let Some(device) = self.slots.get_mut(index).and_then(|s| s.as_mut())
+        {
+            device.bulk[free_in] = None;
+            device.bulk[free_out] = None;
+        }
+        result.map(|_| (dci_in, dci_out))
+    }
+
+    /// The Endpoint Context of a bulk endpoint, starting at the ring's
+    /// current enqueue position.
+    fn bulk_context(endpoint: &BulkEndpoint<'e, E>) -> EndpointContextFields {
+        EndpointContextFields {
+            endpoint_type: context::endpoint_type(TransferType::Bulk, endpoint.direction),
+            max_packet_size: endpoint.max_packet_size,
+            max_burst_size: 0,
+            interval: 0,
+            error_count: 3,
+            dequeue_pointer: endpoint.ring.next_address(),
+            dequeue_cycle: endpoint.ring.state.cycle(),
+            average_trb_length: BULK_BUFFER_BYTES as u16,
+            max_esit_payload: 0,
+        }
+    }
+
+    /// Queues one bulk transfer of `len` bytes on `dci`.  For OUT, `data` is
+    /// what is sent; for IN it is ignored and the bytes are collected with
+    /// [`Self::poll_bulk`].  One transfer per endpoint at a time.
+    pub fn submit_bulk(
+        &mut self,
+        slot: u8,
+        dci: u8,
+        len: usize,
+        data: &[u8],
+    ) -> Result<(), UsbError> {
+        if self
+            .slots
+            .get(slot as usize)
+            .and_then(|s| s.as_ref())
+            .is_none()
+        {
+            return Err(UsbError::Disconnected);
+        }
+        let env = self.env;
+        let endpoint = self
+            .bulk_endpoint_mut(slot, dci)
+            .ok_or(UsbError::InvalidRequest)?;
+        if endpoint.quarantined {
+            return Err(UsbError::ControllerFault);
+        }
+        if endpoint.in_flight.is_some() || len > BULK_BUFFER_BYTES {
+            return Err(UsbError::InvalidRequest);
+        }
+        if endpoint.direction == Direction::Out {
+            if data.len() != len {
+                return Err(UsbError::InvalidRequest);
+            }
+            for (offset, byte) in data.iter().enumerate() {
+                endpoint.buffer.write(offset, *byte);
+            }
+        }
+        endpoint.completed = None;
+        let address = endpoint.ring.next_address();
+        let buffer = endpoint.buffer.device_address();
+        endpoint.ring.push(
+            env,
+            Trb {
+                parameter: buffer,
+                status: len as u32,
+                control: trb_flags::trb_type(trb_type::NORMAL)
+                    | trb_flags::INTERRUPT_ON_COMPLETION
+                    | trb_flags::INTERRUPT_ON_SHORT_PACKET,
+            },
+        );
+        endpoint.in_flight = Some((address, len));
+        unsafe { self.regs.ring_doorbell(slot, dci) };
+        self.snapshot.transfers += 1;
+        Ok(())
+    }
+
+    /// Collects the bulk transfer in flight on `dci`, if it has finished.
+    /// For IN, copies what arrived into `buffer`, which has to be as long as
+    /// the transfer asked for.
+    pub fn poll_bulk(
+        &mut self,
+        slot: u8,
+        dci: u8,
+        buffer: &mut [u8],
+    ) -> Option<Result<usize, UsbError>> {
+        self.poll_events();
+        let env = self.env;
+        let Some(endpoint) = self.bulk_endpoint_mut(slot, dci) else {
+            return Some(Err(UsbError::Disconnected));
+        };
+        let event = endpoint.completed.take()?;
+        let (_, len) = endpoint.in_flight.take()?;
+        match trb::completion_to_error(event.completion_code()) {
+            Ok(()) => {
+                let actual = len.saturating_sub(event.transfer_length() as usize);
+                if endpoint.direction == Direction::In {
+                    env.read_barrier();
+                    let copy = actual.min(buffer.len());
+                    for (offset, byte) in buffer[..copy].iter_mut().enumerate() {
+                        *byte = endpoint.buffer.read(offset);
+                    }
+                }
+                Some(Ok(actual))
+            }
+            Err(error) => {
+                self.snapshot.transfer_errors += 1;
+                Some(Err(error))
+            }
+        }
+    }
+
+    /// The state of endpoint `dci` as the controller has it: 0 disabled,
+    /// 1 running, 2 halted, 3 stopped, 4 error.
+    fn endpoint_state(&self, slot: u8, dci: u8) -> Option<u8> {
+        let device = self.slots.get(slot as usize)?.as_ref()?;
+        self.env.read_barrier();
+        Some(
+            (device
+                .device_context
+                .read(self.layout.device_endpoint_word(dci, 0))
+                & 7) as u8,
+        )
+    }
+
+    fn endpoint_command(&mut self, kind: u8, slot: u8, dci: u8) -> Result<Trb, UsbError> {
+        self.run_command(Trb {
+            parameter: 0,
+            status: 0,
+            control: trb_flags::trb_type(kind) | ((dci as u32) << 16) | ((slot as u32) << 24),
+        })
+    }
+
+    /// Gives up the transfer in flight on `dci` and returns once the
+    /// controller has let go of it, so its buffer can be used again.
+    ///
+    /// Stop Endpoint, then Set TR Dequeue Pointer past the abandoned TRB.  An
+    /// endpoint that cannot be brought to a stop is quarantined: nothing is
+    /// queued on it again and its buffer is left alone.
+    pub fn cancel_bulk(&mut self, slot: u8, dci: u8) -> Result<(), UsbError> {
+        if self.bulk_endpoint(slot, dci).is_none() {
+            return Err(UsbError::InvalidRequest);
+        }
+        let result = self.stop_bulk(slot, dci).and_then(|()| {
+            let endpoint = self
+                .bulk_endpoint(slot, dci)
+                .ok_or(UsbError::InvalidRequest)?;
+            let dequeue = endpoint.ring.next_address();
+            let cycle = endpoint.ring.state.cycle();
+            self.run_command(Trb {
+                parameter: dequeue | cycle as u64,
+                status: 0,
+                control: trb_flags::trb_type(trb_type::SET_TR_DEQUEUE_POINTER)
+                    | ((dci as u32) << 16)
+                    | ((slot as u32) << 24),
+            })
+            .map(|_| ())
+        });
+        self.settle_bulk(slot, dci, result)
+    }
+
+    /// Brings `dci` to the Stopped state from wherever it is.
+    fn stop_bulk(&mut self, slot: u8, dci: u8) -> Result<(), UsbError> {
+        match self.endpoint_state(slot, dci) {
+            // Running: stop it.  The transfer in flight, if any, completes
+            // with Stopped and is dropped on the floor below.
+            Some(1) => match self.endpoint_command(trb_type::STOP_ENDPOINT, slot, dci) {
+                // It halted on its own in the meantime.
+                Ok(_) | Err(UsbError::InvalidRequest)
+                    if self.endpoint_state(slot, dci) != Some(2) =>
+                {
+                    Ok(())
+                }
+                Ok(_) | Err(UsbError::InvalidRequest) => self
+                    .endpoint_command(trb_type::RESET_ENDPOINT, slot, dci)
+                    .map(|_| ()),
+                Err(error) => Err(error),
+            },
+            // Halted after a STALL or an error: Reset Endpoint takes it to
+            // Stopped, and resets the data toggle as it does.
+            Some(2) => self
+                .endpoint_command(trb_type::RESET_ENDPOINT, slot, dci)
+                .map(|_| ()),
+            Some(3) => Ok(()),
+            Some(_) => Err(UsbError::InvalidRequest),
+            None => Err(UsbError::Disconnected),
+        }
+    }
+
+    /// Clears what an endpoint remembered of its last transfer once the
+    /// controller has let go of it, or quarantines it if that is not known.
+    fn settle_bulk(
+        &mut self,
+        slot: u8,
+        dci: u8,
+        result: Result<(), UsbError>,
+    ) -> Result<(), UsbError> {
+        self.poll_events();
+        if let Some(endpoint) = self.bulk_endpoint_mut(slot, dci) {
+            match result {
+                Ok(()) => {
+                    endpoint.in_flight = None;
+                    endpoint.completed = None;
+                }
+                Err(_) => endpoint.quarantined = true,
+            }
+        }
+        if result.is_ok() {
+            self.snapshot.endpoint_recoveries += 1;
+        }
+        result
+    }
+
+    /// The host's half of clearing a halt on bulk endpoint `dci`: the
+    /// endpoint is brought to a stop and then dropped and added back in one
+    /// Configure Endpoint, which is what returns its data toggle to DATA0
+    /// whether or not it had halted.  Reset Endpoint alone does that only
+    /// for a halted endpoint, and Reset Recovery clears endpoints that have
+    /// not.  The caller sends CLEAR_FEATURE(ENDPOINT_HALT) to the device.
+    pub fn reset_bulk(&mut self, slot: u8, dci: u8) -> Result<(), UsbError> {
+        if self.bulk_endpoint(slot, dci).is_none() {
+            return Err(UsbError::InvalidRequest);
+        }
+        let result = self.stop_bulk(slot, dci).and_then(|()| {
+            let device = self.slots[slot as usize]
+                .as_ref()
+                .ok_or(UsbError::Disconnected)?;
+            let endpoint = device
+                .bulk
+                .iter()
+                .flatten()
+                .find(|e| e.dci == dci)
+                .ok_or(UsbError::InvalidRequest)?;
+            let input = &device.input_context;
+            for word in 0..4 {
+                let value = device
+                    .device_context
+                    .read(self.layout.device_slot_word(word));
+                input.write(self.layout.input_slot_word(word), value);
+            }
+            input.write(self.layout.input_control_word(0), 1 << dci);
+            input.write(self.layout.input_control_word(1), 1 | (1 << dci));
+            for (word, value) in Self::bulk_context(endpoint).words().iter().enumerate() {
+                input.write(self.layout.input_endpoint_word(dci, word), *value);
+            }
+            let input_address = input.device_address();
+            self.env.write_barrier();
+            self.run_command(Trb {
+                parameter: input_address,
+                status: 0,
+                control: trb_flags::trb_type(trb_type::CONFIGURE_ENDPOINT) | ((slot as u32) << 24),
+            })
+            .map(|_| ())
+        });
+        self.settle_bulk(slot, dci, result)
+    }
+
+    /// The endpoint address behind bulk endpoint `dci`.
+    pub fn bulk_endpoint_address(&self, slot: u8, dci: u8) -> Option<EndpointAddress> {
+        let endpoint = self.bulk_endpoint(slot, dci)?;
+        EndpointAddress::new(dci / 2, endpoint.direction)
     }
 
     /// Runs one control transfer on `slot` and waits for it.

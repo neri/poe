@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run run-el2 run-xhci run-rpi3 run-rpi4 test test-usb apps kernel update kpart usb
+.PHONY: love all default clean install full run run-el2 run-xhci run-msc run-rpi3 run-rpi4 test test-usb apps kernel update kpart usb
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -64,6 +64,20 @@ run-xhci:
 		-kernel $(POE_BIN) \
 		-device qemu-xhci,id=xhci \
 		-device usb-kbd,id=kbd1,bus=xhci.0
+
+# USB mass storage, per docs/USB_MSC_RPI_PLAN.md: DISK is a raw image read
+# through usbblk/usbread in the POE shell.  p3=0 leaves the controller USB 2.0
+# only; otherwise QEMU attaches usb-storage to a SuperSpeed port, which the
+# stack does not drive.
+DISK ?= $(TEMP)/usb-disk.img
+run-msc:
+	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M \
+		-nographic \
+		-kernel $(POE_BIN) \
+		-device qemu-xhci,id=xhci,p3=0 \
+		-device usb-kbd,id=kbd1,bus=xhci.0 \
+		-drive if=none,id=stick,format=raw,file=$(DISK) \
+		-device usb-storage,bus=xhci.0,drive=stick
 
 # QEMU tests of the xHCI stack (tools/usb-test.py).  They read its diagnostic
 # lines, so this rebuilds bin/kernel.img with minios/usb_debug and leaves that

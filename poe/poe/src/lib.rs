@@ -19,6 +19,9 @@ use minios::prelude::*;
 #[allow(unused_imports)]
 use tui::prelude::*;
 
+#[cfg(feature = "usb")]
+mod usbblk;
+
 #[allow(unused)]
 static SYSTEM_NAME: &str = "myosExp";
 
@@ -313,6 +316,8 @@ pub fn main() {
             };
             match cmd {
                 "reboot" => System::reset_system(),
+                #[cfg(feature = "usb")]
+                "usbblk" | "usbread" | "usbwrite" | "usbbench" => usbblk::command(cmd, args),
                 _ => println!("{:?}: Bad command or file name.", cmd),
             }
         }

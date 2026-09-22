@@ -385,10 +385,22 @@ impl Dwc2 {
         // device can terminate them with a short packet, so derive the USB
         // byte count from that programmed size and then cap it to the
         // caller's logical request length.
-        let actual = slot
-            .programmed_length
-            .saturating_sub(remaining)
-            .min(slot.length);
+        //
+        // An OUT transfer is different: the core does not count HCTSIZ down
+        // as it sends, so "programmed - remaining" reads as zero on a real
+        // Raspberry Pi 3 even though the device acknowledged everything
+        // (HCINT = XFERCOMPL | CHHLTD | ACK).  QEMU does count it down, which
+        // hid this until the first bulk OUT (a mass storage CBW) ran on
+        // hardware.  Linux's dwc2 likewise takes a completed non-split OUT
+        // as its whole length (`dwc2_get_actual_xfer_length`).  Only
+        // XFERCOMPL says that; any other halt reports no progress below.
+        let actual = if slot.direction == Direction::Out && status & 1 != 0 {
+            slot.length
+        } else {
+            slot.programmed_length
+                .saturating_sub(remaining)
+                .min(slot.length)
+        };
         if status & (1 << 10) != 0 {
             unsafe {
                 crate::usb_println!(
