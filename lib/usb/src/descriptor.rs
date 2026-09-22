@@ -57,6 +57,8 @@ pub struct DeviceDescriptor {
     pub class: u8,
     pub subclass: u8,
     pub protocol: u8,
+    /// `bMaxPacketSize0` as sent: a byte count, except from a USB 3.x device
+    /// running at SuperSpeed, where it is the exponent 9 (512 bytes).
     pub max_packet_size_0: u8,
     pub vendor_id: u16,
     pub product_id: u16,
@@ -65,7 +67,13 @@ pub struct DeviceDescriptor {
 }
 impl DeviceDescriptor {
     pub fn parse(b: &[u8]) -> Result<Self, UsbError> {
-        if b.len() < 18 || b[0] != 18 || b[1] != 1 || !matches!(b[7], 8 | 16 | 32 | 64) {
+        if b.len() < 18 || b[0] != 18 || b[1] != 1 {
+            return Err(UsbError::InvalidDescriptor);
+        }
+        // 9 is only meaningful from a USB 3.x device; whether it fits the
+        // speed the device is running at is for the host controller to judge.
+        let superspeed = le16(b, 2)? >= 0x0300 && b[7] == 9;
+        if !superspeed && !matches!(b[7], 8 | 16 | 32 | 64) {
             return Err(UsbError::InvalidDescriptor);
         }
         Ok(Self {
@@ -227,6 +235,18 @@ mod tests {
         assert_eq!(d.vendor_id, 0x1c4f);
         assert_eq!(d.product_id, 0x0027);
         assert_eq!(d.configurations, 1);
+    }
+    #[test]
+    fn a_superspeed_device_gives_ep0_as_an_exponent() {
+        let mut b = [
+            18, 1, 0x20, 0x03, 0, 0, 0, 9, 0x4f, 0x1c, 0x27, 0x00, 0x10, 0x01, 1, 2, 0, 1,
+        ];
+        assert_eq!(DeviceDescriptor::parse(&b).unwrap().max_packet_size_0, 9);
+        b[3] = 0x02;
+        assert!(
+            DeviceDescriptor::parse(&b).is_err(),
+            "9 from a USB 2.0 device"
+        );
     }
     #[test]
     fn rejects_bad_device_descriptors() {

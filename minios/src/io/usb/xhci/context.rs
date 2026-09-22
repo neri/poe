@@ -49,19 +49,23 @@ pub const fn slot_speed(speed: UsbSpeed) -> u32 {
         UsbSpeed::Full => 1,
         UsbSpeed::Low => 2,
         UsbSpeed::High => 3,
+        UsbSpeed::Super => 4,
     }
 }
 
 /// Maps a `PORTSC` port speed ID back to a USB speed.
 ///
-/// SuperSpeed and above are reported as `None`: this driver does not drive
-/// them, and the caller skips the port rather than treating it as High Speed.
+/// SuperSpeed (4) is driven.  SuperSpeedPlus (5 and up) is reported as `None`
+/// rather than folded into SuperSpeed: its Slot Context speed and packet
+/// rules differ, and a controller that has it is not one this targets.  The
+/// VL805 is USB 3.0 only.
 #[inline]
 pub const fn speed_from_port(id: u8) -> Option<UsbSpeed> {
     match id {
         1 => Some(UsbSpeed::Full),
         2 => Some(UsbSpeed::Low),
         3 => Some(UsbSpeed::High),
+        4 => Some(UsbSpeed::Super),
         _ => None,
     }
 }
@@ -69,12 +73,29 @@ pub const fn speed_from_port(id: u8) -> Option<UsbSpeed> {
 /// The default maximum packet size of EP0 before the device descriptor has
 /// been read.  Low Speed is fixed at 8; Full Speed may be 8, 16, 32 or 64 and
 /// is corrected with an Evaluate Context once the first eight bytes arrive.
+/// SuperSpeed is fixed at 512.
 #[inline]
 pub const fn default_max_packet_size(speed: UsbSpeed) -> u16 {
     match speed {
         UsbSpeed::Low => 8,
         UsbSpeed::Full => 8,
         UsbSpeed::High => 64,
+        UsbSpeed::Super => 512,
+    }
+}
+
+/// EP0's packet size from `bMaxPacketSize0` of a device descriptor.
+///
+/// From USB 3.0 on the field is an exponent (9 for 512 bytes) when the device
+/// runs at SuperSpeed, and a byte count otherwise.  `None` for a value that
+/// is not valid at `speed`.
+#[inline]
+pub const fn ep0_packet_size(speed: UsbSpeed, b_max_packet_size_0: u8) -> Option<u16> {
+    match (speed, b_max_packet_size_0) {
+        (UsbSpeed::Super, 9) => Some(512),
+        (UsbSpeed::Super, _) => None,
+        (_, size @ (8 | 16 | 32 | 64)) => Some(size as u16),
+        _ => None,
     }
 }
 
@@ -242,14 +263,15 @@ impl EndpointContextFields {
 /// Converts a `bInterval` from an endpoint descriptor into the `Interval`
 /// field of an Endpoint Context.
 ///
-/// The two are encoded differently by speed.  For High Speed interrupt
-/// endpoints `bInterval` is already a power-of-two exponent of 125 µs frames.
+/// The two are encoded differently by speed.  For High Speed and SuperSpeed
+/// interrupt endpoints `bInterval` is already a power-of-two exponent of
+/// 125 µs frames.
 /// For Low and Full Speed it is a frame count in milliseconds, which has to
 /// become the exponent of the largest power of two that does not exceed it,
 /// shifted by three because a frame is eight 125 µs intervals.
 pub fn interrupt_interval(speed: UsbSpeed, b_interval: u8) -> u8 {
     match speed {
-        UsbSpeed::High => b_interval.clamp(1, 16) - 1,
+        UsbSpeed::High | UsbSpeed::Super => b_interval.clamp(1, 16) - 1,
         UsbSpeed::Low | UsbSpeed::Full => {
             let frames = b_interval.max(1) as u32;
             // floor(log2(frames)) + 3, clamped to the encodable range.
@@ -330,5 +352,25 @@ mod tests {
         assert_eq!(interrupt_interval(UsbSpeed::Low, 1), 3);
         // A device reporting zero must not produce a shift of -1.
         assert_eq!(interrupt_interval(UsbSpeed::Full, 0), 3);
+        // SuperSpeed is encoded as High Speed.
+        assert_eq!(interrupt_interval(UsbSpeed::Super, 4), 3);
+    }
+
+    #[test]
+    fn superspeed_is_speed_id_four_with_a_512_byte_ep0() {
+        assert_eq!(speed_from_port(4), Some(UsbSpeed::Super));
+        assert_eq!(slot_speed(UsbSpeed::Super), 4);
+        assert_eq!(default_max_packet_size(UsbSpeed::Super), 512);
+        // SuperSpeedPlus is not folded into SuperSpeed.
+        assert_eq!(speed_from_port(5), None);
+    }
+
+    #[test]
+    fn ep0_packet_size_is_an_exponent_only_at_superspeed() {
+        assert_eq!(ep0_packet_size(UsbSpeed::Super, 9), Some(512));
+        assert_eq!(ep0_packet_size(UsbSpeed::Super, 64), None);
+        assert_eq!(ep0_packet_size(UsbSpeed::High, 64), Some(64));
+        assert_eq!(ep0_packet_size(UsbSpeed::Full, 8), Some(8));
+        assert_eq!(ep0_packet_size(UsbSpeed::Full, 9), None);
     }
 }

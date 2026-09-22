@@ -56,6 +56,6 @@ pub const fn child_split_route(
             port_number,
             hub_speed: UsbSpeed::High,
         }),
-        UsbSpeed::High => None,
+        UsbSpeed::High | UsbSpeed::Super => None,
     }
 }

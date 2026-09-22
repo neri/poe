@@ -213,9 +213,10 @@ pub unsafe fn init_with<C: ConfigAccess>(host: &mut PciHost<C>) -> Result<(), &'
     crate::io::usb::class::msc::registry::with_global(|r| r.set_clock(counter_us));
     let mut usb = XhciUsb::new(controller);
     usb_println!(
-        "xHCI: managing USB 2.0 root ports {:#06x} of {}",
+        "xHCI: managing root ports {:#06x} of {}, USB3 {:#06x}",
         usb.managed_ports(),
-        max_ports
+        max_ports,
+        usb.usb3_ports()
     );
 
     // Give enumeration a bounded foreground window, the same way the Pi 3

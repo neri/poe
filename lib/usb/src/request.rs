@@ -89,6 +89,7 @@ pub const DESCRIPTOR_INTERFACE: u8 = 4;
 pub const DESCRIPTOR_ENDPOINT: u8 = 5;
 pub const DESCRIPTOR_HID: u8 = 0x21;
 pub const DESCRIPTOR_HUB: u8 = 0x29;
+pub const DESCRIPTOR_SS_ENDPOINT_COMPANION: u8 = 0x30;
 
 #[cfg(test)]
 mod tests {

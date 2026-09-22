@@ -25,6 +25,9 @@ pub enum UsbSpeed {
     Low,
     Full,
     High,
+    /// USB 3.x SuperSpeed (5 Gb/s) or faster.  Only an xHCI controller
+    /// reaches it; the USB 2.0 paths never see this value.
+    Super,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

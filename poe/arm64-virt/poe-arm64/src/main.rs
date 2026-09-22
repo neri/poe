@@ -64,8 +64,16 @@ unsafe extern "C" fn _start() -> ! {
         "    mov     x2, #3 << 20",
         "    msr     cpacr_el1, x2",
         "",
-        // SCTLR_EL1: MMU and caches off, little endian (its reset value is partly UNKNOWN)
-        "    mov     x2, #0x0800",
+        // SCTLR_EL1: MMU and data cache off, instruction cache on (I, bit 12),
+        // little endian (its reset value is partly UNKNOWN).  With the MMU
+        // off every data access is Device memory, so DMA stays coherent
+        // without maintenance; instruction fetches alone are cached, which is
+        // safe because nothing writes code after this point (the relocations
+        // above are done).  The stale lines a previous stage may have left are
+        // invalidated first.
+        "    ic      iallu",
+        "    dsb     sy",
+        "    mov     x2, #0x1800",
         "    movk    x2, #0x30d0, lsl #16",
         "    msr     sctlr_el1, x2",
         "    isb",

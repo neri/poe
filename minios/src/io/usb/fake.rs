@@ -339,7 +339,7 @@ impl Bus {
                 status |= 1 << 1;
                 match self.devices[child].speed {
                     UsbSpeed::Low => status |= 1 << 9,
-                    UsbSpeed::High => status |= 1 << 10,
+                    UsbSpeed::High | UsbSpeed::Super => status |= 1 << 10,
                     UsbSpeed::Full => {}
                 }
             }

@@ -226,6 +226,7 @@ impl MscSession {
         let bot = self.bot.stats();
         if let Some(stats) = registry.stats_mut(self.handle) {
             stats.commands = bot.commands;
+            stats.bus_bytes_in = bot.bytes_in;
             stats.stalls = bot.stalls;
             stats.timeouts = bot.timeouts;
             stats.recoveries = bot.recoveries;

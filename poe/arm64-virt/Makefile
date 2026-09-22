@@ -67,14 +67,23 @@ run-xhci:
 
 # USB mass storage, per docs/USB_MSC_RPI_PLAN.md: DISK is a raw image read
 # through usbblk/usbread in the POE shell.  p3=0 leaves the controller USB 2.0
-# only; otherwise QEMU attaches usb-storage to a SuperSpeed port, which the
-# stack does not drive.
+# only, so the stick is High Speed; run-msc-ss keeps the SuperSpeed ports and
+# QEMU attaches it at SuperSpeed.
 DISK ?= $(TEMP)/usb-disk.img
 run-msc:
 	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M \
 		-nographic \
 		-kernel $(POE_BIN) \
 		-device qemu-xhci,id=xhci,p3=0 \
+		-device usb-kbd,id=kbd1,bus=xhci.0 \
+		-drive if=none,id=stick,format=raw,file=$(DISK) \
+		-device usb-storage,bus=xhci.0,drive=stick
+
+run-msc-ss:
+	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M \
+		-nographic \
+		-kernel $(POE_BIN) \
+		-device qemu-xhci,id=xhci \
 		-device usb-kbd,id=kbd1,bus=xhci.0 \
 		-drive if=none,id=stick,format=raw,file=$(DISK) \
 		-device usb-storage,bus=xhci.0,drive=stick

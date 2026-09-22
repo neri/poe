@@ -130,6 +130,48 @@ impl<'e, E: XhciEnv + ?Sized, T> Dma<'e, E, T> {
     }
 }
 
+impl<E: XhciEnv + ?Sized> Dma<'_, E, u8> {
+    /// Copies the first `dst.len()` bytes out of the buffer.
+    ///
+    /// Eight bytes per volatile load rather than one: with the data cache
+    /// off, as on the Raspberry Pi here, every load is its own trip to DRAM.
+    pub fn copy_to_slice(&self, dst: &mut [u8]) {
+        assert!(dst.len() <= self.len());
+        let base = self.as_ptr();
+        let words = if base as usize % 8 == 0 {
+            dst.len() / 8
+        } else {
+            0
+        };
+        for (i, chunk) in dst[..words * 8].chunks_exact_mut(8).enumerate() {
+            let word = unsafe { base.cast::<u64>().add(i).read_volatile() };
+            chunk.copy_from_slice(&word.to_ne_bytes());
+        }
+        for (offset, byte) in dst.iter_mut().enumerate().skip(words * 8) {
+            *byte = unsafe { base.add(offset).read_volatile() };
+        }
+    }
+
+    /// Copies `src` into the start of the buffer, eight bytes per volatile
+    /// store where it can.
+    pub fn copy_from_slice(&self, src: &[u8]) {
+        assert!(src.len() <= self.len());
+        let base = self.as_ptr();
+        let words = if base as usize % 8 == 0 {
+            src.len() / 8
+        } else {
+            0
+        };
+        for (i, chunk) in src[..words * 8].chunks_exact(8).enumerate() {
+            let word = u64::from_ne_bytes(chunk.try_into().unwrap());
+            unsafe { base.cast::<u64>().add(i).write_volatile(word) };
+        }
+        for (offset, byte) in src.iter().enumerate().skip(words * 8) {
+            unsafe { base.add(offset).write_volatile(*byte) };
+        }
+    }
+}
+
 impl<E: XhciEnv + ?Sized, T> Drop for Dma<'_, E, T> {
     fn drop(&mut self) {
         unsafe { self.env.free_dma(self.allocation) }

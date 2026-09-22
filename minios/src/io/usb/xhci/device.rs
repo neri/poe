@@ -23,6 +23,12 @@
 //! keyboard — so there is no meaningful "one keyboard" to pick, and each
 //! interface gets its own key state.  A hub behind a hub and anything with no
 //! Boot Protocol keyboard interface are enumerated and then left alone.
+//!
+//! SuperSpeed devices are driven on the USB3 root ports only.  On a Raspberry
+//! Pi 4 or 400 that is exactly the blue sockets: the VL805's SuperSpeed lanes
+//! go straight to its four USB3 root ports, while all USB 2.0 lanes share the
+//! one USB 2.0 root port through the VL805's built-in hub.  A SuperSpeed hub
+//! is enumerated and then left alone.
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -33,7 +39,7 @@ use libusb::{
 };
 
 use super::hub::{self, HubDescriptor};
-use super::{BULK_BUFFER_BYTES, DeviceRoute, Xhci, XhciEnv, XhciSnapshot};
+use super::{BULK_BUFFER_BYTES, DeviceRoute, Xhci, XhciEnv, XhciSnapshot, context};
 use crate::env::{ServiceError, SystemService};
 use crate::io::usb::class::hid;
 use crate::io::usb::class::hid_keyboard::{BOOT_REPORT_SIZE, BootKeyboard};
@@ -42,8 +48,8 @@ use crate::io::usb::class::msc::registry::{self, Backend, DeviceInfo};
 use crate::io::usb::class::msc::{self, MAX_INTERFACES_PER_DEVICE, MscInterface, MscSession};
 use crate::usb_println;
 
-/// Root ports this tracks.  The Raspberry Pi 4's VL805 has four USB-A ports
-/// (eight root ports counting their SuperSpeed halves); QEMU's model has
+/// Root ports this tracks.  The Raspberry Pi 4's VL805 has five: one USB 2.0
+/// port carrying its built-in hub and four USB3 ports; QEMU's model has
 /// eight.  A controller with more leaves the rest unmanaged rather than
 /// growing this without bound.
 pub const MAX_ROOT_PORTS: usize = 16;
@@ -313,7 +319,7 @@ pub struct DeviceSnapshot {
 pub struct XhciUsb<'e, E: XhciEnv> {
     controller: Xhci<'e, E>,
     ports: [PortState; MAX_ROOT_PORTS],
-    /// Ports this drives at all: USB 2.0, within [`MAX_ROOT_PORTS`].
+    /// Ports this drives at all: USB 2.0 and USB3, within [`MAX_ROOT_PORTS`].
     managed: u16,
     /// The keyboard interfaces of the device currently being enumerated, and
     /// its class, which decides whether the hub path or the keyboard path
@@ -338,10 +344,10 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         let mut managed = 0u16;
         let ports = controller.port_count().min(MAX_ROOT_PORTS as u8);
         for port in 1..=ports {
-            // Only the USB 2.0 half of a port is driven.  A SuperSpeed port
-            // reports its link state and speed differently, and nothing here
-            // would know what to do with what it found.
-            if controller.port_protocol(port).is_usb2() {
+            // A port no Supported Protocol capability claims is left alone
+            // rather than guessed at.
+            let protocol = controller.port_protocol(port);
+            if protocol.is_usb2() || protocol.is_usb3() {
                 managed |= 1 << (port - 1);
             }
         }
@@ -419,6 +425,13 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
     /// The root ports this driver manages, as a bit per port (bit 0 = port 1).
     pub fn managed_ports(&self) -> u16 {
         self.managed
+    }
+
+    /// The managed root ports that are USB3, in the same form.
+    pub fn usb3_ports(&self) -> u16 {
+        (1..=MAX_ROOT_PORTS as u8)
+            .filter(|&port| self.manages(port) && self.controller.is_usb3_port(port))
+            .fold(0, |mask, port| mask | 1 << (port - 1))
     }
 
     /// True while some port is in a phase whose progress depends on time
@@ -585,6 +598,15 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         match self.controller.poll_port_reset(port) {
             None => {
                 if self.reached(deadline) {
+                    if self.controller.is_usb3_port(port) {
+                        let raw = self.controller.port_status(port).raw;
+                        usb_println!(
+                            "xHCI port {}: SuperSpeed link not up, PORTSC={:08x} (PLS {})",
+                            port,
+                            raw,
+                            (raw >> 5) & 0xf
+                        );
+                    }
                     self.fail_root(port);
                 }
             }
@@ -764,7 +786,8 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
     fn advance_enumeration(&mut self, port: u8, slot: u8, speed: UsbSpeed, step: Step) {
         let next = match self.run_step(Bound::Root(port), slot, speed, step) {
             Ok(next) => next,
-            Err(_) => {
+            Err(error) => {
+                usb_println!("xHCI port {}: {:?} failed: {:?}", port, step, error);
                 let _ = self.controller.disable_slot(slot);
                 self.fail_root(port);
                 return;
@@ -841,9 +864,10 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                 )?;
                 // A Full Speed device may have been addressed with the wrong
                 // EP0 size; its real one is only knowable from these bytes.
-                if head[7] >= 8 {
-                    self.controller.set_max_packet_size(slot, head[7] as u16)?;
-                }
+                // At SuperSpeed the byte is an exponent and always 512.
+                let size =
+                    context::ep0_packet_size(speed, head[7]).ok_or(UsbError::InvalidDescriptor)?;
+                self.controller.set_max_packet_size(slot, size)?;
                 Ok(Outcome::Continue(Step::DeviceDescriptor))
             }
             Step::DeviceDescriptor => {
@@ -867,6 +891,13 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     device.max_packet_size_0
                 );
                 if device.configurations == 0 {
+                    return Ok(Outcome::NotForUs);
+                }
+                if device.class == hub::CLASS_HUB && speed == UsbSpeed::Super {
+                    // Its descriptor, port status and Route String handling
+                    // all differ from a USB 2.0 hub's.  Its USB 2.0 half, if
+                    // any, is on the other bus and is handled there.
+                    usb_println!("xHCI {}: SuperSpeed hub, not supported", at);
                     return Ok(Outcome::NotForUs);
                 }
                 self.pending_class = device.class;
@@ -979,21 +1010,30 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     .flatten()
                     .ok_or(UsbError::InvalidRequest)?;
                 let interface = pending.interface;
+                // A companion's burst means nothing below SuperSpeed.
+                let burst = |b: u8| if speed == UsbSpeed::Super { b } else { 0 };
                 let (dci_in, dci_out) = self.controller.configure_bulk_pair(
                     slot,
-                    (interface.bulk_in.address, interface.bulk_in.max_packet_size),
+                    (
+                        interface.bulk_in.address,
+                        interface.bulk_in.max_packet_size,
+                        burst(interface.burst_in),
+                    ),
                     (
                         interface.bulk_out.address,
                         interface.bulk_out.max_packet_size,
+                        burst(interface.burst_out),
                     ),
                 )?;
                 usb_println!(
-                    "xHCI {}: mass storage interface {}, bulk {:#04x}/{:#04x}, {} bytes ({:?})",
+                    "xHCI {}: mass storage interface {}, bulk {:#04x}/{:#04x}, {} bytes, burst {}/{} ({:?})",
                     at,
                     interface.number,
                     interface.bulk_in.address.raw(),
                     interface.bulk_out.address.raw(),
                     interface.bulk_in.max_packet_size,
+                    burst(interface.burst_in),
+                    burst(interface.burst_out),
                     speed
                 );
                 if let Some(entry) = self.pending_storage[index as usize].as_mut() {

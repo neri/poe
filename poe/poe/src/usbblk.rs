@@ -54,6 +54,14 @@ pub fn command<'a>(name: &str, mut args: impl Iterator<Item = &'a str>) {
     }
 }
 
+/// The counters of the device at `index`, if it is attached.
+fn stats_of(index: usize) -> Option<msc::registry::DeviceStats> {
+    msc::devices()
+        .into_iter()
+        .find(|d| d.index == index)
+        .map(|d| d.stats)
+}
+
 /// Decimal, or hexadecimal with `0x`.
 fn parse(text: &str) -> Option<u64> {
     match text.strip_prefix("0x") {
@@ -201,6 +209,11 @@ fn bench(index: usize, seconds: u64, blocks: u64) {
     let buffer_len = (info.block_size as u64 * blocks) as usize;
     let mut buffer = vec_of(buffer_len);
     let mut timer = Event::with_timeout(Duration::from_secs(seconds));
+    // The rate is worked out from the hardware counter, not from `seconds`:
+    // the timer above counts interrupt ticks, which run slow whenever the
+    // interrupt is serviced late, so the loop can run well past `seconds`.
+    let started = msc::now_us();
+    let before = stats_of(index);
     let (mut lba, mut reads, mut errors, mut bytes) = (0u64, 0u64, 0u64, 0u64);
     let mut last_error = None;
     let mut stopped_early = false;
@@ -230,10 +243,20 @@ fn bench(index: usize, seconds: u64, blocks: u64) {
         }
         lba += blocks;
     }
+    let elapsed_us = msc::now_us().wrapping_sub(started);
+    minios::System::poll_services();
+    let after = stats_of(index);
     let rate = if stopped_early {
         String::from("stopped early")
+    } else if elapsed_us == 0 {
+        String::from("no clock")
     } else {
-        alloc::format!("{} KiB/s", bytes / 1024 / seconds)
+        alloc::format!(
+            "{} KiB/s over {}.{:03} s",
+            bytes as u128 * 1_000_000 / 1024 / elapsed_us as u128,
+            elapsed_us / 1_000_000,
+            elapsed_us / 1000 % 1000
+        )
     };
     println!(
         "usbbench: usb{} {} reads of {} blocks, {} KiB ({}), {} errors{}",
@@ -248,6 +271,25 @@ fn bench(index: usize, seconds: u64, blocks: u64) {
             None => String::new(),
         }
     );
+    // What the bus itself delivered, for comparing with the count above: the
+    // controller's received byte counts, the SCSI commands behind them, and a
+    // CRC of the last buffer to show it holds data (compare with usbread).
+    if let (Some(before), Some(after)) = (before, after) {
+        let commands = after.commands.wrapping_sub(before.commands);
+        let bus = after.bus_bytes_in.wrapping_sub(before.bus_bytes_in);
+        println!(
+            "usbbench: bus received {} KiB in {} commands ({} KiB each), last buffer lba {} crc32 {:08x}",
+            bus / 1024,
+            commands,
+            if commands == 0 {
+                0
+            } else {
+                bus / 1024 / commands
+            },
+            lba.wrapping_sub(blocks),
+            crc32(&buffer)
+        );
+    }
 }
 
 fn vec_of(len: usize) -> Vec<u8> {

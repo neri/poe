@@ -216,12 +216,12 @@ fn a_large_read_is_split_into_bounded_commands_and_packets() {
     let mut rig = Rig::new(FakeDisk::new(512, 256), 64);
     rig.ready();
     let before = rig.disk.opcodes.len();
-    assert_eq!(rig.read(3, 80).unwrap(), expected(512, 3, 80));
+    assert_eq!(rig.read(3, 200).unwrap(), expected(512, 3, 200));
     let reads = rig.disk.opcodes[before..]
         .iter()
         .filter(|&&op| op == scsi::opcode::READ_10)
         .count();
-    assert_eq!(reads, 3, "16 KiB per command: 32 + 32 + 16 blocks");
+    assert_eq!(reads, 2, "64 KiB per command: 128 + 72 blocks");
 }
 
 #[test]
@@ -728,6 +728,35 @@ fn refuses_malformed_or_foreign_mass_storage_by_name() {
             found.rejected[0].reason
         );
     }
+}
+
+#[test]
+fn superspeed_endpoints_carry_their_companion_burst() {
+    let companion = |burst: u8| [6u8, 0x30, burst, 0, 0, 0];
+    let mut body = interface(0, 0, 8, 6, 0x50, &[]);
+    body[4] = 2;
+    body.extend_from_slice(&bulk(0x81, 1024));
+    body.extend_from_slice(&companion(15));
+    body.extend_from_slice(&bulk(0x02, 1024));
+    body.extend_from_slice(&companion(3));
+    let found = find_interfaces(&config(&[&body])).unwrap();
+    assert_eq!(found.interfaces.len(), 1, "{:?}", found.rejected);
+    let i = found.interfaces[0];
+    assert_eq!(i.bulk_in.max_packet_size, 1024);
+    assert_eq!((i.burst_in, i.burst_out), (15, 3));
+
+    // A companion claiming more than 16 packets per burst is malformed.
+    let mut bad = interface(0, 0, 8, 6, 0x50, &[bulk(0x81, 1024)]);
+    bad.extend_from_slice(&companion(16));
+    bad.extend_from_slice(&bulk(0x02, 1024));
+    let found = find_interfaces(&config(&[&bad])).unwrap();
+    assert!(found.interfaces.is_empty());
+    assert!(found.rejected[0].reason.contains("burst"));
+
+    // Below SuperSpeed there are no companions and the burst stays zero.
+    let hs = interface(0, 0, 8, 6, 0x50, &[bulk(0x81, 512), bulk(0x02, 512)]);
+    let i = find_interfaces(&config(&[&hs])).unwrap().interfaces[0];
+    assert_eq!((i.burst_in, i.burst_out), (0, 0));
 }
 
 #[test]

@@ -91,6 +91,9 @@ pub enum MediaState {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DeviceStats {
     pub commands: u64,
+    /// Bytes the controller reported as received in data stages, counted
+    /// below everything that copies or checks them.
+    pub bus_bytes_in: u64,
     pub reads: u64,
     pub bytes_read: u64,
     pub read_errors: u64,
@@ -166,6 +169,7 @@ impl Entry {
         state: MediaState::Detached,
         stats: DeviceStats {
             commands: 0,
+            bus_bytes_in: 0,
             reads: 0,
             bytes_read: 0,
             read_errors: 0,
@@ -598,6 +602,14 @@ impl BlockHost for SystemHost {
     fn with_registry<R>(&mut self, f: impl FnOnce(&mut Registry) -> R) -> R {
         with_global(f)
     }
+}
+
+/// Microseconds from the clock the USB services use, which reads the
+/// hardware counter directly.  Unlike the system tick it does not depend on
+/// the timer interrupt being serviced on time.  Zero before a USB service
+/// has set it.
+pub fn now_us() -> u64 {
+    with_global(|r| r.now_us())
 }
 
 /// Lists the USB block devices the system knows about.

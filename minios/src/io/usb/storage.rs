@@ -544,6 +544,8 @@ mod tests {
                 number: 0,
                 bulk_in: endpoint(0x81, packet),
                 bulk_out: endpoint(0x02, packet),
+                burst_in: 0,
+                burst_out: 0,
             };
             let route = UsbRoute {
                 device_speed: UsbSpeed::Full,

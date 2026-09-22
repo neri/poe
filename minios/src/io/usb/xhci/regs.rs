@@ -89,6 +89,11 @@ pub mod portsc {
     pub const PORT_RESET_CHANGE: u32 = 1 << 21;
     pub const PORT_LINK_STATE_CHANGE: u32 = 1 << 22;
     pub const CONFIG_ERROR_CHANGE: u32 = 1 << 23;
+    /// `WPR`: warm reset, USB3 ports only.  Write-1, reads as zero.
+    pub const WARM_PORT_RESET: u32 = 1 << 31;
+
+    /// `PLS` of a USB3 port whose link is up.
+    pub const LINK_U0: u8 = 0;
 
     /// Every write-1-to-clear change bit.
     pub const CHANGE_MASK: u32 = CONNECT_STATUS_CHANGE
@@ -102,7 +107,7 @@ pub mod portsc {
     /// Bits that must be written as zero to leave the port alone.  `PED` is
     /// write-1-to-clear and *disables* the port, so a read-modify-write that
     /// keeps it set would drop the device.
-    pub const PRESERVE_MASK: u32 = !(CHANGE_MASK | PORT_ENABLED | PORT_RESET | (1 << 31));
+    pub const PRESERVE_MASK: u32 = !(CHANGE_MASK | PORT_ENABLED | PORT_RESET | WARM_PORT_RESET);
 
     #[inline]
     pub const fn link_state(value: u32) -> u8 {
@@ -429,9 +434,16 @@ pub struct PortProtocol {
 }
 
 impl PortProtocol {
-    /// True for a USB 2.0 port, which is the only kind this driver drives.
     #[inline]
     pub const fn is_usb2(&self) -> bool {
         self.major == 2
+    }
+
+    /// True for a USB3 (SuperSpeed) root port.  Its link trains and the port
+    /// enables itself without a reset, and a stuck link needs a warm reset
+    /// rather than the USB 2.0 kind.
+    #[inline]
+    pub const fn is_usb3(&self) -> bool {
+        self.major == 3
     }
 }

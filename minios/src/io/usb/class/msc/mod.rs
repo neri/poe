@@ -31,7 +31,7 @@ pub(crate) mod fake_disk;
 #[cfg(test)]
 mod tests;
 
-pub use registry::{DeviceSummary, MediaState, UsbBlockDevice, devices, open};
+pub use registry::{DeviceSummary, MediaState, UsbBlockDevice, devices, now_us, open};
 pub use session::MscSession;
 
 /// Mass storage interfaces taken from one device.
@@ -44,6 +44,11 @@ pub struct MscInterface {
     pub number: u8,
     pub bulk_in: EndpointDescriptor,
     pub bulk_out: EndpointDescriptor,
+    /// `bMaxBurst` of each endpoint's SuperSpeed Endpoint Companion: how many
+    /// packets beyond the first it may move per burst.  Zero for a device
+    /// that is not running at SuperSpeed, which has no companions.
+    pub burst_in: u8,
+    pub burst_out: u8,
 }
 
 /// A mass storage interface that was found and not taken, and why.
@@ -60,17 +65,25 @@ pub struct Found {
     pub rejected: Vec<Rejected>,
 }
 
-/// A bulk endpoint's packet size has to be one USB 2.0 allows: 8 to 64 at
-/// Full Speed, 512 at High Speed.
+/// A bulk endpoint's packet size has to be one USB allows: 8 to 64 at Full
+/// Speed, 512 at High Speed, 1024 at SuperSpeed.
 const fn bulk_packet_size_valid(size: u16) -> bool {
-    matches!(size, 8 | 16 | 32 | 64 | 512)
+    matches!(size, 8 | 16 | 32 | 64 | 512 | 1024)
 }
+
+/// The largest `bMaxBurst` a SuperSpeed Endpoint Companion may carry.
+const MAX_BURST: u8 = 15;
 
 #[derive(Clone, Copy)]
 struct Candidate {
     number: u8,
     bulk_in: Option<EndpointDescriptor>,
     bulk_out: Option<EndpointDescriptor>,
+    burst_in: u8,
+    burst_out: u8,
+    /// The bulk endpoint a companion descriptor would belong to: the one
+    /// just taken, until anything else comes between.
+    last: Option<Direction>,
     problem: Option<&'static str>,
 }
 
@@ -99,6 +112,8 @@ pub fn find_interfaces(config: &[u8]) -> Result<Found, UsbError> {
                         number: c.number,
                         bulk_in,
                         bulk_out,
+                        burst_in: c.burst_in,
+                        burst_out: c.burst_out,
                     });
                     return;
                 }
@@ -132,11 +147,15 @@ pub fn find_interfaces(config: &[u8]) -> Result<Found, UsbError> {
                     number: interface.number,
                     bulk_in: None,
                     bulk_out: None,
+                    burst_in: 0,
+                    burst_out: 0,
+                    last: None,
                     problem,
                 });
             }
             libusb::DESCRIPTOR_ENDPOINT => {
                 let Some(c) = current.as_mut() else { continue };
+                c.last = None;
                 let endpoint = EndpointDescriptor::parse(item.bytes)?;
                 if endpoint.transfer_type != TransferType::Bulk {
                     // CBI has an interrupt endpoint; it was already refused.
@@ -155,9 +174,31 @@ pub fn find_interfaces(config: &[u8]) -> Result<Found, UsbError> {
                         .get_or_insert("two bulk endpoints in one direction");
                 } else {
                     *slot = Some(endpoint);
+                    c.last = Some(endpoint.address.direction());
                 }
             }
-            _ => {}
+            libusb::DESCRIPTOR_SS_ENDPOINT_COMPANION => {
+                // Follows its endpoint directly.  Streams (bmAttributes) are
+                // for UAS; BOT does not use them.
+                let Some(c) = current.as_mut() else { continue };
+                let Some(direction) = c.last.take() else {
+                    continue;
+                };
+                let burst = *item.bytes.get(2).ok_or(UsbError::InvalidDescriptor)?;
+                if burst > MAX_BURST {
+                    c.problem.get_or_insert("invalid SuperSpeed max burst");
+                    continue;
+                }
+                match direction {
+                    Direction::In => c.burst_in = burst,
+                    Direction::Out => c.burst_out = burst,
+                }
+            }
+            _ => {
+                if let Some(c) = current.as_mut() {
+                    c.last = None;
+                }
+            }
         }
     }
     finish(current.take(), &mut found);

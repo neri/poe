@@ -20,8 +20,8 @@ while its device is still attached.  Those are checked on a Raspberry Pi 4/400.
 The mass storage scenarios (msc-*) read raw blocks of a known image through
 the POE shell's usbread command, typed on the UART, and compare CRC-32s.
 QEMU attaches usb-storage to a SuperSpeed port when the controller has one,
-and SuperSpeed is outside the plan, so they use qemu-xhci with p3=0 or put the
-device behind a hub.  QEMU's DWC2 and devices never NAK, stall or time out a
+so the High Speed ones use qemu-xhci with p3=0 or put the device behind a
+hub, and msc-superspeed leaves the SuperSpeed ports on.  QEMU's DWC2 and devices never NAK, stall or time out a
 bulk transfer on their own; those paths are covered by the unit tests
 (minios/src/io/usb/class/msc/tests.rs) and on real hardware.
 """
@@ -495,7 +495,7 @@ def msc_root(kernel, _dtb):
                 "-device", "usb-kbd,bus=xhci.0,port=2", uart=True)
     try:
         check(m.wait("USB MSC 0: ready, 16384 blocks of 512 bytes", timeout=30), "never ready")
-        check("512 bytes (High)" in m.text(), "not High Speed")
+        check("512 bytes, burst 0/0 (High)" in m.text(), "not High Speed")
         m.boot_shell()
         for lba, count in ((0, 1), (8191, 1), (16383, 1), (100, 64), (16000, 256)):
             read_ok(m, path, 0, lba, count)
@@ -520,12 +520,42 @@ def msc_hub(kernel, _dtb):
                 "-device", "usb-kbd,bus=xhci.0,port=1.2", uart=True)
     try:
         check(m.wait("USB MSC 0: ready, 4096 blocks", timeout=30), "never ready")
-        check("64 bytes (Full)" in m.text(), "not Full Speed")
+        check("64 bytes, burst 0/0 (Full)" in m.text(), "not Full Speed")
         m.boot_shell()
         read_ok(m, path, 0, 0, 1)
         read_ok(m, path, 0, 4095, 1)
         read_ok(m, path, 0, 1000, 40)
         check("j" in m.typed("j"), "the keyboard behind the same hub stopped")
+    finally:
+        m.stop()
+
+
+def msc_superspeed(kernel, _dtb, cycles=3):
+    """SuperSpeed mass storage on a USB3 root port — the blue sockets of a
+    Raspberry Pi 4 — next to a keyboard on a USB 2.0 one: 1024-byte packets,
+    reads, and plugged in and out with memory coming back every time."""
+    path = image(16384)
+    m = Machine(kernel, "-device", "qemu-xhci,id=xhci", *storage_drive(path),
+                "-device", "usb-storage,id=st,bus=xhci.0,port=1,drive=stick",
+                "-device", "usb-kbd,bus=xhci.0,port=2", uart=True)
+    try:
+        check(m.wait("USB MSC 0: ready, 16384 blocks of 512 bytes", timeout=30), "never ready")
+        check("1024 bytes, burst" in m.text() and "(Super)" in m.text(), "not SuperSpeed")
+        m.boot_shell()
+        for lba, count in ((0, 1), (16383, 1), (100, 64), (16000, 256)):
+            read_ok(m, path, 0, lba, count)
+        for cycle in range(1, cycles + 1):
+            m.run("device_del", id="st")
+            check(m.wait(": detached", cycle, 10), "cycle %d: no detach" % cycle)
+            time.sleep(0.3)
+            m.run("device_add", driver="usb-storage", id="st", bus="xhci.0", port="1",
+                  drive="stick")
+            check(m.wait("ready, 16384 blocks", cycle + 1, 15), "cycle %d: never ready" % cycle)
+            read_ok(m, path, ready_device(m), cycle * 10, cycle)
+        memory = m.memory()
+        check(len(memory) >= cycles, "memory was not reported on every detach")
+        check(len(set(memory)) == 1, "memory drifted across cycles: %s" % sorted(set(memory)))
+        check("k" in m.typed("k"), "the keyboard stopped")
     finally:
         m.stop()
 
@@ -725,6 +755,7 @@ SCENARIOS = {
     "raspberry-pi-3": raspberry_pi_3,
     "msc-root": msc_root,
     "msc-hub": msc_hub,
+    "msc-superspeed": msc_superspeed,
     "msc-4k": msc_4k,
     "msc-large": msc_large,
     "msc-hotplug": msc_hotplug,

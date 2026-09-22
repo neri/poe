@@ -40,8 +40,10 @@ pub const RESET_SETTLE_US: u64 = 150_000;
 /// What a whole Reset Recovery can take: three control requests and the
 /// settle time.
 pub const RECOVERY_BUDGET_US: u64 = 3 * CONTROL_TIMEOUT_US + RESET_SETTLE_US;
-/// Largest data stage of one command.
-pub const MAX_COMMAND_BYTES: usize = 16 * 1024;
+/// Largest data stage of one command.  Each command costs a CBW and a CSW
+/// whatever its size, so this is kept large: 64 KiB is also what Linux's
+/// usb-storage asks for per command by default.
+pub const MAX_COMMAND_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Pipe {
@@ -119,6 +121,8 @@ enum Phase {
 pub struct BotStats {
     pub commands: u64,
     pub transfers: u64,
+    /// Bytes the controller reported as received in data IN stages.
+    pub bytes_in: u64,
     pub stalls: u64,
     pub timeouts: u64,
     pub recoveries: u64,
@@ -370,6 +374,7 @@ impl Bot {
                 Ok(n) => {
                     let n = n.min(self.chunk);
                     self.transferred += n;
+                    self.stats.bytes_in += n as u64;
                     if n < self.chunk || self.transferred == self.expected {
                         self.phase = Phase::Csw;
                     }

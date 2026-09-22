@@ -62,10 +62,12 @@ const INTERRUPT_BUFFER_BYTES: usize = 64;
 const MAX_BULK_ENDPOINTS: usize = 8;
 
 /// Bytes of the DMA buffer behind one bulk endpoint, and so the largest bulk
-/// transfer.  One page: a TRB's buffer must not cross a 64 KiB boundary,
-/// which a page-aligned page never does, and it is a multiple of every bulk
+/// transfer: a whole command's data stage in one TRB, since the fixed cost of
+/// each transfer is what bounds throughput here.  The buffer is aligned to
+/// its own size, because a TRB's buffer must not cross a 64 KiB boundary; 64
+/// KiB is also the most one TRB can carry, and a multiple of every bulk
 /// packet size.
-pub const BULK_BUFFER_BYTES: usize = 4096;
+pub const BULK_BUFFER_BYTES: usize = 64 * 1024;
 
 /// How long a controller has to finish a reset or come out of `CNR`.
 const RESET_TIMEOUT_US: u64 = 1_000_000;
@@ -101,7 +103,7 @@ pub struct PortStatus {
     pub enabled: bool,
     pub resetting: bool,
     pub powered: bool,
-    /// `None` for a link the driver does not drive, such as SuperSpeed.
+    /// `None` for a link the driver does not drive, such as SuperSpeedPlus.
     pub speed: Option<UsbSpeed>,
     pub protocol: PortProtocol,
     pub raw: u32,
@@ -361,6 +363,9 @@ struct BulkEndpoint<'e, E: XhciEnv> {
     ring: Ring<'e, E>,
     buffer: Dma<'e, E, u8>,
     max_packet_size: u16,
+    /// `bMaxBurst` from the SuperSpeed Endpoint Companion; zero below
+    /// SuperSpeed.
+    max_burst: u8,
     /// Address and length of the TRB of the transfer in flight.
     in_flight: Option<(u64, usize)>,
     /// The completion for that transfer, once it has arrived.
@@ -415,6 +420,13 @@ pub struct Xhci<'e, E: XhciEnv> {
     transfer_events: EventQueue<16>,
     /// Ports whose status changed since the caller last asked.
     port_change: u64,
+    /// USB3 root ports, one bit per port (bit 0 = port 1), read once from the
+    /// Supported Protocol capabilities.  Their resets differ from USB 2.0's.
+    usb3_ports: u64,
+    /// USB 2.0 root ports, the same way.  Kept so that [`Self::port_status`],
+    /// which runs for every port on every poll, does not walk the extended
+    /// capabilities over PCIe each time.
+    usb2_ports: u64,
 
     snapshot: XhciSnapshot,
 }
@@ -471,8 +483,18 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
             command_events: EventQueue::new(),
             transfer_events: EventQueue::new(),
             port_change: 0,
+            usb3_ports: 0,
+            usb2_ports: 0,
             snapshot: XhciSnapshot::default(),
         };
+        for port in 1..=xhci.capabilities.max_ports.min(64) {
+            let protocol = xhci.port_protocol(port);
+            if protocol.is_usb3() {
+                xhci.usb3_ports |= 1 << (port - 1);
+            } else if protocol.is_usb2() {
+                xhci.usb2_ports |= 1 << (port - 1);
+            }
+        }
         xhci.allocate_scratchpad()?;
         unsafe { xhci.start()? };
         Ok(xhci)
@@ -721,6 +743,30 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
         .unwrap_or_default()
     }
 
+    /// The major revision of `port` as read at start-up, without touching
+    /// the controller.  The minor revision is not kept.
+    fn cached_protocol(&self, port: u8) -> PortProtocol {
+        let bit = if (1..=64).contains(&port) {
+            1u64 << (port - 1)
+        } else {
+            0
+        };
+        let major = if self.usb3_ports & bit != 0 {
+            3
+        } else if self.usb2_ports & bit != 0 {
+            2
+        } else {
+            0
+        };
+        PortProtocol { major, minor: 0 }
+    }
+
+    /// True if `port` is a USB3 (SuperSpeed) root port.
+    #[inline]
+    pub fn is_usb3_port(&self, port: u8) -> bool {
+        (1..=64).contains(&port) && self.usb3_ports & (1 << (port - 1)) != 0
+    }
+
     pub fn port_status(&self, port: u8) -> PortStatus {
         let raw = unsafe { self.regs.read_portsc(port) };
         PortStatus {
@@ -729,7 +775,7 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
             resetting: raw & regs::portsc::PORT_RESET != 0,
             powered: raw & regs::portsc::PORT_POWER != 0,
             speed: context::speed_from_port(regs::portsc::port_speed(raw)),
-            protocol: self.port_protocol(port),
+            protocol: self.cached_protocol(port),
             raw,
         }
     }
@@ -770,10 +816,33 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
     /// port itself; there is no separate SET_ADDRESS-time enable as on DWC2.
     /// It is split in two because reset signalling takes tens of milliseconds
     /// and this runs from a service poll that must not block that long.
+    ///
+    /// A USB3 port needs no reset at all: link training enables it on its
+    /// own, and a port already in U0 is left alone.  One whose link did not
+    /// come up — still training, or stuck in SS.Inactive or Compliance — gets
+    /// a warm reset, as Linux gives it; a hot reset (`PR`) cannot bring a
+    /// link out of those states.
     pub fn begin_port_reset(&mut self, port: u8) -> Result<(), UsbError> {
         let raw = unsafe { self.regs.read_portsc(port) };
         if raw & regs::portsc::CURRENT_CONNECT_STATUS == 0 {
             return Err(UsbError::Disconnected);
+        }
+        if self.is_usb3_port(port) {
+            if raw & regs::portsc::PORT_ENABLED != 0
+                && regs::portsc::link_state(raw) == regs::portsc::LINK_U0
+            {
+                return Ok(());
+            }
+            unsafe {
+                self.regs.write_portsc(
+                    port,
+                    (raw & regs::portsc::PRESERVE_MASK)
+                        | regs::portsc::WARM_PORT_RESET
+                        | regs::portsc::WARM_RESET_CHANGE
+                        | regs::portsc::PORT_RESET_CHANGE,
+                )
+            };
+            return Ok(());
         }
         unsafe {
             self.regs.write_portsc(
@@ -796,6 +865,22 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
         if status & regs::portsc::CURRENT_CONNECT_STATUS == 0 {
             self.acknowledge_port_change(port);
             return Some(Err(UsbError::Disconnected));
+        }
+        if self.is_usb3_port(port) {
+            // Done once the port is enabled and no reset is running, whether
+            // or not one was needed; `PRC`/`WRC` are only a hint here, since a
+            // port that trained by itself never sets them.
+            if status & regs::portsc::PORT_RESET != 0
+                || status & regs::portsc::PORT_ENABLED == 0
+                || regs::portsc::link_state(status) != regs::portsc::LINK_U0
+            {
+                return None;
+            }
+            self.acknowledge_port_change(port);
+            return Some(
+                context::speed_from_port(regs::portsc::port_speed(status))
+                    .ok_or(UsbError::Unsupported),
+            );
         }
         if status & regs::portsc::PORT_RESET != 0 || status & regs::portsc::PORT_RESET_CHANGE == 0 {
             return None;
@@ -1530,17 +1615,21 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
     ///
     /// Endpoints already running on the slot — a keyboard interface of the
     /// same device, say — are neither added again nor dropped.
+    ///
+    /// Each endpoint is its address, packet size and SuperSpeed Max Burst
+    /// (zero below SuperSpeed).
     pub fn configure_bulk_pair(
         &mut self,
         slot: u8,
-        bulk_in: (EndpointAddress, u16),
-        bulk_out: (EndpointAddress, u16),
+        bulk_in: (EndpointAddress, u16, u8),
+        bulk_out: (EndpointAddress, u16, u8),
     ) -> Result<(u8, u8), UsbError> {
         let pair = [(bulk_in, Direction::In), (bulk_out, Direction::Out)];
-        for ((endpoint, max_packet_size), direction) in pair {
+        for ((endpoint, max_packet_size, max_burst), direction) in pair {
             if endpoint.direction() != direction
                 || endpoint.number() == 0
                 || max_packet_size == 0
+                || max_burst > 15
                 || BULK_BUFFER_BYTES % max_packet_size as usize != 0
             {
                 return Err(UsbError::InvalidRequest);
@@ -1570,7 +1659,7 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
         };
 
         let mut made = [None, None];
-        for (i, ((_, max_packet_size), direction)) in pair.into_iter().enumerate() {
+        for (i, ((_, max_packet_size, max_burst), direction)) in pair.into_iter().enumerate() {
             made[i] = Some(BulkEndpoint {
                 dci: if direction == Direction::In {
                     dci_in
@@ -1579,8 +1668,10 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
                 },
                 direction,
                 ring: Ring::new(self.env).ok_or(UsbError::Dma)?,
-                buffer: Dma::new(self.env, BULK_BUFFER_BYTES, 4096).ok_or(UsbError::Dma)?,
+                buffer: Dma::new(self.env, BULK_BUFFER_BYTES, BULK_BUFFER_BYTES)
+                    .ok_or(UsbError::Dma)?,
                 max_packet_size,
+                max_burst,
                 in_flight: None,
                 completed: None,
                 quarantined: false,
@@ -1641,12 +1732,13 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
         EndpointContextFields {
             endpoint_type: context::endpoint_type(TransferType::Bulk, endpoint.direction),
             max_packet_size: endpoint.max_packet_size,
-            max_burst_size: 0,
+            max_burst_size: endpoint.max_burst,
             interval: 0,
             error_count: 3,
             dequeue_pointer: endpoint.ring.next_address(),
             dequeue_cycle: endpoint.ring.state.cycle(),
-            average_trb_length: BULK_BUFFER_BYTES as u16,
+            // A 16-bit hint; a full buffer does not fit it.
+            average_trb_length: BULK_BUFFER_BYTES.min(u16::MAX as usize) as u16,
             max_esit_payload: 0,
         }
     }
@@ -1683,9 +1775,7 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
             if data.len() != len {
                 return Err(UsbError::InvalidRequest);
             }
-            for (offset, byte) in data.iter().enumerate() {
-                endpoint.buffer.write(offset, *byte);
-            }
+            endpoint.buffer.copy_from_slice(data);
         }
         endpoint.completed = None;
         let address = endpoint.ring.next_address();
@@ -1728,9 +1818,7 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
                 if endpoint.direction == Direction::In {
                     env.read_barrier();
                     let copy = actual.min(buffer.len());
-                    for (offset, byte) in buffer[..copy].iter_mut().enumerate() {
-                        *byte = endpoint.buffer.read(offset);
-                    }
+                    endpoint.buffer.copy_to_slice(&mut buffer[..copy]);
                 }
                 Some(Ok(actual))
             }
@@ -1917,13 +2005,7 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
         }
 
         if direction == Direction::Out && !data.is_empty() {
-            for (offset, byte) in data.iter().enumerate() {
-                self.bounce.write(offset, *byte);
-            }
-        } else {
-            for offset in 0..data.len() {
-                self.bounce.write(offset, 0);
-            }
+            self.bounce.copy_from_slice(data);
         }
         let buffer_address = self.bounce.device_address();
         let length = data.len() as u32;
@@ -2035,9 +2117,7 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
 
         if direction == Direction::In && transferred > 0 {
             self.env.read_barrier();
-            for (offset, byte) in data[..transferred].iter_mut().enumerate() {
-                *byte = self.bounce.read(offset);
-            }
+            self.bounce.copy_to_slice(&mut data[..transferred]);
         }
         Ok(transferred)
     }
@@ -2110,6 +2190,22 @@ mod tests {
         }
 
         fn read_barrier(&self) {}
+    }
+
+    #[test]
+    fn dma_copies_move_every_byte_including_an_odd_tail() {
+        let env = TestEnv::new();
+        let buffer: Dma<'_, TestEnv, u8> = Dma::new(&env, 64, 64).unwrap();
+        let data: Vec<u8> = (1..=31).collect();
+        buffer.copy_from_slice(&data);
+        assert_eq!(buffer.read(30), 31);
+        assert_eq!(buffer.read(31), 0, "nothing past the data is written");
+        let mut back = [0u8; 31];
+        buffer.copy_to_slice(&mut back);
+        assert_eq!(&back[..], &data[..]);
+        let mut short = [0u8; 3];
+        buffer.copy_to_slice(&mut short);
+        assert_eq!(short, [1, 2, 3]);
     }
 
     #[test]
