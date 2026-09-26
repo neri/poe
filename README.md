@@ -32,17 +32,48 @@
 
 ✅ implemented / ❌ not yet / — not applicable
 
-| Feature           | PC/AT      | PC-98      | FM TOWNS   | UEFI (x64) | RV64 virt | RV32 virt | arm64 virt | RPi 3/4    | Chromebook bob |
-|-------------------|:----------:|:----------:|:----------:|:----------:|:---------:|:---------:|:----------:|:----------:|:--------------:|
-| Boot              | ✅         | ✅         | ✅         | ✅         | ✅        | ✅        | ✅         | ✅         | ✅             |
-| Text console      | ✅ CGA     | ✅         | ✅         | ✅         | ✅ SBI    | ✅ SBI    | ✅ PL011   | ✅ PL011   | ✅             |
-| Graphical console | ✅ VESA    | ✅ PEGC    | ✅ SVGA    | ✅ GOP     | —         | —         | ❌         | ✅ mailbox | ✅ coreboot FB |
-| Keyboard input    | ✅ PS/2    | ✅ BIOS    | ✅         | ✅         | ✅ SBI    | ✅ SBI    | ✅ PL011   | ✅ PL011   | ✅ ChromeOS EC |
-| Timer             | ✅ PIT     | ✅ PIT     | ✅ PIT     | ✅         | ✅        | ✅        | ✅         | ✅         | ✅             |
-| Panic handler     | ✅         | ✅         | ✅         | ❌         | ✅        | ✅        | ✅         | ✅         | ✅             |
-| Block device      | ✅ INT 13h | ✅ INT 1Bh | ✅ INT 93h | ✅         | ❌        | ❌        | ❌         | ❌         | ❌             |
+### x86
+
+| Feature           | PC/AT      | PC-98      | FM TOWNS   | UEFI (x64) |
+|-------------------|:----------:|:----------:|:----------:|:----------:|
+| Boot              | ✅         | ✅         | ✅         | ✅         |
+| Text-mode console | ✅ CGA     | ✅         | ✅         | ✅ UEFI    |
+| Serial console    | ✅ 16550*  | ❌         | ❌         | ❌         |
+| Graphical console | ✅ VESA    | ✅ PEGC    | ✅ SVGA    | ✅ GOP     |
+| Keyboard          | ✅ PS/2    | ✅ BIOS    | ✅         | ✅ UEFI    |
+| Timer             | ✅ PIT     | ✅ PIT     | ✅ PIT     | ✅         |
+| Panic handler     | ✅         | ✅         | ✅         | ❌         |
+| Block device      | ✅ INT 13h | ✅ INT 1Bh | ✅ INT 93h | ✅         |
+
+### RISC-V
+
+| Feature           | RV64 virt       | RV32 virt | VisionFive 2 |
+|-------------------|:---------------:|:---------:|:------------:|
+| Boot              | ✅              | ✅        | ✅           |
+| Text-mode console | —               | —         | —            |
+| Serial console    | ✅ SBI          | ✅ SBI    | ✅ SBI       |
+| Graphical console | ✅ VirtIO GPU   | —         | ✅ HDMI      |
+| Keyboard          | ✅ USB          | ❌        | ✅ USB       |
+| Timer             | ✅              | ✅        | ✅           |
+| Panic handler     | ✅              | ✅        | ✅           |
+| Block device      | ✅ USB / VirtIO | ❌        | ✅ USB       |
+
+### Arm64
+
+| Feature           | virt            | RPi 3/4       | Chromebook bob |
+|-------------------|:---------------:|:-------------:|:--------------:|
+| Boot              | ✅              | ✅            | ✅             |
+| Text-mode console | —               | —             | —              |
+| Serial console    | ✅ PL011        | ✅ PL011     | ❌             |
+| Graphical console | ✅ VirtIO GPU   | ✅ mailbox    | ✅ coreboot FB |
+| Keyboard          | ✅ USB          | ✅ USB        | ✅ ChromeOS EC |
+| Timer             | ✅              | ✅            | ✅             |
+| Panic handler     | ✅              | ✅            | ✅             |
+| Block device      | ✅ USB / VirtIO | ✅ USB        | ❌             |
 
 * RV32 virt runs on minisbi, the bundled SBI implementation.
+* The PC/AT 16550 serial console is implemented but disabled in the default build.
+* USB mass storage is read-only; VirtIO block devices support reads and writes.
 * Raspberry Pi 5 is not supported.
 
 ### Not yet
