@@ -11,12 +11,12 @@ use super::*;
 #[cfg(target_arch = "riscv64")]
 mod jh7110;
 mod memory;
-#[cfg(all(target_arch = "riscv64", feature = "virtio"))]
+#[cfg(feature = "virtio")]
 pub(crate) mod plic;
 pub mod sbi_console;
 pub mod timer;
 pub mod trap;
-#[cfg(all(feature = "usb", target_arch = "riscv64"))]
+#[cfg(feature = "usb")]
 mod usb;
 
 unsafe extern "C" {
@@ -80,7 +80,7 @@ impl Platform for CurrentPlatform {
                 crate::io::virtio::init(dt);
             }
 
-            #[cfg(all(feature = "usb", target_arch = "riscv64"))]
+            #[cfg(feature = "usb")]
             if let Some(dt) = System::device_tree()
                 && dt.root().is_compatible_with("riscv-virtio")
                 && let Err(reason) = usb::init(dt)

@@ -4,7 +4,7 @@ use core::sync::atomic::{Ordering, fence};
 #[inline]
 pub fn device() {
     fence(Ordering::SeqCst);
-    #[cfg(target_arch = "riscv64")]
+    #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
     unsafe {
         core::arch::asm!("fence iorw, iorw", options(nostack))
     };

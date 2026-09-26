@@ -31,8 +31,14 @@ def resize_disk(qmp_path, size):
 
 def run(arch, kernel, disk, commands, readonly=True, gic_version=2, devices=True,
         unknown_device=False, rng_only=False, smp=1):
-    binary = "qemu-system-aarch64" if arch == "aarch64" else "qemu-system-riscv64"
-    machine = ["-M", f"virt,gic-version={gic_version}", "-cpu", "cortex-a53", "-m", "512M", "-smp", str(smp)] if arch == "aarch64" else ["-M", "virt", "-smp", str(smp)]
+    binary = f"qemu-system-{arch}"
+    if arch == "aarch64":
+        machine = ["-M", f"virt,gic-version={gic_version}", "-cpu", "cortex-a53", "-m", "512M", "-smp", str(smp)]
+    elif arch == "riscv32":
+        # rv32 boots through the bundled minisbi, not OpenSBI.
+        machine = ["-M", "virt", "-bios", "none", "-smp", str(smp)]
+    else:
+        machine = ["-M", "virt", "-smp", str(smp)]
     argv = [binary, *machine, "-nographic", "-monitor", "none",
             "-global", "virtio-mmio.force-legacy=false", "-kernel", kernel]
     if devices or rng_only:
@@ -96,12 +102,12 @@ def run(arch, kernel, disk, commands, readonly=True, gic_version=2, devices=True
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arch", choices=["aarch64", "riscv64"], required=True)
+    parser.add_argument("--arch", choices=["aarch64", "riscv32", "riscv64"], required=True)
     parser.add_argument("--kernel", required=True)
     parser.add_argument("--gic-version", type=int, choices=[2, 3], default=2)
     parser.add_argument("--smp", type=int, default=1)
     args = parser.parse_args()
-    binary = "qemu-system-aarch64" if args.arch == "aarch64" else "qemu-system-riscv64"
+    binary = f"qemu-system-{args.arch}"
     irq_expected = "(active)" if args.arch == "aarch64" else "virq:"
     print(subprocess.check_output([binary, "--version"], text=True).splitlines()[0], flush=True)
     with tempfile.TemporaryDirectory() as directory:

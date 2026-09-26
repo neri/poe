@@ -1,4 +1,4 @@
-//! Polling VirtIO devices on QEMU Arm64 and RISC-V64 `virt`.
+//! Polling VirtIO devices on QEMU Arm64 and RISC-V (RV32/RV64) `virt`.
 mod barrier;
 pub mod block;
 mod dma;
@@ -22,13 +22,10 @@ use queue::Queue;
 use transport::Transport;
 
 use crate::System;
-#[cfg(not(any(
-    all(target_arch = "aarch64", feature = "arm64dt"),
-    all(target_arch = "riscv64", feature = "sbi")
-)))]
+#[cfg(not(any(all(target_arch = "aarch64", feature = "arm64dt"), feature = "sbi")))]
 use crate::platform::{CurrentPlatform, Platform};
 
-#[cfg(all(target_arch = "riscv64", feature = "sbi"))]
+#[cfg(feature = "sbi")]
 static QEMU_RV_VIRT: AtomicBool = AtomicBool::new(false);
 
 pub struct Device {
@@ -129,7 +126,7 @@ impl Device {
             // On QEMU RISC-V virt, multi-threaded TCG can leave WFI asleep
             // after a GPU completion. Poll only on that machine; other
             // platforms retain interrupt-driven waiting.
-            #[cfg(all(target_arch = "riscv64", feature = "sbi"))]
+            #[cfg(feature = "sbi")]
             if QEMU_RV_VIRT.load(Ordering::Relaxed) {
                 core::hint::spin_loop();
                 continue;
@@ -214,14 +211,11 @@ fn now_us() -> u64 {
     {
         return crate::platform::arm64dt::counter_us();
     }
-    #[cfg(all(target_arch = "riscv64", feature = "sbi"))]
+    #[cfg(feature = "sbi")]
     {
         return crate::platform::rv_sbi::timer::PlatformTimer::microseconds();
     }
-    #[cfg(not(any(
-        all(target_arch = "aarch64", feature = "arm64dt"),
-        all(target_arch = "riscv64", feature = "sbi")
-    )))]
+    #[cfg(not(any(all(target_arch = "aarch64", feature = "arm64dt"), feature = "sbi")))]
     {
         CurrentPlatform::monotonic()
     }
@@ -235,9 +229,12 @@ fn expired(limit: u64) -> bool {
 
 /// Enumerates at most 32 enabled DT nodes. Unsupported IDs are left untouched.
 pub fn init(dt: &fdt::DeviceTree) {
-    #[cfg(all(target_arch = "riscv64", feature = "sbi"))]
+    #[cfg(feature = "sbi")]
     {
-        QEMU_RV_VIRT.store(dt.root().is_compatible_with("riscv-virtio"), Ordering::Relaxed);
+        QEMU_RV_VIRT.store(
+            dt.root().is_compatible_with("riscv-virtio"),
+            Ordering::Relaxed,
+        );
         let _ = crate::platform::rv_sbi::plic::init(dt);
     }
     let mut count = 0;

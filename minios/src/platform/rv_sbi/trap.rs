@@ -188,7 +188,7 @@ unsafe fn _arch_handle_trap(ctx: &ExceptionContext) {
                     super::timer::PlatformTimer::advance_tick();
                     return;
                 }
-                #[cfg(all(target_arch = "riscv64", feature = "virtio"))]
+                #[cfg(feature = "virtio")]
                 0x0000_0009 => {
                     super::plic::handle_external();
                     return;

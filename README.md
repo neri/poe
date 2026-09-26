@@ -47,16 +47,16 @@
 
 ### RISC-V
 
-| Feature           | RV64 virt       | RV32 virt | VisionFive 2 |
-|-------------------|:---------------:|:---------:|:------------:|
-| Boot              | ✅              | ✅        | ✅           |
-| Text-mode console | —               | —         | —            |
-| Serial console    | ✅ SBI          | ✅ SBI    | ✅ SBI       |
-| Graphical console | ✅ VirtIO GPU   | —         | ✅ HDMI      |
-| Keyboard          | ✅ USB          | ❌        | ✅ USB       |
-| Timer             | ✅              | ✅        | ✅           |
-| Panic handler     | ✅              | ✅        | ✅           |
-| Block device      | ✅ USB / VirtIO | ❌        | ✅ USB       |
+| Feature           | RV64 virt       | RV32 virt       | VisionFive 2 |
+|-------------------|:---------------:|:---------------:|:------------:|
+| Boot              | ✅              | ✅              | ✅           |
+| Text-mode console | —               | —               | —            |
+| Serial console    | ✅ SBI          | ✅ SBI          | ✅ SBI       |
+| Graphical console | ✅ VirtIO GPU   | ✅ VirtIO GPU   | ✅ HDMI      |
+| Keyboard          | ✅ USB          | ✅ USB          | ✅ USB       |
+| Timer             | ✅              | ✅              | ✅           |
+| Panic handler     | ✅              | ✅              | ✅           |
+| Block device      | ✅ USB / VirtIO | ✅ USB / VirtIO | ✅ USB       |
 
 ### Arm64
 

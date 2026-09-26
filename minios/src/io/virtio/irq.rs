@@ -3,10 +3,7 @@
 //! the transport and wakes a waiting request.
 use core::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
-#[cfg(any(
-    all(target_arch = "aarch64", feature = "arm64dt"),
-    all(target_arch = "riscv64", feature = "sbi")
-))]
+#[cfg(any(all(target_arch = "aarch64", feature = "arm64dt"), feature = "sbi"))]
 use super::mmio::Mmio;
 
 struct Slot {
@@ -42,7 +39,7 @@ pub fn number(node: &fdt::Node<'_>) -> Option<(u32, bool)> {
             return Some((words[1].as_u32().checked_add(32)?, edge));
         }
     }
-    #[cfg(all(target_arch = "riscv64", feature = "sbi"))]
+    #[cfg(feature = "sbi")]
     {
         if words.len() == 1 {
             return Some((words[0].as_u32(), false));
@@ -77,12 +74,9 @@ pub fn register(base: usize, irq: u32, edge: bool) -> bool {
         )
         .is_ok()
     };
-    #[cfg(all(target_arch = "riscv64", feature = "sbi"))]
+    #[cfg(feature = "sbi")]
     let registered = crate::platform::rv_sbi::plic::register_source(irq);
-    #[cfg(not(any(
-        all(target_arch = "aarch64", feature = "arm64dt"),
-        all(target_arch = "riscv64", feature = "sbi")
-    )))]
+    #[cfg(not(any(all(target_arch = "aarch64", feature = "arm64dt"), feature = "sbi")))]
     let registered = false;
 
     if !registered {
@@ -112,7 +106,7 @@ fn handle() {
     }
 }
 
-#[cfg(all(target_arch = "riscv64", feature = "sbi"))]
+#[cfg(feature = "sbi")]
 pub fn handle_source(source: u32) {
     for slot in &SLOTS {
         if slot.irq.load(Ordering::Relaxed) != source {

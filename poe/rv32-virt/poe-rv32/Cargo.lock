@@ -193,6 +193,10 @@ name = "libhid"
 version = "0.1.0"
 
 [[package]]
+name = "libusb"
+version = "0.1.0"
+
+[[package]]
 name = "micromath"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -216,6 +220,7 @@ dependencies = [
  "guid",
  "heapless",
  "libhid",
+ "libusb",
  "minilib",
  "num",
  "paste",

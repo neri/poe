@@ -15,8 +15,14 @@ def main(arch, kernel, smp):
         disk = os.path.join(directory, "disk.img")
         with open(disk, "wb") as image:
             image.write(b"\0" * (512 * 1024))
-        binary = "qemu-system-aarch64" if arch == "aarch64" else "qemu-system-riscv64"
-        machine = ["-M", "virt", "-cpu", "cortex-a53", "-m", "512M", "-smp", str(smp)] if arch == "aarch64" else ["-M", "virt", "-smp", str(smp)]
+        binary = f"qemu-system-{arch}"
+        if arch == "aarch64":
+            machine = ["-M", "virt", "-cpu", "cortex-a53", "-m", "512M", "-smp", str(smp)]
+        elif arch == "riscv32":
+            # rv32 boots through the bundled minisbi, not OpenSBI.
+            machine = ["-M", "virt", "-bios", "none", "-smp", str(smp)]
+        else:
+            machine = ["-M", "virt", "-smp", str(smp)]
         argv = [binary, *machine, "-display", "none", "-serial", f"file:{serial}",
             "-monitor", "stdio",
             "-global", "virtio-mmio.force-legacy=false", "-kernel", kernel,
@@ -64,7 +70,7 @@ def main(arch, kernel, smp):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arch", choices=["aarch64", "riscv64"], required=True)
+    parser.add_argument("--arch", choices=["aarch64", "riscv32", "riscv64"], required=True)
     parser.add_argument("--kernel", required=True)
     parser.add_argument("--smp", type=int, default=1)
     args = parser.parse_args()
