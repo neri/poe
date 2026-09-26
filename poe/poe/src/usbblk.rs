@@ -152,11 +152,12 @@ fn read(index: usize, lba: u64, count: u64) {
     match device.read(LBA(lba), &mut buffer) {
         Ok(()) => {
             println!(
-                "usbread: usb{} lba {} count {} size {} crc32 {:08x}",
+                "usbread: usb{} lba {} count {} block_size {} bytes {} crc32 {:08x}",
                 index,
                 lba,
                 count,
                 block_size,
+                buffer.len(),
                 crc32(&buffer)
             );
             let mut line = String::new();

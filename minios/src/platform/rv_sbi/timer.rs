@@ -13,6 +13,7 @@ static mut TIMER: UnsafeCell<PlatformTimer> = UnsafeCell::new(PlatformTimer::new
 pub struct PlatformTimer {
     monotonic_timer_value: u64,
     timer_tick: u64,
+    timebase_frequency: u64,
 }
 
 impl PlatformTimer {
@@ -25,6 +26,7 @@ impl PlatformTimer {
         Self {
             monotonic_timer_value: 0,
             timer_tick: 0,
+            timebase_frequency: 0,
         }
     }
 
@@ -42,6 +44,7 @@ impl PlatformTimer {
             let timer_tick = timebase_freq / Self::TICKS_PER_SEC;
 
             shared.timer_tick = timer_tick as u64;
+            shared.timebase_frequency = timebase_freq as u64;
 
             CSR::SIE.set(1 << 5);
 
@@ -68,6 +71,17 @@ impl PlatformTimer {
     #[inline]
     pub fn duration_to_ticks(duration: Duration) -> u64 {
         System::duration_to_ticks_helper32(duration, Self::NANOS_PER_TICK)
+    }
+
+    /// Wall-clock independent microseconds for device deadlines. `rdtime`
+    /// keeps advancing while interrupts are disabled or foreground polls run.
+    pub fn microseconds() -> u64 {
+        let frequency = unsafe { Self::shared().timebase_frequency };
+        if frequency == 0 {
+            return 0;
+        }
+        let ticks = CSR::rdtime();
+        ticks / frequency * 1_000_000 + ticks % frequency * 1_000_000 / frequency
     }
 
     #[allow(unused)]

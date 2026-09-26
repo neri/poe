@@ -31,29 +31,7 @@ static CURRENT_VERSION: Version = Version::new(0, 0, 0, "");
 pub fn main() {
     System::set_graphics_mode_if_recommended();
 
-    #[allow(unreachable_code)]
-    {}
-
-    let info = System::boot_info();
-    let memsize1 = MemoryManager::total_memory_size();
-    let memsize2 = MemoryManager::total_extended_memory_size();
-    println!("{} v{}", SYSTEM_NAME, CURRENT_VERSION,);
-    if memsize2 > 0 {
-        let memsize1 = (memsize1 + 0xfffff) >> 20;
-        let memsize = memsize1 + memsize2;
-        print!(
-            "MEMORY {} GB ({} MB + {} MB)",
-            (memsize + 0x3ff) >> 10,
-            memsize1,
-            memsize2,
-        );
-    } else {
-        let memsize1 = (memsize1 + 0x3ff) >> 10;
-        print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
-    }
-    println!(", PLATFORM {}", info.platform_type);
-    println!("");
-
+    cmd_about();
     loop {
         print!("poe>");
         if let Some(line) = line_input(64) {
@@ -62,7 +40,9 @@ pub fn main() {
                 continue;
             };
             match cmd {
+                "about" => cmd_about(),
                 "reboot" => System::reset_system(),
+                "clear" => System::stdout().clear_screen(),
                 "tui" => tui_demo::tui_demo(),
                 "mode" => mode(),
                 #[cfg(feature = "usb")]
@@ -140,6 +120,28 @@ pub fn line_input(max_len: usize) -> Option<String> {
         }
     }
     Some(buf.into_iter().collect())
+}
+
+/// Display information about the system.
+pub fn cmd_about() {
+    let info = System::boot_info();
+    let memsize1 = MemoryManager::total_memory_size();
+    let memsize2 = MemoryManager::total_extended_memory_size();
+    println!("{} v{}", SYSTEM_NAME, CURRENT_VERSION,);
+    if memsize2 > 0 {
+        let memsize1 = (memsize1 + 0xfffff) >> 20;
+        let memsize = memsize1 + memsize2;
+        print!(
+            "MEMORY {} GB ({} MB + {} MB)",
+            (memsize + 0x3ff) >> 10,
+            memsize1,
+            memsize2,
+        );
+    } else {
+        let memsize1 = (memsize1 + 0x3ff) >> 10;
+        print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
+    }
+    println!(", PLATFORM {}", info.platform_type);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -280,6 +282,7 @@ pub fn mode() {
         }
 
         if exit_flag {
+            System::stdout().reset();
             break;
         }
     }

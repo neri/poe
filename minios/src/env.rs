@@ -727,7 +727,15 @@ impl ConsoleController {
                 current_mode.info.width as u32,
                 current_mode.info.height as u32,
             );
-            self.fbcon = FbCon::new(display, font).into();
+            let mut fbcon = FbCon::new(display, font);
+            if let Some(sync) = graphics.framebuffer_sync() {
+                fbcon.set_framebuffer_sync(
+                    sync,
+                    current_mode.fb.as_usize(),
+                    current_mode.info.bytes_per_scanline as usize,
+                );
+            }
+            self.fbcon = Some(fbcon);
 
             // SAFETY: to avoid lifetime
             System::_set_stdout(core::mem::transmute(

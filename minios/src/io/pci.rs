@@ -20,6 +20,9 @@
 //! (the root bus aliasing, the link guard) are tested against a fake window on
 //! the host rather than only on the board.
 
+#[cfg(feature = "device_tree")]
+pub mod host;
+
 /// A bus/device/function triple.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Bdf {

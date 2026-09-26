@@ -27,6 +27,13 @@ pub trait GraphicsOutputDevice {
     /// Detaches the graphics output device.
     /// This function is used to switch to the text mode.
     fn detach(&mut self);
+
+    /// Flush CPU writes from the framebuffer before a noncoherent device reads it.
+    /// The callback receives the physical framebuffer address and byte length.
+    fn framebuffer_sync(&self) -> Option<fn(usize, usize)> {
+        None
+    }
+
 }
 
 /// Video mode index type.

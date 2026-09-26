@@ -17,6 +17,9 @@ pub struct FbCon {
     font_height: usize,
     fg_color: IndexedColor,
     bg_color: IndexedColor,
+    framebuffer_sync: Option<(fn(usize, usize), usize, usize)>,
+    /// Scanlines `start..end` written since the last framebuffer sync.
+    dirty_lines: Option<(usize, usize)>,
 }
 
 impl FbCon {
@@ -37,6 +40,30 @@ impl FbCon {
             font_height,
             fg_color: IndexedColor::BLACK,
             bg_color: IndexedColor::BLACK,
+            framebuffer_sync: None,
+            dirty_lines: None,
+        }
+    }
+
+    pub fn set_framebuffer_sync(&mut self, sync: fn(usize, usize), address: usize, stride: usize) {
+        self.framebuffer_sync = Some((sync, address, stride));
+    }
+
+    fn mark_dirty(&mut self, y: usize, height: usize) {
+        let display_height = self.fb.bounding_box().size.height as usize;
+        let y = y.min(display_height);
+        let end = (y + height).min(display_height);
+        self.dirty_lines = Some(match self.dirty_lines {
+            Some((start, old_end)) => (start.min(y), old_end.max(end)),
+            None => (y, end),
+        });
+    }
+
+    fn sync_framebuffer(&mut self) {
+        if let Some((start, end)) = self.dirty_lines.take()
+            && let Some((sync, address, stride)) = self.framebuffer_sync
+        {
+            sync(address + start * stride, (end - start) * stride);
         }
     }
 
@@ -46,12 +73,14 @@ impl FbCon {
     }
 
     fn draw_cursor(&mut self, col: u8, row: u8, state: bool) {
+        let y = row as usize * self.font_height + self.font_height - 1;
+        self.mark_dirty(y, 1);
         self.fb
             .fill_solid(
                 &Rectangle::new(
                     Point::new(
                         (col as usize * self.font_width) as i32,
-                        (row as usize * self.font_height + self.font_height - 1) as i32,
+                        y as i32,
                     ),
                     Size::new(self.font_width as u32, 1),
                 ),
@@ -114,6 +143,7 @@ impl core::fmt::Write for FbCon {
                         row = new_row;
                     }
 
+                    self.mark_dirty(row as usize * self.font_height, self.font_height);
                     if ch == ' ' {
                         // for space char, just fill the background color
                         self.fb
@@ -154,6 +184,7 @@ impl core::fmt::Write for FbCon {
         if old_cursor_visible {
             self.enable_cursor(old_cursor_visible);
         }
+        self.sync_framebuffer();
         Ok(())
     }
 }
@@ -178,6 +209,7 @@ impl SimpleTextOutput for FbCon {
 
     fn clear_screen(&mut self) {
         let old_cursor_visible = self.enable_cursor(false);
+        self.mark_dirty(0, self.mode.rows as usize * self.font_height);
 
         self.fb
             .fill_solid(
@@ -197,6 +229,7 @@ impl SimpleTextOutput for FbCon {
         if old_cursor_visible {
             self.enable_cursor(old_cursor_visible);
         }
+        self.sync_framebuffer();
     }
 
     fn set_cursor_position(&mut self, col: u32, row: u32) {
@@ -210,6 +243,7 @@ impl SimpleTextOutput for FbCon {
                 old_cursor_visible,
             );
         }
+        self.sync_framebuffer();
     }
 
     fn enable_cursor(&mut self, visible: bool) -> bool {
@@ -218,6 +252,7 @@ impl SimpleTextOutput for FbCon {
             self.draw_cursor(self.mode.cursor_column, self.mode.cursor_row, visible);
         }
         self.mode.set_cursor_visible(visible);
+        self.sync_framebuffer();
         old_value
     }
 

@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run test apps kernel update
+.PHONY: love all default clean install full run run-usb run-usb-msc test apps kernel update
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -39,7 +39,19 @@ run:
 		-kernel $(POE_BIN) \
 		-serial mon:stdio
 
-# 		-device virtio-vga \
+# RISC-V PCI/xHCI polling path. The optional mass-storage disk is opened
+# read-only by QEMU; the guest exposes only read commands.
+run-usb: $(POE_BIN)
+	qemu-system-riscv64 -M virt -smp 1 -nographic \
+		-kernel $(POE_BIN) -device qemu-xhci -device usb-kbd \
+		-serial mon:stdio
+
+run-usb-msc: $(POE_BIN)
+	@test -n "$(DISK)" || (echo "usage: make run-usb-msc DISK=<raw image>"; exit 1)
+	qemu-system-riscv64 -M virt -smp 1 -nographic \
+		-kernel $(POE_BIN) -device qemu-xhci -device usb-kbd \
+		-drive if=none,id=stick,file=$(DISK),format=raw,readonly=on \
+		-device usb-storage,drive=stick -serial mon:stdio
 
 test: poe
 

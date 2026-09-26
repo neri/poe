@@ -8,9 +8,14 @@ use sbi::Eid;
 
 use super::*;
 
+#[cfg(target_arch = "riscv64")]
+mod jh7110;
+mod memory;
 pub mod sbi_console;
 pub mod timer;
 pub mod trap;
+#[cfg(all(feature = "usb", target_arch = "riscv64"))]
+mod usb;
 
 unsafe extern "C" {
     unsafe static _end: c_void;
@@ -32,9 +37,11 @@ impl Platform for CurrentPlatform {
             let boot_info = System::boot_info_mut();
             boot_info.platform_type = PlatformType::Sbi;
 
-            let end = PhysicalAddress::new(&_end as *const _ as PhysicalAddressRepr);
-            boot_info.start_conventional_memory = end.rounding_up_4k().as_repr() as u32;
-            boot_info.conventional_memory_size = 0x40_0000;
+            let kernel_end = &_end as *const _ as u64;
+            let (start, size) = memory::early_ram(dt, kernel_end)
+                .expect("no safe 32-bit RAM span after the RISC-V kernel");
+            boot_info.start_conventional_memory = start;
+            boot_info.conventional_memory_size = size;
 
             timer::PlatformTimer::init(dt);
 
@@ -57,12 +64,27 @@ impl Platform for CurrentPlatform {
             for item in dt.root().compatible().unwrap() {
                 println!("compatible: {}", item);
             }
+            #[cfg(target_arch = "riscv64")]
+            jh7110::init_early(dt);
         }
     }
 
     unsafe fn init(_arg: usize) {
         unsafe {
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
+
+            #[cfg(all(feature = "usb", target_arch = "riscv64"))]
+            if let Some(dt) = System::device_tree()
+                && dt.root().is_compatible_with("riscv-virtio")
+                && let Err(reason) = usb::init(dt)
+            {
+                println!("USB disabled: {}", reason);
+            }
+
+            #[cfg(target_arch = "riscv64")]
+            if let Some(dt) = System::device_tree() {
+                jh7110::init(dt);
+            }
 
             Hal::cpu().enable_interrupt();
         }
@@ -84,6 +106,14 @@ impl Platform for CurrentPlatform {
             sbi::system_reset_no_reason(sbi::ResetType::Shutdown).ok();
         }
         sbi::legacy::shutdown();
+    }
+
+    fn recommended_console_mode() -> RecommendedConsoleMode {
+        #[cfg(target_arch = "riscv64")]
+        if System::device_tree().is_some_and(jh7110::is_visionfive2) {
+            return RecommendedConsoleMode::Graphics;
+        }
+        RecommendedConsoleMode::None
     }
 
     #[inline]

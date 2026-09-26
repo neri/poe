@@ -139,7 +139,9 @@ pub fn probe_on<C: ConfigAccess>(host: &mut PciHost<C>) -> Result<XhciPciDevice,
     host.enable_memory_and_bus_master(bdf);
 
     let pin = host.read_u8(bdf, pci::config::INTERRUPT_PIN);
-    let irq = host.interrupt_for_device(bdf, pin);
+    let irq = host
+        .interrupt_for_device(bdf, pin)
+        .map(crate::arch::gic::Irq);
 
     usb_println!(
         "xHCI PCI: {} {:04x}:{:04x} BAR0 {:#x} ({:#x} bytes, bus {:#x}) COMMAND={:04x} pin {} INT{} {:?}",
