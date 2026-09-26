@@ -13,6 +13,7 @@ sbi = []
 # 64-bit Arm machines with a device tree (QEMU virt, Raspberry Pi 3/4, RK3399 Chromebooks)
 arm64dt = ["device_tree"]
 usb = ["dep:libusb"]
+virtio = ["device_tree"]
 # Diagnostic output from the USB stack.  Off by default: the console is
 # normally a TUI and the stack keeps enumerating in the background, so a line
 # printed from a hotplug or a retry lands in the middle of the screen.

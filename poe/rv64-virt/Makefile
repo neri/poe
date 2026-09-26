@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run run-usb run-usb-msc test apps kernel update
+.PHONY: love all default clean install full run run-usb run-usb-msc test apps kernel update run-virtio-rng run-virtio-blk run-virtio-gpu test-virtio
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -34,10 +34,29 @@ update: clean
 	(cd $(POE_SRC) && cargo update)
 
 run:
-	qemu-system-riscv64 -M virt -smp 4\
-		-nographic \
+	qemu-system-riscv64 -M virt -smp 4 \
 		-kernel $(POE_BIN) \
+		-global virtio-mmio.force-legacy=false -device virtio-gpu-device \
+		-device qemu-xhci -device usb-kbd \
 		-serial mon:stdio
+
+run-virtio-rng: $(POE_BIN)
+	qemu-system-riscv64 -M virt -smp 1 -nographic -global virtio-mmio.force-legacy=false -kernel $(POE_BIN) \
+		-object rng-builtin,id=rng0 -device virtio-rng-device,rng=rng0 -serial mon:stdio
+
+run-virtio-blk: $(POE_BIN)
+	@test -n "$(DISK)" || (echo "usage: make run-virtio-blk DISK=<raw image>"; exit 1)
+	qemu-system-riscv64 -M virt -smp 1 -nographic -global virtio-mmio.force-legacy=false -kernel $(POE_BIN) \
+		-drive if=none,id=vblk,format=raw,file=$(DISK),readonly=on \
+		-device virtio-blk-device,drive=vblk -serial mon:stdio
+
+run-virtio-gpu: $(POE_BIN)
+	qemu-system-riscv64 -M virt -smp 1 -display cocoa -serial mon:stdio -global virtio-mmio.force-legacy=false \
+		-kernel $(POE_BIN) -device virtio-gpu-device
+
+test-virtio: $(POE_BIN)
+	python3 ../arm64-virt/tools/virtio-test.py --arch riscv64 --kernel $(POE_BIN)
+	python3 ../arm64-virt/tools/virtio-gpu-test.py --arch riscv64 --kernel $(POE_BIN)
 
 # RISC-V PCI/xHCI polling path. The optional mass-storage disk is opened
 # read-only by QEMU; the guest exposes only read commands.

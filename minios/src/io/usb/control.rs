@@ -291,6 +291,7 @@ impl ControlTransfer {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
     use alloc::vec::Vec;
 
     use libusb::{DESCRIPTOR_DEVICE, TransferProgress};

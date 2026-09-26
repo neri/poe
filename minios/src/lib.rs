@@ -1,8 +1,10 @@
 //! Mini OS Library
 
-#![cfg_attr(not(test), no_std)]
+#![no_std]
 
 extern crate alloc;
+#[cfg(test)]
+extern crate std;
 
 pub mod arch;
 pub mod env;

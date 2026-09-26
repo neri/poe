@@ -11,6 +11,8 @@ use super::*;
 #[cfg(target_arch = "riscv64")]
 mod jh7110;
 mod memory;
+#[cfg(all(target_arch = "riscv64", feature = "virtio"))]
+pub(crate) mod plic;
 pub mod sbi_console;
 pub mod timer;
 pub mod trap;
@@ -73,6 +75,11 @@ impl Platform for CurrentPlatform {
         unsafe {
             println!("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
 
+            #[cfg(feature = "virtio")]
+            if let Some(dt) = System::device_tree() {
+                crate::io::virtio::init(dt);
+            }
+
             #[cfg(all(feature = "usb", target_arch = "riscv64"))]
             if let Some(dt) = System::device_tree()
                 && dt.root().is_compatible_with("riscv-virtio")
@@ -109,6 +116,10 @@ impl Platform for CurrentPlatform {
     }
 
     fn recommended_console_mode() -> RecommendedConsoleMode {
+        #[cfg(feature = "virtio")]
+        if crate::io::virtio::gpu::available() {
+            return RecommendedConsoleMode::Graphics;
+        }
         #[cfg(target_arch = "riscv64")]
         if System::device_tree().is_some_and(jh7110::is_visionfive2) {
             return RecommendedConsoleMode::Graphics;

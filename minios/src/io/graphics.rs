@@ -28,8 +28,9 @@ pub trait GraphicsOutputDevice {
     /// This function is used to switch to the text mode.
     fn detach(&mut self);
 
-    /// Flush CPU writes from the framebuffer before a noncoherent device reads it.
-    /// The callback receives the physical framebuffer address and byte length.
+    /// Make CPU writes in this physical framebuffer range visible on the scanout.
+    /// A device may also submit display update commands here. The callback must
+    /// not reenter the graphics console or poll system services.
     fn framebuffer_sync(&self) -> Option<fn(usize, usize)> {
         None
     }

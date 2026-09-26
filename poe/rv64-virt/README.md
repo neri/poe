@@ -77,3 +77,24 @@ Notes:
   register after each update.
 - For a read-only USB mass-storage check, use `usbblk` and `usbread 0 0 8` at
   the POE prompt, then repeat `usbblk` after reconnecting the device.
+
+# VirtIO on QEMU virt
+
+The image enables the independent `virtio` feature. Use
+`make run-virtio-rng`, `make run-virtio-blk DISK=/path/to/raw.img`,
+`make run-virtio-gpu`, or `make test-virtio`. The Make targets force modern
+virtio-mmio with `-global virtio-mmio.force-legacy=false` on QEMU 11.1.1.
+The shell commands are `virq`, `vrng`, `vblk`, `vread`, `vwrite`, `vflush`, and `vreset` (see the
+Arm64 virt README for arguments). The normal block target opens the image
+read-only; use a disposable image for writes. The driver supports RNG, block
+and a single 2D GPU scanout. The PLIC handles supervisor external interrupts,
+but synchronous VirtIO requests poll for completion on QEMU RISC-V `virt`. QEMU 11.1.1 with
+four harts and multi-threaded TCG sometimes delayed a `wfi` wakeup by almost
+one second; polling kept 40 GPU updates below 11 ms in 20 runs. The CPU is busy
+only while a request is pending, and `virq` may remain idle when polling
+acknowledges a completion first. Resize and advanced VirtIO features are not
+supported. The four-hart QEMU path is covered by the test scripts' `--smp 4` option.
+`make test-virtio` also checks boots with no VirtIO device and with an
+unsupported balloon device, plus a GPU screendump with RNG and block attached.
+The test uses QMP to resize a disposable block image and verifies that a
+`vreset` picks up the new capacity after the change notification.

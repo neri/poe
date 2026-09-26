@@ -19,6 +19,8 @@ use tui::prelude::*;
 
 #[cfg(feature = "usb")]
 mod usbblk;
+#[cfg(feature = "virtio")]
+mod virtio;
 
 mod tui_demo;
 
@@ -47,6 +49,8 @@ pub fn main() {
                 "mode" => mode(),
                 #[cfg(feature = "usb")]
                 "usbblk" | "usbread" | "usbwrite" | "usbbench" => usbblk::command(cmd, args),
+                #[cfg(feature = "virtio")]
+                "virq" | "vrng" | "vblk" | "vread" | "vwrite" | "vflush" | "vreset" => virtio::command(cmd, args),
                 _ => println!("{:?}: Bad command or file name.", cmd),
             }
         }

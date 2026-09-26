@@ -63,46 +63,86 @@ pub unsafe fn init(dt: &fdt::DeviceTree) -> heapless::String<64> {
     info
 }
 
-#[cfg(feature = "usb")]
-static mut USB_IRQ: Option<(Irq, fn())> = None;
+static mut HANDLERS: [Option<(Irq, fn())>; 64] = [None; 64];
 
-#[cfg(feature = "usb")]
-pub unsafe fn register_usb_handler(irq: Irq, handler: fn()) {
-    unsafe {
-        USB_IRQ = Some((irq, handler));
-        enable(irq)
+/// Registers an interrupt handler before CPU interrupts are enabled.
+/// The handler must acknowledge its device source before returning.
+pub unsafe fn register_handler(irq: Irq, handler: fn()) -> Result<(), &'static str> {
+    unsafe { register_handler_inner(irq, handler, None) }
+}
+
+pub unsafe fn register_handler_trigger(
+    irq: Irq,
+    handler: fn(),
+    edge: bool,
+) -> Result<(), &'static str> {
+    unsafe { register_handler_inner(irq, handler, Some(edge)) }
+}
+
+unsafe fn register_handler_inner(
+    irq: Irq,
+    handler: fn(),
+    trigger: Option<bool>,
+) -> Result<(), &'static str> {
+    if !can_enable(irq) {
+        return Err("unsupported IRQ");
     }
+    unsafe {
+        let _guard = Hal::cpu().interrupt_guard();
+        let handlers = &mut *(&raw mut HANDLERS);
+        if handlers
+            .iter()
+            .flatten()
+            .any(|(registered, _)| *registered == irq)
+        {
+            return Err("IRQ already registered");
+        }
+        let slot = handlers
+            .iter_mut()
+            .find(|slot| slot.is_none())
+            .ok_or("IRQ registry full")?;
+        if irq.0 >= 32
+            && let Some(edge) = trigger
+        {
+            match IRQ_CONTROLLER {
+                IrqController::GicV2 => Gic::configure_spi(irq, edge),
+                IrqController::GicV3 => GicV3::configure_spi(irq, edge),
+                IrqController::LocalIntc => {}
+            }
+        }
+        *slot = Some((irq, handler));
+        enable(irq);
+    }
+    Ok(())
 }
 
 #[cfg(feature = "usb")]
+pub unsafe fn register_usb_handler(irq: Irq, handler: fn()) {
+    unsafe { register_handler(irq, handler).expect("USB IRQ registration failed") }
+}
+
 pub fn dispatch(irq: Irq) -> bool {
     unsafe {
-        if let Some((expected, handler)) = USB_IRQ
-            && irq == expected
-        {
-            handler();
-            return true;
+        for &(registered, handler) in (&raw const HANDLERS).as_ref().unwrap().iter().flatten() {
+            if irq == registered {
+                handler();
+                return true;
+            }
         }
     }
     false
 }
 
-#[cfg(not(feature = "usb"))]
-pub fn dispatch(_irq: Irq) -> bool {
-    false
-}
-
 /// True if the interrupt controller in use can enable `irq`.
 ///
-/// The GICv3 driver here only handles SGIs and PPIs, so a driver that finds a
-/// shared peripheral interrupt in the device tree has to ask before enabling
-/// it — [`enable`] asserts rather than failing, and a device that can fall
-/// back to polling would otherwise take the whole boot down with it.
+/// A driver that finds an unsupported interrupt in the device tree can fall
+/// back to polling instead of stopping the boot.
 pub fn can_enable(irq: Irq) -> bool {
     unsafe {
         match IRQ_CONTROLLER {
-            IrqController::GicV3 => irq.0 < 32,
-            IrqController::GicV2 | IrqController::LocalIntc => true,
+            IrqController::GicV3 => GicV3::can_enable(irq),
+            IrqController::GicV2 => Gic::can_enable(irq),
+            IrqController::LocalIntc => true,
         }
     }
 }

@@ -7,6 +7,8 @@ pub mod hid_mgr;
 #[cfg(feature = "usb")]
 pub mod pci;
 pub mod tty;
+#[cfg(feature = "virtio")]
+pub mod virtio;
 #[cfg(feature = "usb")]
 pub mod usb;
 

@@ -19,6 +19,7 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::{Cell, RefCell, RefMut};
+use std::thread_local;
 
 use libusb::*;
 

@@ -12,7 +12,7 @@ static mut GIC: UnsafeCell<GicV3> = UnsafeCell::new(GicV3::new());
 
 /// Arm Generic Interrupt Controller version 3 (GICv3)
 ///
-/// Only SGIs and PPIs of the current CPU are supported for now.
+/// SGIs, PPIs and SPIs routed to the current CPU.
 pub struct GicV3 {
     gicd_base: usize,
     /// SGI_base frame of the redistributor for the current CPU
@@ -127,18 +127,54 @@ impl GicV3 {
 
     /// Enable the interrupt as Group 1 on the current CPU.
     pub unsafe fn enable(irq: Irq) {
-        assert!(irq.0 < 32, "GICv3: SPI is not supported yet");
         unsafe {
             let shared = Self::shared();
-            let bit = 1 << irq.0;
+            assert!(irq.0 < 1020 && irq.0 < Self::max_irq());
+            if irq.0 < 32 {
+                let bit = 1 << irq.0;
+                let igroupr0 = shared.sgi(GicR::IGROUPR0);
+                igroupr0.write_volatile(igroupr0.read_volatile() | bit);
+                ((shared.sgi_base + GicR::IPRIORITYR + irq.0 as usize) as *mut u8)
+                    .write_volatile(Self::DEFAULT_PRIORITY);
+                shared.sgi(GicR::ISENABLER0).write_volatile(bit);
+            } else {
+                let bit = 1 << (irq.0 % 32);
+                let group = shared.gicd(GicD::IGROUPR + (irq.0 / 32) as usize * 4);
+                group.write_volatile(group.read_volatile() | bit);
+                ((shared.gicd_base + GicD::IPRIORITYR + irq.0 as usize) as *mut u8)
+                    .write_volatile(Self::DEFAULT_PRIORITY);
+                let mpidr: u64;
+                asm!("mrs {}, mpidr_el1", out(reg) mpidr);
+                let affinity = (((mpidr >> 32) & 0xff) << 32) | (mpidr & 0xff_ffff);
+                ((shared.gicd_base + GicD::IROUTER + irq.0 as usize * 8) as *mut u64)
+                    .write_volatile(affinity);
+                shared
+                    .gicd(GicD::ISENABLER + (irq.0 / 32) as usize * 4)
+                    .write_volatile(bit);
+            }
+            asm!("dsb sy", options(nostack));
+        }
+    }
 
-            let igroupr0 = shared.sgi(GicR::IGROUPR0);
-            igroupr0.write_volatile(igroupr0.read_volatile() | bit);
+    pub fn can_enable(irq: Irq) -> bool {
+        irq.0 < 1020 && irq.0 < unsafe { Self::max_irq() }
+    }
 
-            ((shared.sgi_base + GicR::IPRIORITYR + irq.0 as usize) as *mut u8)
-                .write_volatile(Self::DEFAULT_PRIORITY);
+    pub unsafe fn configure_spi(irq: Irq, edge: bool) {
+        assert!(irq.0 >= 32 && Self::can_enable(irq));
+        unsafe {
+            let shared = Self::shared();
+            let register = shared.gicd(GicD::ICFGR + (irq.0 / 16) as usize * 4);
+            let bit = 1 << ((irq.0 % 16) * 2 + 1);
+            let value = register.read_volatile();
+            register.write_volatile(if edge { value | bit } else { value & !bit });
+        }
+    }
 
-            shared.sgi(GicR::ISENABLER0).write_volatile(bit);
+    unsafe fn max_irq() -> u32 {
+        unsafe {
+            let shared = Self::shared();
+            ((shared.gicd(GicD::TYPER).read_volatile() & 0x1f) + 1) * 32
         }
     }
 
@@ -167,6 +203,12 @@ struct GicD;
 
 impl GicD {
     const CTLR: usize = 0x0000;
+    const TYPER: usize = 0x0004;
+    const IGROUPR: usize = 0x0080;
+    const ISENABLER: usize = 0x0100;
+    const IPRIORITYR: usize = 0x0400;
+    const ICFGR: usize = 0x0c00;
+    const IROUTER: usize = 0x6000;
 
     const CTLR_ENABLE_G1: u32 = 1 << 0;
     const CTLR_ENABLE_G1A: u32 = 1 << 1;

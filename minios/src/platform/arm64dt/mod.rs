@@ -109,6 +109,8 @@ impl Platform for CurrentPlatform {
             Hal::cpu().enable_interrupt();
 
             if let Some(dt) = System::device_tree() {
+                #[cfg(feature = "virtio")]
+                crate::io::virtio::init(dt);
                 #[cfg(feature = "usb")]
                 if rpi::current_machine_type() == rpi::MachineType::RaspberryPi3 {
                     if let Err(reason) = rpi::usb::init(dt) {
@@ -142,7 +144,10 @@ impl Platform for CurrentPlatform {
                     rpi::init_graphics();
                     true
                 } else {
-                    init_firmware_framebuffer(dt)
+                    #[cfg(feature = "virtio")]
+                    if crate::io::virtio::gpu::available() { true } else { init_firmware_framebuffer(dt) }
+                    #[cfg(not(feature = "virtio"))]
+                    { init_firmware_framebuffer(dt) }
                 };
             }
         }
@@ -249,7 +254,7 @@ pub unsafe fn clean_dtb_cache(dtb: usize) {
 const MAX_DTB_SIZE: usize = 0x20_0000;
 
 /// Microseconds from the counter, available without the timer interrupt
-pub(super) fn counter_us() -> u64 {
+pub(crate) fn counter_us() -> u64 {
     let cntvct: u64;
     unsafe {
         asm!("isb", "mrs {}, cntvct_el0", out(reg) cntvct);

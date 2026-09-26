@@ -71,6 +71,27 @@ impl Gic {
         }
     }
 
+    pub unsafe fn configure_spi(irq: Irq, edge: bool) {
+        assert!(irq.0 >= 32 && Self::can_enable(irq));
+        unsafe {
+            let shared = Self::shared();
+            let register = shared.gicd(GicD::ICFGR).add((irq.0 / 16) as usize);
+            let bit = 1 << ((irq.0 % 16) * 2 + 1);
+            let value = register.read_volatile();
+            register.write_volatile(if edge { value | bit } else { value & !bit });
+        }
+    }
+
+    pub fn can_enable(irq: Irq) -> bool {
+        if irq.0 >= 1020 {
+            return false;
+        }
+        unsafe {
+            let shared = Self::shared();
+            irq.0 < ((shared.gicd(GicD::TYPER).read_volatile() & 0x1f) + 1) * 32
+        }
+    }
+
     /// Acknowledge the highest priority pending interrupt.
     ///
     /// Returns [`IRQ_SPURIOUS`] if no interrupt is pending.

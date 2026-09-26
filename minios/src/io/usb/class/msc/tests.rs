@@ -10,6 +10,7 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
+use std::thread_local;
 
 use libusb::UsbError;
 

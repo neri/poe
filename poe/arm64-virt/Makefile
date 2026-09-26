@@ -1,4 +1,4 @@
-.PHONY: love all default clean install full run run-el2 run-xhci run-msc run-rpi3 run-rpi4 test test-usb apps kernel update kpart usb
+.PHONY: love all default clean install full run run-el2 run-xhci run-msc run-rpi3 run-rpi4 test test-usb apps kernel update kpart usb run-virtio-rng run-virtio-blk run-virtio-gpu test-virtio
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -52,8 +52,30 @@ update: clean
 
 run:
 	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M \
-		-nographic \
-		-kernel $(POE_BIN)
+		-kernel $(POE_BIN) \
+		-global virtio-mmio.force-legacy=false -device virtio-gpu-device \
+		-device qemu-xhci,id=xhci \
+		-device usb-kbd,id=kbd1,bus=xhci.0 \
+		-serial mon:stdio
+
+run-virtio-rng: $(POE_BIN)
+	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M -nographic -global virtio-mmio.force-legacy=false \
+		-kernel $(POE_BIN) -object rng-builtin,id=rng0 -device virtio-rng-device,rng=rng0
+
+run-virtio-blk: $(POE_BIN)
+	@test "$(origin DISK)" = "command line" || (echo "usage: make run-virtio-blk DISK=<raw image>"; exit 1)
+	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M -nographic -global virtio-mmio.force-legacy=false \
+		-kernel $(POE_BIN) -drive if=none,id=vblk,format=raw,file=$(DISK),readonly=on \
+		-device virtio-blk-device,drive=vblk
+
+run-virtio-gpu: $(POE_BIN)
+	qemu-system-aarch64 -M virt,gic-version=$(GIC) -cpu cortex-a53 -m 512M -global virtio-mmio.force-legacy=false \
+		-display cocoa -serial mon:stdio -kernel $(POE_BIN) -device virtio-gpu-device
+
+test-virtio: $(POE_BIN)
+	python3 tools/virtio-test.py --arch aarch64 --kernel $(POE_BIN)
+	python3 tools/virtio-test.py --arch aarch64 --gic-version 3 --kernel $(POE_BIN)
+	python3 tools/virtio-gpu-test.py --arch aarch64 --kernel $(POE_BIN)
 
 # USB on xHCI, per docs/USB_HOST_RPI4_PLAN.md.  The Raspberry Pi 4 machine of
 # QEMU has no PCIe root port, so the xHCI work is verified on virt instead.

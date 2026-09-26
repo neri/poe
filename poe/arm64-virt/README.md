@@ -167,3 +167,37 @@ $ make usb DEV=/dev/sdX
 * `make usb DEV=<file>.img` creates a disk image file instead.
 * On the Chromebook (developer mode), enable USB boot once with `sudo crossystem dev_boot_usb=1`.
   Insert the disk, wait a few seconds at the warning screen, then press Ctrl+U.
+
+# VirtIO on QEMU virt
+
+The `virtio` feature is enabled in this POE image. QEMU 11.1.1 defaults to
+legacy virtio-mmio, so the VirtIO targets pass
+`-global virtio-mmio.force-legacy=false`. The driver accepts modern MMIO,
+split queues and QEMU virt MMIO interrupts. It discovers up to 32 enabled DT nodes and
+supports RNG, one or more block devices, and one 800×600-or-smaller 2D GPU
+scanout. Entropy quality depends on the QEMU RNG backend.
+
+```sh
+make run-virtio-rng
+make run-virtio-blk DISK=/path/to/raw.img
+make run-virtio-gpu
+make test-virtio
+```
+
+`run-virtio-blk` opens the image read-only. In the POE shell, `vrng` requests
+entropy, `virq` reports received VirtIO interrupts, `vblk` lists disks,
+`vread <disk> <lba> [count]` reads blocks,
+`vwrite <disk> <lba> [count]` writes a 0x5a pattern, `vflush <disk>`
+flushes it, and `vreset <disk>` reinitializes the device. Use only a disposable image with a writable QEMU drive. The
+automated test creates its own disposable image and checks host-side writes.
+`vread` reports a CRC-32; the test checks transfers larger than one 128 KiB request.
+The test also boots with no VirtIO device and with an unsupported balloon device,
+checks interrupt delivery with GICv2 and GICv3, and runs a headless GPU screendump with
+RNG and block attached; normal `run-virtio-gpu` uses Cocoa.
+It uses QMP to resize a disposable block image, checks that I/O is rejected
+until `vreset`, and confirms the new capacity afterward.
+
+The CPU waits for interrupts during synchronous I/O when they are registered;
+polling remains the fallback. Packed rings, hotplug, resize, and GPU
+acceleration are not supported. DMA assumes the identity-mapped RAM of QEMU
+`virt`. The IRQ path is validated on QEMU's single CPU configuration.
