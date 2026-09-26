@@ -128,6 +128,7 @@ run-el2:
 run-rpi3:
 	qemu-system-aarch64 -M raspi3b -dtb $(DTB_PATH)/bcm2710-rpi-3-b.dtb \
 		-kernel $(POE_BIN) \
+		-global bcm2835-fb.xres=1280 -global bcm2835-fb.yres=800 \
 		-device usb-hub,id=hub1,bus=usb-bus.0,port=1 \
 		-device usb-kbd,id=kbd1,bus=usb-bus.0,port=1.1 \
 		-serial mon:stdio
@@ -136,6 +137,7 @@ run-rpi3:
 run-rpi4:
 	qemu-system-aarch64 -M raspi4b -dtb $(DTB_PATH)/bcm2711-rpi-4-b.dtb \
 		-kernel $(POE_BIN) \
+		-global bcm2835-fb.xres=1280 -global bcm2835-fb.yres=800 \
 		-serial mon:stdio
 
 test: poe

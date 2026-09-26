@@ -50,7 +50,9 @@ pub fn main() {
                 #[cfg(feature = "usb")]
                 "usbblk" | "usbread" | "usbwrite" | "usbbench" => usbblk::command(cmd, args),
                 #[cfg(feature = "virtio")]
-                "virq" | "vrng" | "vblk" | "vread" | "vwrite" | "vflush" | "vreset" => virtio::command(cmd, args),
+                "virq" | "vrng" | "vblk" | "vread" | "vwrite" | "vflush" | "vreset" => {
+                    virtio::command(cmd, args)
+                }
                 _ => println!("{:?}: Bad command or file name.", cmd),
             }
         }
@@ -146,6 +148,24 @@ pub fn cmd_about() {
         print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
     }
     println!(", PLATFORM {}", info.platform_type);
+
+    let stdout = System::stdout();
+    let current_console_mode = stdout.current_mode();
+    if let Some(current_graphics_mode) = System::conctl().current_graphics_mode() {
+        println!(
+            "Console: {} x {}, Graphics: {} x {}, Pixel Format: {:?}",
+            current_console_mode.columns,
+            current_console_mode.rows,
+            current_graphics_mode.info.width,
+            current_graphics_mode.info.height,
+            current_graphics_mode.info.pixel_format
+        );
+    } else {
+        println!(
+            "Console: {} x {}, Text Mode",
+            current_console_mode.columns, current_console_mode.rows
+        );
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

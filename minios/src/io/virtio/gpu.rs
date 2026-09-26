@@ -7,6 +7,7 @@ use super::queue::Buffer;
 use crate::io::graphics::{
     CurrentMode, GraphicsOutputDevice, ModeIndex, ModeInfo, PixelFormat, PreferredGraphicsMode,
 };
+use crate::mem::MemoryManager;
 use crate::{PhysicalAddress, System};
 
 const GET_DISPLAY_INFO: u32 = 0x0100;
@@ -19,6 +20,9 @@ const ATTACH: u32 = 0x0106;
 const DETACH: u32 = 0x0107;
 const OK_NODATA: u32 = 0x1100;
 const OK_DISPLAY_INFO: u32 = 0x1101;
+/// Largest scanout accepted from the host: a 1920x1200 BGRX framebuffer is 8.8 MiB.
+const MAX_WIDTH: u32 = 1920;
+const MAX_HEIGHT: u32 = 1200;
 const RESOURCE: u32 = 1;
 
 static mut ACTIVE: *mut VirtioGpu = core::ptr::null_mut();
@@ -227,13 +231,25 @@ pub(super) fn attach(base: usize, size: usize) -> Result<(), &'static str> {
     {
         return Err("no enabled scanout 0");
     }
-    let width = get32(bytes, 32).min(800) as u16;
-    let height = get32(bytes, 36).min(600) as u16;
-    if width == 0 || height == 0 {
+    // Follow the host's preferred mode (QEMU: 1280x800, or `xres`/`yres`) when
+    // its framebuffer leaves at least half of the free heap to the other
+    // devices; otherwise fall back to 800x600, as on arm64 virt whose early
+    // heap is 4 MiB.
+    let preferred = (
+        get32(bytes, 32).min(MAX_WIDTH) as u16,
+        get32(bytes, 36).min(MAX_HEIGHT) as u16,
+    );
+    if preferred.0 == 0 || preferred.1 == 0 {
         return Err("zero display dimensions");
     }
-    let framebuffer =
-        Dma::new(width as usize * height as usize * 4, 4096)?.with_owner(device.owner.clone());
+    let fb_size = |(width, height): (u16, u16)| width as usize * height as usize * 4;
+    let fallback = (preferred.0.min(800), preferred.1.min(600));
+    let (width, height) = if fb_size(preferred) <= MemoryManager::free_memory_count() / 2 {
+        preferred
+    } else {
+        fallback
+    };
+    let framebuffer = Dma::new(fb_size((width, height)), 4096)?.with_owner(device.owner.clone());
     let info = ModeInfo {
         width,
         height,
