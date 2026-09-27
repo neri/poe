@@ -73,15 +73,13 @@ impl MboxContext<Request, DynamicMbox> {
         assert!(n >= 6);
         let fixup = 1023;
         let n = n.checked_add(fixup).unwrap() & !fixup;
-        let mut vec = Vec::with_capacity(n);
-        vec.resize(n, 0);
         let mut mbox = Self {
-            buffer: DynamicMbox(vec),
+            buffer: DynamicMbox::new(n),
             chan,
             index: 2,
             _phantom: PhantomData,
         };
-        mbox.buffer.0[1] = Self::REQUEST;
+        mbox.buffer.as_slice_mut()[1] = Self::REQUEST;
         mbox
     }
 }
@@ -223,18 +221,42 @@ impl<const N: usize> MboxBuffer for FixedMbox<N> {
     }
 }
 
-#[repr(transparent)]
-pub struct DynamicMbox(Vec<u32>);
+/// A mailbox buffer the VideoCore can reach: the mailbox takes the ARM
+/// address as it is, which the VideoCore sees only in the first 1 GiB.
+pub struct DynamicMbox {
+    ptr: core::ptr::NonNull<u32>,
+    len: usize,
+}
+
+impl DynamicMbox {
+    const VC_WINDOW: (u64, u64) = (0, 0x4000_0000);
+
+    fn new(len: usize) -> Self {
+        let window = crate::mem::PhysRange::new(Self::VC_WINDOW.0, Self::VC_WINDOW.1).unwrap();
+        let ptr = crate::mem::MemoryManager::alloc_dma(len * 4, 16, window)
+            .expect("no mailbox buffer below 1 GiB");
+        Self {
+            ptr: ptr.cast(),
+            len,
+        }
+    }
+}
+
+impl Drop for DynamicMbox {
+    fn drop(&mut self) {
+        let _ = unsafe { crate::mem::MemoryManager::free_dma(self.ptr.cast(), self.len * 4) };
+    }
+}
 
 impl MboxBuffer for DynamicMbox {
     #[inline]
     fn as_slice(&self) -> &[u32] {
-        &self.0
+        unsafe { core::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
     }
 
     #[inline]
     fn as_slice_mut(&mut self) -> &mut [u32] {
-        &mut self.0
+        unsafe { core::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 }
 

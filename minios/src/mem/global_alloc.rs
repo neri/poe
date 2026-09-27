@@ -4,7 +4,7 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 
-use super::{MemoryManager, MemoryType};
+use super::{MemoryFreeError, MemoryManager, MemoryType};
 
 #[global_allocator]
 static ALLOC: CustomAlloc = CustomAlloc::new();
@@ -19,12 +19,15 @@ impl CustomAlloc {
 
 unsafe impl GlobalAlloc for CustomAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        MemoryManager::zalloc(layout, None, MemoryType::Used, None).unwrap_or(null_mut())
+        MemoryManager::zalloc(layout, None, MemoryType::Loader, None).unwrap_or(null_mut())
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe {
-            MemoryManager::zfree(ptr, layout).unwrap();
+        match unsafe { MemoryManager::zfree(ptr, layout) } {
+            // After the final map, freed memory stays `Loader` and is
+            // reclaimed by the next OS with the rest of MiniOS.
+            Ok(()) | Err(MemoryFreeError::Frozen) => {}
+            Err(err) => panic!("dealloc {:p} {:?}: {:?}", ptr, layout, err),
         }
     }
 }

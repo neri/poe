@@ -79,12 +79,17 @@ impl LoMemoryManager {
         let mut acpi_nvs = false;
         match mem_type {
             MemoryType::Available => return Err(ReserveError::InvalidParameter),
-            MemoryType::Used => {}
+            MemoryType::Loader => {}
             MemoryType::Reserved => reserved = true,
             MemoryType::AcpiReclaim => acpi_reclaim = true,
             MemoryType::AcpiNvs => acpi_nvs = true,
-            MemoryType::DeviceTree => reserved = true,
-            MemoryType::OtherFw => reserved = true,
+            // Low memory keeps only whether a page is free or reserved
+            MemoryType::DeviceTree
+            | MemoryType::OtherFw
+            | MemoryType::Kernel
+            | MemoryType::BootData
+            | MemoryType::Initrd
+            | MemoryType::Framebuffer => reserved = true,
         }
         let fixed_range =
             (range.start / Self::PAGE_SIZE)..((range.end + Self::PAGE_SIZE_M1) / Self::PAGE_SIZE);
@@ -271,7 +276,7 @@ impl Iterator for LowMemoryIter<'_> {
             } else if free {
                 MemoryType::Available
             } else {
-                MemoryType::Used
+                MemoryType::Loader
             };
             if let Some((prev, prev_type)) = self.prev_attr {
                 if prev_type != current_type {

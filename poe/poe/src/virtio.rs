@@ -22,7 +22,11 @@ pub fn command<'a>(name: &str, mut args: impl Iterator<Item = &'a str>) {
     match name {
         "virq" => {
             let count = minios::io::virtio::interrupt_count();
-            println!("virq: {} ({})", count, if count > 0 { "active" } else { "idle" });
+            println!(
+                "virq: {} ({})",
+                count,
+                if count > 0 { "active" } else { "idle" }
+            );
         }
         "vrng" => {
             let mut bytes = [0; 16];

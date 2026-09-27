@@ -10,7 +10,6 @@ use super::*;
 
 #[cfg(target_arch = "riscv64")]
 mod jh7110;
-mod memory;
 #[cfg(feature = "virtio")]
 pub(crate) mod plic;
 pub mod sbi_console;
@@ -20,6 +19,7 @@ pub mod trap;
 mod usb;
 
 unsafe extern "C" {
+    unsafe static _image_start: c_void;
     unsafe static _end: c_void;
 }
 
@@ -38,12 +38,6 @@ impl Platform for CurrentPlatform {
 
             let boot_info = System::boot_info_mut();
             boot_info.platform_type = PlatformType::Sbi;
-
-            let kernel_end = &_end as *const _ as u64;
-            let (start, size) = memory::early_ram(dt, kernel_end)
-                .expect("no safe 32-bit RAM span after the RISC-V kernel");
-            boot_info.start_conventional_memory = start;
-            boot_info.conventional_memory_size = size;
 
             timer::PlatformTimer::init(dt);
 
@@ -69,6 +63,31 @@ impl Platform for CurrentPlatform {
             #[cfg(target_arch = "riscv64")]
             jh7110::init_early(dt);
         }
+    }
+
+    unsafe fn dt_memory_in_use(
+        _dt: &fdt::DeviceTree,
+        builder: &mut crate::mem::EarlyMapBuilder,
+    ) -> Result<(), crate::mem::MapError> {
+        use crate::mem::{MapError, MemoryType, PhysRange, RegionAttrs};
+        // The boot stack is at the end of the BSS, before `_end`
+        let image = PhysRange::new(
+            &raw const _image_start as usize as u64,
+            &raw const _end as usize as u64,
+        )
+        .ok_or(MapError::InvalidRange)?;
+        builder.add_protected(image, MemoryType::Loader, RegionAttrs::empty())?;
+        // The SBI firmware runs in M-mode below this S-mode payload, with its
+        // memory closed by PMP, and the device tree does not always say so:
+        // on a VisionFive 2 the DTB from U-Boot has no node for OpenSBI at
+        // 0x4000_0000, and a store there faults. Keep the RAM below the image
+        // for the firmware, as it was before the whole RAM was used.
+        crate::mem::dt::protect_ram_below(
+            builder,
+            image.start(),
+            MemoryType::OtherFw,
+            RegionAttrs::FIRMWARE,
+        )
     }
 
     unsafe fn init(_arg: usize) {
@@ -98,7 +117,13 @@ impl Platform for CurrentPlatform {
     }
 
     unsafe fn exit() {
-        // to do nothing for now
+        // The services have stopped their DMA (`System::exit_minios`). The
+        // JH7110 HDMI keeps scanning out its `Framebuffer`. What remains is
+        // to stop interrupts reaching this kernel.
+        unsafe {
+            Hal::cpu().disable_interrupt();
+            timer::PlatformTimer::stop();
+        }
     }
 
     fn reset_system() -> ! {

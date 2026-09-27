@@ -23,6 +23,7 @@ use rk3399::rk_spi::RkSpi;
 use spi::SpiDevice;
 
 use super::{CurrentPlatform, MonotonicTimerPoller, Platform};
+use crate::mem::{EarlyMapBuilder, MapError, MemoryType, PhysRange, RegionAttrs};
 use crate::*;
 
 pub mod cros;
@@ -41,6 +42,7 @@ pub mod trap;
 pub mod xhci_pci;
 
 unsafe extern "C" {
+    unsafe static _image_start: c_void;
     unsafe static _end: c_void;
 }
 
@@ -68,9 +70,6 @@ impl Platform for CurrentPlatform {
             if is_rpi {
                 boot_info.platform_type = PlatformType::RaspberryPi;
             }
-            let end = PhysicalAddress::new(&_end as *const _ as PhysicalAddressRepr);
-            boot_info.start_conventional_memory = end.rounding_up_4k().as_repr() as u32;
-            boot_info.conventional_memory_size = 0x40_0000;
 
             psci::init(dt);
 
@@ -100,6 +99,38 @@ impl Platform for CurrentPlatform {
                 println!("{}", irq_info);
             }
         }
+    }
+
+    unsafe fn dt_memory_in_use(
+        dt: &fdt::DeviceTree,
+        builder: &mut EarlyMapBuilder,
+    ) -> Result<(), MapError> {
+        // The boot stack is at the end of the BSS, before `_end`
+        let image = PhysRange::new(
+            &raw const _image_start as usize as u64,
+            &raw const _end as usize as u64,
+        )
+        .ok_or(MapError::InvalidRange)?;
+        builder.add_protected(image, MemoryType::Loader, RegionAttrs::empty())?;
+
+        // Chromebooks: the coreboot table and CBMEM, read later for the VPD
+        cros::coreboot::for_each_firmware_region(
+            dt,
+            |base, size| match PhysRange::from_base_size(base, size)? {
+                Some(range) => {
+                    builder.add_protected(range, MemoryType::OtherFw, RegionAttrs::FIRMWARE)
+                }
+                None => Ok(()),
+            },
+        )?;
+
+        // The firmware screen stays on and is used as the console
+        if let Some(fb) = unsafe { firmware_framebuffer(dt) }
+            && let Some(range) = PhysRange::from_base_size(fb.base as u64, fb.size() as u64)?
+        {
+            builder.add_protected(range, MemoryType::Framebuffer, RegionAttrs::FIRMWARE)?;
+        }
+        Ok(())
     }
 
     unsafe fn init(_arg: usize) {
@@ -145,16 +176,30 @@ impl Platform for CurrentPlatform {
                     true
                 } else {
                     #[cfg(feature = "virtio")]
-                    if crate::io::virtio::gpu::available() { true } else { init_firmware_framebuffer(dt) }
+                    if crate::io::virtio::gpu::available() {
+                        true
+                    } else {
+                        init_firmware_framebuffer(dt)
+                    }
                     #[cfg(not(feature = "virtio"))]
-                    { init_firmware_framebuffer(dt) }
+                    {
+                        init_firmware_framebuffer(dt)
+                    }
                 };
             }
         }
     }
 
     unsafe fn exit() {
-        // to do nothing for now
+        // The services have stopped their DMA (`System::exit_minios`). The
+        // display keeps scanning out: the firmware framebuffer and the
+        // mailbox one are left alone, and the MMU and the data cache are
+        // already off, so nothing is left only in the cache. What remains is
+        // to stop interrupts reaching this kernel.
+        unsafe {
+            Hal::cpu().disable_interrupt();
+            arch::timer::GenericTimer::stop();
+        }
     }
 
     fn reset_system() -> ! {
@@ -202,15 +247,7 @@ fn find_cros_ec(dt: &fdt::DeviceTree) -> Option<CrosEc<impl SpiDevice + 'static>
 ///
 /// Returns `false` if there is no framebuffer or its pixel format is not supported.
 unsafe fn init_firmware_framebuffer(dt: &fdt::DeviceTree) -> bool {
-    let fb = cros::coreboot::find_framebuffer(dt)
-        .map(|mut fb| {
-            // On Rockchip, the address is not in the coreboot table
-            if fb.base == 0 {
-                fb.base = unsafe { rk3399::vop::scanout_address(dt) }.unwrap_or(0);
-            }
-            fb
-        })
-        .filter(|fb| fb.mode_info().is_some());
+    let fb = unsafe { firmware_framebuffer(dt) }.filter(|fb| fb.mode_info().is_some());
     let Some(fb) = fb else {
         return false;
     };
@@ -230,6 +267,19 @@ unsafe fn init_firmware_framebuffer(dt: &fdt::DeviceTree) -> bool {
         }
     }
     fb::FirmwareFb::install(&fb)
+}
+
+/// Returns the framebuffer the firmware left on, if any. No heap is used.
+unsafe fn firmware_framebuffer(dt: &fdt::DeviceTree) -> Option<fb::Framebuffer> {
+    cros::coreboot::find_framebuffer(dt)
+        .map(|mut fb| {
+            // On Rockchip, the address is not in the coreboot table
+            if fb.base == 0 {
+                fb.base = unsafe { rk3399::vop::scanout_address(dt) }.unwrap_or(0);
+            }
+            fb
+        })
+        .filter(|fb| fb.base != 0)
 }
 
 /// Makes the device tree blob written by the boot loader visible with the data cache off.

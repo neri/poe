@@ -248,9 +248,7 @@ fn init_port(
     let reset_deadline = PlatformTimer::microseconds().saturating_add(1_000);
     let status = loop {
         let status = unsafe { ((stg_crg + 0x78) as usize as *const u32).read_volatile() };
-        if status & reset_mask == reset_mask
-            || PlatformTimer::microseconds() >= reset_deadline
-        {
+        if status & reset_mask == reset_mask || PlatformTimer::microseconds() >= reset_deadline {
             break status;
         }
     };
@@ -462,20 +460,20 @@ fn probe_vl805_mmio(port: &Node, controller: u64, endpoint: usize) {
     }
 }
 
+/// CPU addresses the VL805 is given DMA buffers in: the JH7110 RAM below
+/// 4 GiB, which the identity inbound window below covers. The xHCI
+/// environment allocates every DMA buffer inside it.
+#[cfg(feature = "usb")]
+pub(super) const VL805_DMA_WINDOW: (u64, u64) = (0x4000_0000, 0x1_0000_0000);
+
 /// Set up the same inbound identity window as the Linux PLDA host driver,
 /// then enable bus mastering for the verified VL805 only. All DMA allocations
-/// are subsequently restricted to the early allocator's low RAM bank.
+/// are subsequently restricted to [`VL805_DMA_WINDOW`].
 #[cfg(feature = "usb")]
 pub(super) fn prepare_vl805_dma() -> Result<usize, &'static str> {
     let endpoint = VL805_ENDPOINT.load(Ordering::Acquire);
     if endpoint != 0x9_4010_0000 {
         return Err("verified PCIe0 VL805 not found");
-    }
-    let info = System::boot_info();
-    let start = info.start_conventional_memory as u64;
-    let end = start + info.conventional_memory_size as u64;
-    if start < 0x4000_0000 || end > 0x1_0000_0000 || end <= start {
-        return Err("DMA allocator outside low JH7110 RAM");
     }
     let controller = 0x2b00_0000usize;
     let inbound = controller + 0x600;

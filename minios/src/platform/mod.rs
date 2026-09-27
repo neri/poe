@@ -31,6 +31,15 @@ pub trait Platform {
     #[cfg(feature = "device_tree")]
     unsafe fn init_dt_early(dt: &fdt::DeviceTree, arg: usize);
 
+    /// Adds the physical memory in use before the memory manager starts that
+    /// the device tree does not describe: the MiniOS image (code, data, BSS and
+    /// the boot stack), and things like a framebuffer the firmware left on.
+    #[cfg(feature = "device_tree")]
+    unsafe fn dt_memory_in_use(
+        dt: &fdt::DeviceTree,
+        builder: &mut crate::mem::EarlyMapBuilder,
+    ) -> Result<(), crate::mem::MapError>;
+
     /// Initialize platform
     unsafe fn init(arg: usize);
 
@@ -59,6 +68,15 @@ pub trait Platform {
 
 #[cfg(not(any(feature = "pc", feature = "sbi", feature = "arm64dt", feature = "uefi")))]
 impl Platform for CurrentPlatform {
+    #[cfg(feature = "device_tree")]
+    unsafe fn init_dt_early(_dt: &fdt::DeviceTree, _arg: usize) {}
+    #[cfg(feature = "device_tree")]
+    unsafe fn dt_memory_in_use(
+        _dt: &fdt::DeviceTree,
+        _builder: &mut crate::mem::EarlyMapBuilder,
+    ) -> Result<(), crate::mem::MapError> {
+        Ok(())
+    }
     unsafe fn init(_arg: usize) {}
     unsafe fn exit() {}
     fn reset_system() -> ! {

@@ -8,7 +8,6 @@
 //! text mode or a late monitor connection.
 
 use alloc::boxed::Box;
-use core::alloc::Layout;
 
 use fdt::{DeviceTree, Node, NodeName, PHandle, PropName};
 
@@ -16,7 +15,7 @@ use super::super::timer::PlatformTimer;
 use crate::io::graphics::{
     CurrentMode, GraphicsOutputDevice, ModeIndex, ModeInfo, PixelFormat, PreferredGraphicsMode,
 };
-use crate::mem::{MemoryManager, MemoryType};
+use crate::mem::{AllocRequest, MemoryManager, MemoryType, PhysRange};
 use crate::{PhysicalAddress, System, println};
 
 const PMU_BASE: usize = 0x1703_0000;
@@ -413,16 +412,19 @@ fn alloc_framebuffer(dc: &Node) -> Result<usize, &'static str> {
         return Err("unexpected DC8200 display register aperture");
     }
     let bytes = WIDTH * HEIGHT * 4;
-    let layout =
-        Layout::from_size_align(bytes, 4096).map_err(|_| "invalid display buffer layout")?;
-    let framebuffer = MemoryManager::zalloc(layout, None, MemoryType::Used, None)
-        .map_err(|_| "cannot allocate display buffer")?;
+    // DC8200 takes 32-bit scanout addresses. The buffer is `Framebuffer`, not
+    // heap: it is what keeps the picture on after the handoff.
+    let mut request = AllocRequest::new(bytes as u64, 4096, MemoryType::Framebuffer);
+    request.window = PhysRange::new(0, 0x1_0000_0000).unwrap();
+    let framebuffer = MemoryManager::alloc_pages(&request)
+        .map_err(|_| "cannot allocate display buffer")?
+        .as_ptr();
     let address = framebuffer as usize;
     if address
         .checked_add(bytes)
-        .is_none_or(|end| end > u32::MAX as usize)
+        .is_none_or(|end| end > u32::MAX as usize + 1)
     {
-        unsafe { MemoryManager::zfree(framebuffer, layout) }.ok();
+        unsafe { MemoryManager::free_pages(framebuffer, bytes, MemoryType::Framebuffer) }.ok();
         return Err("display buffer is outside 32-bit DMA range");
     }
     // The zeroes may still be dirty in the cache.

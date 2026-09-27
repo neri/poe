@@ -2120,6 +2120,10 @@ impl SystemService for UsbManager {
         Ok(())
     }
 
+    fn quiesce(&mut self) -> Result<(), ServiceError> {
+        self.hcd.quiesce().map_err(|_| ServiceError::Failed)
+    }
+
     fn requires_continuous_polling(&self) -> bool {
         // A mass storage stage re-arms each NAKed packet from here, and its
         // deadlines are shorter than a tick apart.

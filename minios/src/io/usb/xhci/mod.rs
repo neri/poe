@@ -669,6 +669,22 @@ impl<'e, E: XhciEnv> Xhci<'e, E> {
         self.interrupts
     }
 
+    /// Stops the controller before another OS takes over: no more interrupts
+    /// and, once it reports halted, no more DMA. It is not reset, and the
+    /// rings and contexts are not freed; the next OS resets the controller.
+    pub fn halt(&mut self) -> Result<(), UsbError> {
+        self.disable_interrupts();
+        unsafe {
+            let command = self.regs.read_op_u32(regs::op::USBCMD);
+            self.regs
+                .write_op_u32(regs::op::USBCMD, command & !regs::usbcmd::RUN);
+            let regs = &self.regs;
+            Self::wait_until(self.env, RESET_TIMEOUT_US, || {
+                regs.read_op_u32(regs::op::USBSTS) & regs::usbsts::HALTED != 0
+            })
+        }
+    }
+
     /// The platform services this controller was built with.
     pub fn env(&self) -> &'e E {
         self.env

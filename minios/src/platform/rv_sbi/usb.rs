@@ -1,10 +1,7 @@
 //! Polling PCI xHCI attachment for RISC-V. QEMU virt probes an ECAM host
 //! here; board-specific hosts call [`start_xhci`] after their own setup.
 
-use alloc::alloc::{alloc_zeroed, dealloc};
 use alloc::boxed::Box;
-use core::alloc::Layout;
-use core::ptr::NonNull;
 
 use super::timer::PlatformTimer;
 use crate::io::pci::host::{self, DmaWindow, PciHost};
@@ -12,6 +9,7 @@ use crate::io::usb::input::UsbTextInputMux;
 use crate::io::usb::xhci::Xhci;
 use crate::io::usb::xhci::device::XhciUsb;
 use crate::io::usb::xhci::env::{DmaAllocation, XhciEnv};
+use crate::mem::{MemoryManager, PhysRange};
 use crate::{System, println};
 
 struct RiscvXhciEnv {
@@ -24,17 +22,11 @@ impl XhciEnv for RiscvXhciEnv {
     }
 
     fn alloc_dma(&self, len: usize, align: usize) -> Option<DmaAllocation> {
-        let layout = Layout::from_size_align(len, align).ok()?;
-        let cpu = NonNull::new(unsafe { alloc_zeroed(layout) })?;
+        // Allocated inside the window, so the controller never gets an
+        // address it would read or write somewhere else.
+        let window = PhysRange::new(self.dma.cpu_start, self.dma.cpu_end)?;
+        let cpu = MemoryManager::alloc_dma(len, align, window)?;
         let address = cpu.as_ptr() as u64;
-        let reachable = address >= self.dma.cpu_start
-            && address
-                .checked_add(len as u64)
-                .is_some_and(|end| end <= self.dma.cpu_end);
-        if !reachable {
-            unsafe { dealloc(cpu.as_ptr(), layout) };
-            return None;
-        }
         Some(DmaAllocation {
             cpu,
             device: address.wrapping_add(self.dma.offset),
@@ -44,9 +36,8 @@ impl XhciEnv for RiscvXhciEnv {
     }
 
     unsafe fn free_dma(&self, allocation: DmaAllocation) {
-        if let Ok(layout) = Layout::from_size_align(allocation.len, allocation.align) {
-            unsafe { dealloc(allocation.cpu.as_ptr(), layout) };
-        }
+        let result = unsafe { MemoryManager::free_dma(allocation.cpu, allocation.len) };
+        debug_assert!(result.is_ok());
     }
 
     fn write_barrier(&self) {

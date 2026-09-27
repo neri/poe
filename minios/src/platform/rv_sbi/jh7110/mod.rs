@@ -44,14 +44,11 @@ fn init_usb() -> Result<(), &'static str> {
     use crate::io::pci::host::DmaWindow;
 
     let bar = pcie::prepare_vl805_dma()?;
-    let info = System::boot_info();
-    let start = info.start_conventional_memory as u64;
-    let end = start + info.conventional_memory_size as u64;
     let result = super::usb::start_xhci(
         bar,
         DmaWindow {
-            cpu_start: start,
-            cpu_end: end,
+            cpu_start: pcie::VL805_DMA_WINDOW.0,
+            cpu_end: pcie::VL805_DMA_WINDOW.1,
             offset: 0,
         },
     );

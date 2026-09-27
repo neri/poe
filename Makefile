@@ -29,7 +29,7 @@ test:
 	(cd lib/minilib; cargo test)
 	(cd lib/smbios; cargo test)
 	(cd lib/usb; cargo test)
-	(cd minios; cargo test --features usb --lib)
+	(cd minios; cargo test --features usb,device_tree --lib)
 	(cd lib/uuid; cargo test)
 	(cd tools; cargo test --all-features)
 

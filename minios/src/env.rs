@@ -49,6 +49,13 @@ pub struct System {
 pub trait SystemService {
     fn poll(&mut self) -> Result<(), ServiceError>;
 
+    /// Stops the device's DMA and interrupts before another OS takes over,
+    /// without allocating or freeing. Services that own no DMA have nothing
+    /// to do.
+    fn quiesce(&mut self) -> Result<(), ServiceError> {
+        Ok(())
+    }
+
     /// Returns true when the service cannot make progress while the CPU is
     /// asleep waiting for an interrupt.
     fn requires_continuous_polling(&self) -> bool {
@@ -67,6 +74,8 @@ struct ServiceRegistry {
     services: Vec<Box<dyn SystemService>>,
     polling: bool,
     failures: u64,
+    /// Quiesced for the handoff; no longer polled
+    stopped: bool,
 }
 
 impl ServiceRegistry {
@@ -79,7 +88,7 @@ impl ServiceRegistry {
     }
 
     fn poll(&mut self) {
-        if self.polling {
+        if self.polling || self.stopped {
             return;
         }
         self.polling = true;
@@ -95,6 +104,25 @@ impl ServiceRegistry {
         self.services
             .iter()
             .any(|service| service.requires_continuous_polling())
+    }
+
+    /// Quiesces every service, even after one fails, and stops polling.
+    fn quiesce(&mut self) -> Result<(), ServiceError> {
+        if self.stopped {
+            return Ok(());
+        }
+        self.stopped = true;
+        let mut result = Ok(());
+        for service in &mut self.services {
+            if let Err(err) = service.quiesce() {
+                result = Err(err);
+            }
+        }
+        if result.is_err() {
+            // Tried again on the next call; a stopped device stays stopped
+            self.stopped = false;
+        }
+        result
     }
 }
 
@@ -160,7 +188,9 @@ impl System {
 
             CurrentPlatform::init_dt_early(&dt, arg);
 
-            MemoryManager::init_dt(&dt);
+            MemoryManager::init_dt(&dt, |builder| {
+                CurrentPlatform::dt_memory_in_use(&dt, builder)
+            });
 
             if let Some(dt) = NonNullPhysicalAddress::from_ptr(dt.as_ptr()) {
                 System::add_config_table_entry(&fdt::DTB_TABLE_GUID, dt);
@@ -249,12 +279,41 @@ impl System {
         }
     }
 
+    /// Stops the background services' DMA before control passes to another OS.
+    ///
+    /// Call this before [`MemoryManager::finalize_map`]. The display keeps
+    /// what it shows. An error means that some device could not be confirmed
+    /// stopped: the handoff must not go ahead.
+    pub fn prepare_exit() -> Result<(), ServiceError> {
+        unsafe {
+            if SERVICES_POLLING {
+                return Err(ServiceError::Busy);
+            }
+            Self::shared_mut().services.quiesce()
+        }
+    }
+
+    /// Ends MiniOS before control passes to another OS.
+    ///
+    /// Runs [`Self::prepare_exit`] if it has not succeeded yet, freezes the
+    /// memory map if [`MemoryManager::finalize_map`] has not, then lets the
+    /// platform stop the rest (interrupts, timers). Nothing is allocated or
+    /// freed from here on. If a device cannot be stopped, the system halts
+    /// here instead of returning, so that it never jumps to the OS with DMA
+    /// still running.
+    ///
     /// # Safety
     ///
     /// After calling this function, all minios functions will cease to function.
+    /// The code and the stack that jump to the OS must not be in memory the
+    /// OS reuses before the jump.
     pub unsafe fn exit_minios() {
         unsafe {
-            // let shared = Self::shared_mut();
+            if Self::prepare_exit().is_err() {
+                println!("exit: a device could not be stopped; halted");
+                Hal::cpu().halt();
+            }
+            MemoryManager::freeze();
 
             CurrentPlatform::exit();
 
@@ -507,6 +566,44 @@ mod service_tests {
         );
     }
 
+    struct Quiesce(Rc<Cell<u32>>, bool);
+    impl SystemService for Quiesce {
+        fn poll(&mut self) -> Result<(), ServiceError> {
+            Ok(())
+        }
+        fn quiesce(&mut self) -> Result<(), ServiceError> {
+            self.0.set(self.0.get() + 1);
+            if self.1 {
+                Err(ServiceError::Failed)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn every_service_is_quiesced_and_then_not_polled() {
+        let count = Rc::new(Cell::new(0));
+        let polled = Rc::new(Cell::new(0));
+        let mut registry = ServiceRegistry::default();
+        registry
+            .register(Box::new(Quiesce(count.clone(), true)))
+            .unwrap();
+        registry
+            .register(Box::new(Quiesce(count.clone(), false)))
+            .unwrap();
+        registry
+            .register(Box::new(Counter(polled.clone(), false)))
+            .unwrap();
+        // One failure is reported, but the others are still stopped
+        assert_eq!(registry.quiesce(), Err(ServiceError::Failed));
+        assert_eq!(count.get(), 2);
+        registry.services.remove(0);
+        assert_eq!(registry.quiesce(), Ok(()));
+        registry.poll();
+        assert_eq!(polled.get(), 0);
+    }
+
     #[test]
     fn continuous_polling_requirement_is_reported() {
         let mut registry = ServiceRegistry::default();
@@ -528,9 +625,10 @@ pub struct SsblInfo {
     pub x86_real_memory_size: u16,
     /// Reserved
     pub reserved: u32,
-    /// Start address of conventional memory
+    /// Start address of conventional memory (from the SSBL; 0 on device tree
+    /// platforms, whose memory is only in [`MemoryManager`])
     pub start_conventional_memory: u32,
-    /// Size of conventional memory in bytes
+    /// Size of conventional memory in bytes (from the SSBL; 0 on device tree platforms)
     pub conventional_memory_size: u32,
 }
 

@@ -233,8 +233,7 @@ pub(super) fn attach(base: usize, size: usize) -> Result<(), &'static str> {
     }
     // Follow the host's preferred mode (QEMU: 1280x800, or `xres`/`yres`) when
     // its framebuffer leaves at least half of the free heap to the other
-    // devices; otherwise fall back to 800x600, as on arm64 virt whose early
-    // heap is 4 MiB.
+    // devices; otherwise fall back to 800x600.
     let preferred = (
         get32(bytes, 32).min(MAX_WIDTH) as u16,
         get32(bytes, 36).min(MAX_HEIGHT) as u16,

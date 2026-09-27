@@ -52,6 +52,13 @@ impl GenericTimer {
         }
     }
 
+    /// Stops the virtual timer from raising its interrupt.
+    pub unsafe fn stop() {
+        unsafe {
+            core::arch::asm!("msr cntv_ctl_el0, xzr", "isb");
+        }
+    }
+
     #[inline]
     pub fn monotonic() -> u64 {
         unsafe {

@@ -11,6 +11,14 @@ use core::{fmt, str};
 
 pub mod bus;
 
+#[cfg(any(test, feature = "builder"))]
+extern crate alloc;
+#[cfg(any(test, feature = "builder"))]
+pub mod builder;
+
+#[cfg(test)]
+mod tests;
+
 /// EFI GUID of the Device Tree Table
 #[cfg(feature = "guid")]
 pub const DTB_TABLE_GUID: guid::Guid = guid::guid!("b1b621d5-f19c-41a5-830b-d9152c69aae0");
@@ -75,21 +83,33 @@ impl DeviceTree<'_> {
         )
     }
 
-    pub fn memory_map(&self) -> Option<impl Iterator<Item = (u64, u64)>> {
-        unsafe {
-            let root = self.root();
-            let address_cells = root.address_cells();
-            let size_cells = root.size_cells();
-            let memory = match root.memory() {
-                Some(v) => v,
-                None => return None,
-            };
-            let slice = match memory.get_prop(PropName::REG) {
-                Some(prop) => slice::from_raw_parts(prop.ptr(), prop.len() / 4),
-                None => return None,
-            };
-            Some(AddressAndSizeIter::new(slice, address_cells, size_cells))
-        }
+    /// Returns every `reg` entry of every enabled memory node.
+    ///
+    /// Malformed `reg` properties are skipped; use [`Self::memory_nodes`] and
+    /// [`Node::reg_with_cells`] to detect them.
+    pub fn memory_map(&self) -> Option<impl Iterator<Item = (u64, u64)> + '_> {
+        let root = self.root();
+        let address_cells = root.address_cells();
+        let size_cells = root.size_cells();
+        let mut nodes = self.memory_nodes().peekable();
+        nodes.peek()?;
+        Some(nodes.flat_map(move |node| {
+            let words = node.get_prop_in_tree(PropName::REG).map(|v| v.words());
+            let words = words
+                .filter(|words| reg_is_well_formed(words, address_cells, size_cells))
+                .unwrap_or(&[]);
+            AddressAndSizeIter::new(words, address_cells, size_cells)
+        }))
+    }
+
+    /// Returns the enabled memory nodes (`/memory@...` or `device_type = "memory"`)
+    /// directly below the root.
+    pub fn memory_nodes(&self) -> impl Iterator<Item = Node<'_>> + '_ {
+        self.root().children().filter(|node| {
+            (node.name().without_unit() == NodeName::MEMORY
+                || node.get_prop_str(PropName::DEVICE_TYPE) == Some("memory"))
+                && node.status_is_ok()
+        })
     }
 
     pub fn reserved_memory_map(&self) -> Option<Node<'_>> {
@@ -116,10 +136,24 @@ impl DeviceTree<'_> {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseError {
     InvalidInput,
     InvalidData,
+}
+
+/// A `reg` property that cannot be read as (address, size) pairs
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegError {
+    /// `#address-cells` or `#size-cells` is not 1 or 2
+    UnsupportedCells,
+    /// The length is not a whole number of entries
+    Truncated,
+}
+
+fn reg_is_well_formed(words: &[BeU32], address_cells: AddressCells, size_cells: SizeCells) -> bool {
+    let stride = address_cells.0 as usize + size_cells.0 as usize;
+    matches!(address_cells.0, 1 | 2) && matches!(size_cells.0, 1 | 2) && words.len() % stride == 0
 }
 
 #[repr(transparent)]
@@ -238,11 +272,31 @@ impl Header {
         unsafe { p.add(self.off_mem_rsvmap()) as *const _ }
     }
 
+    /// Returns the non-empty entries of the memory reservation block.
+    ///
+    /// Stops at the terminator or at the first malformed entry; use
+    /// [`Self::reserved_map_entries`] to detect a malformed block.
     #[inline]
     pub fn reserved_maps(&self) -> impl Iterator<Item = (u64, u64)> + '_ {
+        self.reserved_map_entries()
+            .map_while(|v| v.ok())
+            .filter(|&(_, size)| size > 0)
+    }
+
+    /// Returns every entry of the memory reservation block up to the
+    /// terminator, where both the address and the size are 0.
+    ///
+    /// An entry outside `totalsize`, or a block that is not 8-byte aligned,
+    /// yields an error and ends the iteration. Zero-sized entries before the
+    /// terminator are returned as they are.
+    #[inline]
+    pub fn reserved_map_entries(
+        &self,
+    ) -> impl Iterator<Item = Result<(u64, u64), ParseError>> + '_ {
         FdtRsvMapIter {
             header: self,
             index: 0,
+            done: false,
         }
     }
 
@@ -384,6 +438,11 @@ impl<'a> Node<'a> {
         None
     }
 
+    /// Same as [`Self::get_prop`], but the property borrows the tree instead of the node.
+    fn get_prop_in_tree(&self, prop_name: PropName) -> Option<FdtProperty<'a>> {
+        FdtProps::new(self.tokens()).find(|prop| prop.name() == prop_name)
+    }
+
     #[inline]
     pub fn get_prop_str(&self, prop_name: PropName) -> Option<&str> {
         self.get_prop(prop_name).map(|v| v.as_str())
@@ -486,6 +545,32 @@ impl<'a> Node<'a> {
     pub fn reg(&'a self) -> Option<impl Iterator<Item = (u64, u64)> + 'a> {
         self.get_prop(PropName::REG)
             .map(|v| AddressAndSizeIter::new(v.words(), self.address_cells, self.size_cells))
+    }
+
+    /// Parses `reg` with the given cells, rejecting a malformed property.
+    ///
+    /// Returns `Ok(None)` if the node has no `reg`. Unlike [`Self::reg`], a
+    /// cell count other than 1 or 2, or a length that is not a whole number
+    /// of entries, is an error instead of a truncated list.
+    pub fn reg_with_cells(
+        &self,
+        address_cells: AddressCells,
+        size_cells: SizeCells,
+    ) -> Result<Option<impl Iterator<Item = (u64, u64)> + '_>, RegError> {
+        let Some(prop) = self.get_prop(PropName::REG) else {
+            return Ok(None);
+        };
+        if !matches!(address_cells.0, 1 | 2) || !matches!(size_cells.0, 1 | 2) {
+            return Err(RegError::UnsupportedCells);
+        }
+        if prop.len() % 4 != 0 || !reg_is_well_formed(prop.words(), address_cells, size_cells) {
+            return Err(RegError::Truncated);
+        }
+        Ok(Some(AddressAndSizeIter::new(
+            prop.words(),
+            address_cells,
+            size_cells,
+        )))
     }
 
     /// Well-known property name `status`
@@ -946,23 +1031,39 @@ impl<'a> FdtProperty<'a> {
 struct FdtRsvMapIter<'a> {
     header: &'a Header,
     index: usize,
+    done: bool,
 }
 
 impl Iterator for FdtRsvMapIter<'_> {
-    type Item = (u64, u64);
+    type Item = Result<(u64, u64), ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let ptr = self.header.reserve_map_ptr().add(self.index);
-            let base = ptr.read_volatile().as_u64();
-            let size = ptr.add(1).read_volatile().as_u64();
-            if size > 0 {
-                self.index += 2;
-                Some((base, size))
-            } else {
-                None
-            }
+        if self.done {
+            return None;
         }
+        let offset = self.header.off_mem_rsvmap();
+        let entry_end = self
+            .index
+            .checked_mul(8)
+            .and_then(|v| v.checked_add(offset))
+            .and_then(|v| v.checked_add(16));
+        if offset % 8 != 0 || entry_end.is_none_or(|end| end > self.header.total_size()) {
+            self.done = true;
+            return Some(Err(ParseError::InvalidData));
+        }
+        let (base, size) = unsafe {
+            let ptr = self.header.reserve_map_ptr().add(self.index);
+            (
+                ptr.read_volatile().as_u64(),
+                ptr.add(1).read_volatile().as_u64(),
+            )
+        };
+        if base == 0 && size == 0 {
+            self.done = true;
+            return None;
+        }
+        self.index += 2;
+        Some(Ok((base, size)))
     }
 }
 

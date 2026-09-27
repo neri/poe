@@ -116,4 +116,11 @@ pub trait HostController {
     fn requires_foreground_polling(&self) -> bool {
         true
     }
+
+    /// Stops all DMA and interrupts of the controller before another OS
+    /// takes over, without freeing anything. A controller that cannot
+    /// confirm it has stopped returns an error.
+    fn quiesce(&mut self) -> Result<(), UsbError> {
+        Err(UsbError::Unsupported)
+    }
 }

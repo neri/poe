@@ -52,6 +52,14 @@ impl PlatformTimer {
         }
     }
 
+    /// Stops the timer interrupt: masked, and the next event pushed to the end of time.
+    pub unsafe fn stop() {
+        unsafe {
+            CSR::SIE.clear(1 << 5);
+            sbi::legacy::set_timer(u64::MAX);
+        }
+    }
+
     #[inline]
     fn _set_next_timer() {
         unsafe {

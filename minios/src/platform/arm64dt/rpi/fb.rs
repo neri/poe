@@ -235,6 +235,22 @@ impl GraphicsOutputDevice for Fb {
             Fb::set_resolution(info.width as u32, info.height as u32, info.pixel_format)
         {
             info.bytes_per_scanline = stride as u16;
+            // Normally in the VideoCore's memory, outside the ARM RAM, where
+            // this does nothing. Inside the RAM, the heap must keep off it.
+            if let Some(range) =
+                crate::mem::PhysRange::from_base_size(ptr as u64, (stride * h as usize) as u64)
+                    .ok()
+                    .flatten()
+                && let Err(err) = unsafe {
+                    crate::mem::MemoryManager::reserve(
+                        range,
+                        crate::mem::MemoryType::Framebuffer,
+                        crate::mem::RegionAttrs::FIRMWARE,
+                    )
+                }
+            {
+                println!("Framebuffer {} not protected: {:?}", range, err);
+            }
             self.current_mode = CurrentMode {
                 current: mode,
                 info,

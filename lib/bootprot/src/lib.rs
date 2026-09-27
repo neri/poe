@@ -117,15 +117,74 @@ pub struct BootMemoryMapDescriptor {
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BootMemoryType {
-    Available,
-    AcpiReclaim,
-    AcpiNonVolatile,
-    Mmio,
-    MmioPortSpace,
-    OsLoaderCode,
-    OsLoaderData,
-    FirmwareCode,
-    FirmwareData,
-    Reserved,
-    Unavailable,
+    Available = 0,
+    AcpiReclaim = 1,
+    AcpiNonVolatile = 2,
+    Mmio = 3,
+    MmioPortSpace = 4,
+    OsLoaderCode = 5,
+    /// Used by the loader until it passes control; reclaimable after that
+    OsLoaderData = 6,
+    FirmwareCode = 7,
+    FirmwareData = 8,
+    Reserved = 9,
+    Unavailable = 10,
+    /// The kernel image
+    Kernel = 11,
+    /// Boot information: this memory map, the command line, ...
+    BootData = 12,
+    /// The initial ramdisk
+    Initrd = 13,
+    /// The device tree blob received from the firmware, unchanged
+    DeviceTree = 14,
+    /// Memory that keeps the display on; keep it until the display is taken over
+    Framebuffer = 15,
+}
+
+/// One entry of the memory map, with 64-bit base and size
+///
+/// Unlike [`BootMemoryMapDescriptor`], the size is in bytes and never
+/// truncated, and the origin of the region is kept in `attributes`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BootMemoryRegion {
+    pub base: u64,
+    pub size: u64,
+    pub mem_type: BootMemoryType,
+    pub attributes: BootMemoryAttributes,
+}
+
+/// Attributes of a [`BootMemoryRegion`]
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BootMemoryAttributes(pub u32);
+
+impl BootMemoryAttributes {
+    /// Backed by system RAM
+    pub const RAM: Self = Self(1 << 0);
+    /// Device tree `no-map`: not to be mapped as normal memory
+    pub const NO_MAP: Self = Self(1 << 1);
+    /// Device tree `reusable`
+    pub const REUSABLE: Self = Self(1 << 2);
+    /// From the memory reservation block of the DTB
+    pub const MEMRESERVE: Self = Self(1 << 8);
+    /// From `/reserved-memory` of the DTB
+    pub const RESERVED_MEMORY: Self = Self(1 << 9);
+    /// From a firmware memory map or a platform specific source
+    pub const FIRMWARE: Self = Self(1 << 10);
+
+    #[inline]
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    #[inline]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    #[inline]
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
 }

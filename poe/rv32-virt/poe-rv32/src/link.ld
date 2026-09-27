@@ -3,6 +3,7 @@ ENTRY(boot)
 SECTIONS {
     . = 0x80000000;
     __kernel_base = .;
+    _image_start = .;
 
     .text :{
         KEEP(*(.text.boot));

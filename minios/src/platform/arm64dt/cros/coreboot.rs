@@ -66,6 +66,35 @@ pub fn find_vpd_ro(dt: &fdt::DeviceTree) -> Option<Vec<u8>> {
     }
 }
 
+/// Calls `f` with each `reg` entry of `/firmware/coreboot`: the coreboot
+/// table and the CBMEM area that contains it (and the VPD read later).
+///
+/// A `reg` that cannot be read is an error, since that memory must not be
+/// allocated while it may still be in use.
+pub fn for_each_firmware_region(
+    dt: &fdt::DeviceTree,
+    mut f: impl FnMut(u64, u64) -> Result<(), crate::mem::MapError>,
+) -> Result<(), crate::mem::MapError> {
+    let root = dt.root();
+    let Some(firmware) = root.find_child_exact(NodeName::new("firmware")) else {
+        return Ok(());
+    };
+    // Old depthcharge adds /firmware without #address-cells, so fall back to the root's.
+    let address_cells = firmware.address_cells().unwrap_or(root.address_cells());
+    let size_cells = firmware.size_cells().unwrap_or(root.size_cells());
+    for node in firmware.children() {
+        if node.is_compatible_with("coreboot") {
+            let regs = node
+                .reg_with_cells(address_cells, size_cells)
+                .map_err(|_| crate::mem::MapError::Malformed("coreboot reg"))?;
+            for (base, size) in regs.into_iter().flatten() {
+                f(base, size)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Returns the address of the coreboot table from `/firmware/coreboot`.
 fn find_table(dt: &fdt::DeviceTree) -> Option<usize> {
     let root = dt.root();

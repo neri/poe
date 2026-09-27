@@ -23,7 +23,7 @@ impl Platform for CurrentPlatform {
 
             MemoryManager::register_memmap(
                 0x10_0000..info.start_conventional_memory as u64,
-                MemoryType::Used,
+                MemoryType::Loader,
             )
             .unwrap();
 

@@ -8,6 +8,8 @@ version = "0.1.0"
 [features]
 default = []
 all = ["guid"]
+# Test helper that writes device tree blobs (needs `alloc`)
+builder = []
 
 [dependencies]
 guid = { path = "../guid/", optional = true }

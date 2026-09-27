@@ -1985,6 +1985,10 @@ impl<E: XhciEnv> SystemService for XhciUsb<'_, E> {
         self.poll_once().map_err(|_| ServiceError::Failed)
     }
 
+    fn quiesce(&mut self) -> Result<(), ServiceError> {
+        self.controller.halt().map_err(|_| ServiceError::Failed)
+    }
+
     fn requires_continuous_polling(&self) -> bool {
         // Without an interrupt nothing would wake the system to notice a
         // completion.  With one, the steady state — a bound keyboard, or

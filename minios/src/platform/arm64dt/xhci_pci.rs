@@ -10,9 +10,6 @@
 //! continues.  USB is not yet the console on this machine, and a controller
 //! that will not start must not cost the UART.
 
-use alloc::alloc::{alloc_zeroed, dealloc};
-use core::alloc::Layout;
-use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use super::pci::{self, Bdf, DmaWindow, PciHost};
@@ -22,6 +19,7 @@ use crate::io::usb::input::UsbTextInputMux;
 use crate::io::usb::xhci::device::XhciUsb;
 use crate::io::usb::xhci::env::{DmaAllocation, XhciEnv};
 use crate::io::usb::xhci::{InterruptAck, Xhci};
+use crate::mem::{MemoryManager, PhysRange};
 use crate::{System, usb_println};
 
 /// The platform side of the xHCI driver's contract on an Arm device-tree
@@ -50,18 +48,14 @@ impl XhciEnv for DtXhciEnv {
     }
 
     fn alloc_dma(&self, len: usize, align: usize) -> Option<DmaAllocation> {
-        let layout = Layout::from_size_align(len, align).ok()?;
-        // The global allocator hands out page-aligned, page-granular, zeroed
+        // The memory manager hands out page-aligned, page-granular, zeroed
         // memory, which is what the rings and contexts need: 64-byte aligned
-        // and never straddling a 64 KiB boundary.
-        let cpu = NonNull::new(unsafe { alloc_zeroed(layout) })?;
+        // and never straddling a 64 KiB boundary. It is taken from inside the
+        // window: memory the controller cannot reach is worse than none, as
+        // it would accept the address and then read or write somewhere else.
+        let window = PhysRange::new(self.dma.cpu_start, self.dma.cpu_end)?;
+        let cpu = MemoryManager::alloc_dma(len, align, window)?;
         let start = cpu.as_ptr() as u64;
-        // Memory the controller cannot reach is worse than none: it would
-        // accept the address and then read or write somewhere else entirely.
-        if start < self.dma.cpu_start || start.saturating_add(len as u64) > self.dma.cpu_end {
-            unsafe { dealloc(cpu.as_ptr(), layout) };
-            return None;
-        }
         Some(DmaAllocation {
             cpu,
             device: start.wrapping_add(self.dma.offset),
@@ -71,9 +65,8 @@ impl XhciEnv for DtXhciEnv {
     }
 
     unsafe fn free_dma(&self, allocation: DmaAllocation) {
-        if let Ok(layout) = Layout::from_size_align(allocation.len, allocation.align) {
-            unsafe { dealloc(allocation.cpu.as_ptr(), layout) }
-        }
+        let result = unsafe { MemoryManager::free_dma(allocation.cpu, allocation.len) };
+        debug_assert!(result.is_ok());
     }
 
     fn write_barrier(&self) {

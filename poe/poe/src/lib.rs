@@ -43,6 +43,8 @@ pub fn main() {
             };
             match cmd {
                 "about" => cmd_about(),
+                "memmap" => cmd_memmap(),
+                "handoff" => cmd_handoff(),
                 "reboot" => System::reset_system(),
                 "clear" => System::stdout().clear_screen(),
                 "tui" => tui_demo::tui_demo(),
@@ -126,6 +128,59 @@ pub fn line_input(max_len: usize) -> Option<String> {
         }
     }
     Some(buf.into_iter().collect())
+}
+
+/// Display the physical memory map.
+pub fn cmd_memmap() {
+    for region in MemoryManager::regions() {
+        println!("{}", region);
+    }
+    let (len, peak, capacity) = MemoryManager::table_usage();
+    println!(
+        "free {} KB (largest {} KB), table {} entries (peak {}) of {}",
+        MemoryManager::free_memory_count() >> 10,
+        MemoryManager::max_free_memory_size() >> 10,
+        len,
+        peak,
+        capacity
+    );
+}
+
+/// Test of the handoff to an OS: stops the devices, writes the final memory
+/// map, ends MiniOS and stops where the jump to the OS would be. Never
+/// returns once the map is written.
+pub fn cmd_handoff() {
+    if let Err(err) = System::prepare_exit() {
+        println!("handoff: devices not stopped: {:?}", err);
+        return;
+    }
+    let map = match unsafe { MemoryManager::finalize_map() } {
+        Ok(map) => map,
+        Err(err) => {
+            println!("handoff: no final map: {:?}", err);
+            return;
+        }
+    };
+    for region in map {
+        println!(
+            "{:010x}-{:010x} {:?} attr {:#x}",
+            region.base,
+            region.base + region.size - 1,
+            region.mem_type,
+            region.attributes.0
+        );
+    }
+    println!(
+        "handoff: map at {:p}, {} entries; MiniOS ends here",
+        map.as_ptr(),
+        map.len()
+    );
+    unsafe {
+        System::exit_minios();
+    }
+    loop {
+        core::hint::spin_loop();
+    }
 }
 
 /// Display information about the system.
