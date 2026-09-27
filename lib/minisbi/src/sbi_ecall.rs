@@ -161,10 +161,12 @@ pub unsafe fn ecall(ctx: &mut ExceptionContext) {
     }
 }
 
+#[inline]
 pub fn sbi_set_timer(timer_value: u64) {
     timer::set_timer(timer_value);
 }
 
+#[inline]
 pub fn sbi_console_putchar(c: u8) {
     StdOut::stdout().write_byte(c);
 }

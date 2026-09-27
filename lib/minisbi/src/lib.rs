@@ -114,13 +114,6 @@ pub unsafe fn init(hart_id: usize) {
     }
 }
 
-#[inline(always)]
-pub(crate) fn no_op() {
-    unsafe {
-        asm!("nop", options(nomem, nostack));
-    }
-}
-
 pub struct StdOut;
 
 impl StdOut {

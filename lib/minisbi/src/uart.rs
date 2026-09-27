@@ -1,7 +1,6 @@
 //! Generic Uart driver
 use core::cell::UnsafeCell;
-
-use crate::*;
+use core::hint::spin_loop;
 
 static mut RAW: UnsafeCell<Uart16550> = UnsafeCell::new(Uart16550::new());
 
@@ -94,7 +93,7 @@ impl Uart16550 {
     #[inline]
     pub fn write_byte(&mut self, byte: u8) {
         while !self.is_ready_to_write() {
-            no_op();
+            spin_loop();
         }
         self._write(Register::DATA, byte);
     }
