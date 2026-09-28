@@ -61,6 +61,17 @@ pub trait SystemService {
     fn requires_continuous_polling(&self) -> bool {
         false
     }
+
+    /// Writes a human-readable report of the service's state.
+    fn describe(&self, _out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        Ok(())
+    }
+
+    /// The USB bus this service drives, if it is one.
+    #[cfg(feature = "usb")]
+    fn usb_bus(&self) -> Option<&dyn crate::io::usb::inventory::UsbBus> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +115,27 @@ impl ServiceRegistry {
         self.services
             .iter()
             .any(|service| service.requires_continuous_polling())
+    }
+
+    fn describe(&self, out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        for service in &self.services {
+            service.describe(out)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "usb")]
+    fn usb_buses(&self) -> Vec<crate::io::usb::inventory::BusSnapshot> {
+        self.services
+            .iter()
+            .filter_map(|service| service.usb_bus())
+            .enumerate()
+            .map(|(index, bus)| crate::io::usb::inventory::BusSnapshot {
+                number: index + 1,
+                controller: bus.controller(),
+                devices: bus.devices(),
+            })
+            .collect()
     }
 
     /// Quiesces every service, even after one fails, and stops polling.
@@ -401,6 +433,27 @@ impl System {
             Self::shared_mut().services.poll();
             SERVICES_POLLING = false;
         }
+    }
+
+    /// Writes each registered service's state report to `out`.
+    pub fn describe_services(out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        unsafe {
+            if SERVICES_POLLING {
+                return Ok(());
+            }
+            Self::shared().services.describe(out)
+        }
+    }
+
+    /// Every USB bus with the devices on it, numbered from 1.
+    #[cfg(feature = "usb")]
+    pub fn usb_buses() -> Vec<crate::io::usb::inventory::BusSnapshot> {
+        unsafe {
+            if SERVICES_POLLING {
+                return Vec::new();
+            }
+        }
+        Self::shared().services.usb_buses()
     }
 
     /// True while [`Self::poll_services`] is running a service.  Code that

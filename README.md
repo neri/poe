@@ -15,6 +15,8 @@
 * risc-v
   * rv32imac virt machine
   * rv64gc virt machine
+  * StarFive VisionFive 2
+  * Milk-V Duo & Duo 256M
 * x86-64
   * UEFI
 * x86-32
@@ -34,42 +36,40 @@
 
 ### x86
 
-| Feature           | PC/AT      | PC-98      | FM TOWNS   | UEFI (x64) |
-|-------------------|:----------:|:----------:|:----------:|:----------:|
-| Boot              | ✅         | ✅         | ✅         | ✅         |
-| Text-mode console | ✅ CGA     | ✅         | ✅         | ✅ UEFI    |
-| Serial console    | ✅ 16550*  | ❌         | ❌         | ❌         |
-| Graphical console | ✅ VESA    | ✅ PEGC    | ✅ SVGA    | ✅ GOP     |
-| Keyboard          | ✅ PS/2    | ✅ BIOS    | ✅         | ✅ UEFI    |
-| Timer             | ✅ PIT     | ✅ PIT     | ✅ PIT     | ✅         |
-| Panic handler     | ✅         | ✅         | ✅         | ❌         |
-| Block device      | ✅ INT 13h | ✅ INT 1Bh | ✅ INT 93h | ✅         |
+| Feature           |  PC/AT   | PC-98  | FM TOWNS | UEFI (x64) |
+| ----------------- | :------: | :----: | :------: | :--------: |
+| Boot              |    ✅     |   ✅    |    ✅     |     ✅      |
+| Text-mode console |  ✅ CGA   |   ✅    |    ✅     |   ✅ UEFI   |
+| Serial console    | ✅ 16550* |   ❌    |    ❌     |     ❌      |
+| Graphical console |  ✅ VESA  | ✅ PEGC |  ✅ SVGA  |   ✅ GOP    |
+| Keyboard          |  ✅ PS/2  | ✅ BIOS |    ✅     |   ✅ UEFI   |
+| Timer             |  ✅ PIT   | ✅ PIT  |  ✅ PIT   |     ✅      |
+| Panic handler     |    ✅     |   ✅    |    ✅     |     ❌      |
+| Block device      |  ✅ BIOS  | ✅ BIOS |  ✅ BIOS  |   ✅ UEFI   |
 
 ### RISC-V
 
-| Feature           | RV64 virt       | RV32 virt       | VisionFive 2 |
-|-------------------|:---------------:|:---------------:|:------------:|
-| Boot              | ✅              | ✅              | ✅           |
-| Text-mode console | —               | —               | —            |
-| Serial console    | ✅ SBI          | ✅ SBI          | ✅ SBI       |
-| Graphical console | ✅ VirtIO GPU   | ✅ VirtIO GPU   | ✅ HDMI      |
-| Keyboard          | ✅ USB          | ✅ USB          | ✅ USB       |
-| Timer             | ✅              | ✅              | ✅           |
-| Panic handler     | ✅              | ✅              | ✅           |
-| Block device      | ✅ USB / VirtIO | ✅ USB / VirtIO | ✅ USB       |
+| Feature           |   RV64 virt    |   RV32 virt    | VisionFive 2 | Milk-V Duo | Milk-V Duo 256M |
+| ----------------- | :------------: | :------------: | :----------: | :--------: | :-------------: |
+| Boot              |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
+| Serial console    |     ✅ SBI      |     ✅ SBI      |    ✅ SBI     |   ✅ SBI    |      ✅ SBI      |
+| Graphical console |  ✅ VirtIO GPU  |  ✅ VirtIO GPU  |    ✅ HDMI    |     ❌      |        ❌        |
+| Keyboard          |     ✅ USB      |     ✅ USB      |    ✅ USB     |   ✅ USB    |      ✅ USB      |
+| Timer             |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
+| Panic handler     |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
+| Block device      | ✅ USB / VirtIO | ✅ USB / VirtIO |    ✅ USB     |   ✅ USB    |      ✅ USB      |
 
 ### Arm64
 
-| Feature           | virt            | RPi 3/4       | Chromebook bob |
-|-------------------|:---------------:|:-------------:|:--------------:|
-| Boot              | ✅              | ✅            | ✅             |
-| Text-mode console | —               | —             | —              |
-| Serial console    | ✅ PL011        | ✅ PL011     | ❌             |
-| Graphical console | ✅ VirtIO GPU   | ✅ mailbox    | ✅ coreboot FB |
-| Keyboard          | ✅ USB          | ✅ USB        | ✅ ChromeOS EC |
-| Timer             | ✅              | ✅            | ✅             |
-| Panic handler     | ✅              | ✅            | ✅             |
-| Block device      | ✅ USB / VirtIO | ✅ USB        | ❌             |
+| Feature           |      virt      |  RPi 3/4  | Chromebook bob |
+| ----------------- | :------------: | :-------: | :------------: |
+| Boot              |       ✅        |     ✅     |       ✅        |
+| Serial console    |    ✅ PL011     |  ✅ PL011  |       ❌        |
+| Graphical console |  ✅ VirtIO GPU  | ✅ mailbox | ✅ coreboot FB  |
+| Keyboard          |     ✅ USB      |   ✅ USB   | ✅ ChromeOS EC  |
+| Timer             |       ✅        |     ✅     |       ✅        |
+| Panic handler     |       ✅        |     ✅     |       ✅        |
+| Block device      | ✅ USB / VirtIO |   ✅ USB   |       ❌        |
 
 * RV32 virt runs on minisbi, the bundled SBI implementation.
 * The PC/AT 16550 serial console is implemented but disabled in the default build.

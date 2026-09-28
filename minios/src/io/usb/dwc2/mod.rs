@@ -1,3 +1,6 @@
+//! Synopsys DesignWare USB 2.0 OTG (DWC2) host controller, used in host mode
+//! with buffer DMA. The SoC integration is described by [`Dwc2Platform`].
+
 mod interrupt;
 mod regs;
 
@@ -47,6 +50,26 @@ const HCINT_CONCLUDES: u32 = 1 | (1 << 2) | (1 << 3) | (1 << 7) | (1 << 8) | (1 
 /// translator keeps their result until it is collected.
 const LAST_PERIODIC_SPLIT_START: u32 = 2;
 const LAST_SPLIT_START: u32 = 5;
+
+/// What the SoC around the core provides and requires.
+#[derive(Clone, Copy)]
+pub struct Dwc2Platform {
+    pub now_us: fn() -> u64,
+    /// Data cache maintenance for the DMA buffers, as `(start, size)`. The
+    /// core does not snoop the CPU caches on any supported SoC.
+    pub dcache_clean: unsafe fn(usize, usize),
+    pub dcache_invalidate: unsafe fn(usize, usize),
+    pub dcache_clean_invalidate: unsafe fn(usize, usize),
+    /// GAHBCFG bits written besides DMA enable (bit 5) and the global
+    /// interrupt mask (bit 0).
+    pub ahb_config: u32,
+    /// UTMI+ data width to select when the core leaves it to software
+    /// (GHWCFG4 reports 8/16 bits). `None` keeps what the firmware set.
+    pub utmi_width: Option<u8>,
+    /// Keeps the root port at full speed (HCFG.FSLSSupp): a high-speed
+    /// device is enumerated without the chirp handshake.
+    pub full_speed_only: bool,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct DmaMap {
@@ -146,6 +169,7 @@ impl Slot {
 pub struct Dwc2 {
     base: usize,
     dma: DmaMap,
+    platform: Dwc2Platform,
     capabilities: Capabilities,
     buffers: Box<[DmaBuffer; MAX_CHANNELS]>,
     slots: [Slot; MAX_CHANNELS],
@@ -153,10 +177,13 @@ pub struct Dwc2 {
     snapshot: HcdSnapshot,
     reset_deadline: Option<u64>,
     storm_reported: bool,
+    /// The last transfer that ended in an error other than NAK/NYET, for
+    /// `describe`: channel, HCINT, HCCHAR and HCTSIZ.
+    last_error: Option<(usize, u32, u32, u32)>,
 }
 
 impl Dwc2 {
-    pub unsafe fn new(base: usize, dma: DmaMap, now_us: fn() -> u64) -> Result<Self, UsbError> {
+    pub unsafe fn new(base: usize, dma: DmaMap, platform: Dwc2Platform) -> Result<Self, UsbError> {
         let snpsid = unsafe { regs::read(base, regs::GSNPSID) };
         if snpsid & 0xffff_0000 != 0x4f54_0000 {
             return Err(UsbError::Unsupported);
@@ -171,7 +198,11 @@ impl Dwc2 {
         let initial_gusbcfg = unsafe { regs::read(base, regs::GUSBCFG) };
         let utmi_width = match (hwcfg[3] >> 14) & 3 {
             1 => 16,
-            2 if initial_gusbcfg & (1 << 3) != 0 => 16,
+            2 => match platform.utmi_width {
+                Some(width) => width,
+                None if initial_gusbcfg & (1 << 3) != 0 => 16,
+                None => 8,
+            },
             _ => 8,
         };
         let cap = Capabilities {
@@ -191,6 +222,7 @@ impl Dwc2 {
         let mut this = Self {
             base,
             dma,
+            platform,
             capabilities: cap,
             buffers: Box::new([DmaBuffer([0; DMA_BUFFER_SIZE]); MAX_CHANNELS]),
             slots: [Slot::EMPTY; MAX_CHANNELS],
@@ -198,8 +230,9 @@ impl Dwc2 {
             snapshot: HcdSnapshot::default(),
             reset_deadline: None,
             storm_reported: false,
+            last_error: None,
         };
-        unsafe { this.initialize(now_us)? };
+        unsafe { this.initialize(platform.now_us)? };
         Ok(this)
     }
     unsafe fn wait_register(
@@ -258,9 +291,27 @@ impl Dwc2 {
 
             self.wait_register(regs::GRSTCTL, 1 << 31, true, 10_000, now_us)?;
             regs::write(self.base, regs::GRSTCTL, 1);
-            self.wait_register(regs::GRSTCTL, 1, false, 10_000, now_us)?;
+            if self.capabilities.snpsid & 0xffff < 0x420a {
+                self.wait_register(regs::GRSTCTL, 1, false, 10_000, now_us)?;
+            } else {
+                // From 4.20a CSftRst no longer clears itself: completion is
+                // reported by CSftRstDone (W1C) and software drops CSftRst.
+                self.wait_register(regs::GRSTCTL, 1 << 29, true, 10_000, now_us)?;
+                let greset = regs::read(self.base, regs::GRSTCTL);
+                regs::write(self.base, regs::GRSTCTL, (greset & !1) | (1 << 29));
+            }
             self.wait_register(regs::GRSTCTL, 1 << 31, true, 10_000, now_us)?;
             self.wait_register(regs::GINTSTS, 1, true, 120_000, now_us)?;
+
+            // HS/FS timeout calibration: PHY clocks added to the inter-packet
+            // timeout for the PHY's own delay.  A 4.20a core clears it in the
+            // soft reset (the PHY selection above survives), and with it at
+            // 0 every reply from the device on a CV181x ended in XactErr.
+            regs::write(
+                self.base,
+                regs::GUSBCFG,
+                regs::read(self.base, regs::GUSBCFG) | 7,
+            );
 
             // Override the external VBUS-valid input, which is not wired on
             // every integrated DWC2 implementation, and restart PHY clocks.
@@ -296,11 +347,16 @@ impl Dwc2 {
             // A HS PHY requires the 30/60 MHz FS/LS clock selection.  The
             // previous unconditional value 1 selected the dedicated-FS 48 MHz
             // clock and leaves the Pi PHY unable to observe its root hub.
-            let hcfg = regs::read(self.base, regs::HCFG) & !3;
+            let hcfg = regs::read(self.base, regs::HCFG) & !((1 << 2) | 3);
+            let fs_ls_only = if self.platform.full_speed_only {
+                1 << 2
+            } else {
+                0
+            };
             regs::write(
                 self.base,
                 regs::HCFG,
-                hcfg | u32::from(self.capabilities.hs_phy_type == 0),
+                hcfg | fs_ls_only | u32::from(self.capabilities.hs_phy_type == 0),
             );
 
             // Discard any request state inherited from firmware/bootloader.
@@ -347,14 +403,57 @@ impl Dwc2 {
                 (1u32 << self.capabilities.host_channels.min(MAX_CHANNELS as u8)) - 1,
             );
             regs::write(self.base, regs::GINTMSK, (1 << 24) | (1 << 25));
-            // Bit 4 is the BCM2835 wait-for-AXI-writes integration setting.
             // Bit 5 enables internal DMA and bit 0 enables global interrupts.
-            regs::write(self.base, regs::GAHBCFG, (1 << 5) | (1 << 4) | 1);
+            regs::write(
+                self.base,
+                regs::GAHBCFG,
+                self.platform.ahb_config | (1 << 5) | 1,
+            );
             Ok(())
         }
     }
     pub const fn capabilities(&self) -> Capabilities {
         self.capabilities
+    }
+    /// Prints the core's configuration and host state on the USB log.
+    pub fn log_state(&self) {
+        let cap = self.capabilities;
+        let phy = match cap.hs_phy_type {
+            1 => "UTMI+",
+            2 => "ULPI",
+            3 => "UTMI+/ULPI",
+            _ => "FS-only",
+        };
+        crate::usb_println!(
+            "USB DWC2: {:08x}, {} channels, FIFO {} words, PHY {}/{}",
+            cap.snpsid,
+            cap.host_channels,
+            cap.fifo_depth_words,
+            phy,
+            cap.utmi_width
+        );
+        crate::usb_println!(
+            "USB GHWCFG: {:08x} {:08x} {:08x} {:08x} (descriptor DMA {})",
+            cap.hwcfg[0],
+            cap.hwcfg[1],
+            cap.hwcfg[2],
+            cap.hwcfg[3],
+            if cap.descriptor_dma {
+                "available, unused"
+            } else {
+                "absent"
+            }
+        );
+        let regs = self.register_snapshot();
+        crate::usb_println!(
+            "USB regs: GUSBCFG={:08x} HCFG={:08x} HPRT={:08x} PCGCTL={:08x} GINTSTS={:08x}",
+            regs.gusbcfg,
+            regs.hcfg,
+            regs.hprt,
+            regs.pcgctl,
+            regs.gintsts
+        );
+        crate::usb_println!("USB root port: {:?}", self.root_port_state());
     }
     pub fn register_snapshot(&self) -> RegisterSnapshot {
         unsafe {
@@ -420,7 +519,7 @@ impl Dwc2 {
         let result = if status & 1 != 0 {
             if slot.direction == Direction::In && actual > 0 {
                 unsafe {
-                    crate::arch::cache::dcache_invalidate(
+                    (self.platform.dcache_invalidate)(
                         self.buffers[channel].0.as_ptr() as usize,
                         actual,
                     );
@@ -464,6 +563,10 @@ impl Dwc2 {
         slot.split_pending = false;
         self.snapshot.active = self.snapshot.active.saturating_sub(1);
         self.snapshot.reaped = self.snapshot.reaped.saturating_add(1);
+        if matches!(result, Err(error) if error != UsbError::Nak && error != UsbError::Nyet) {
+            let hcchar = unsafe { regs::read(self.base, regs::channel(channel, regs::HCCHAR)) };
+            self.last_error = Some((channel, status, hcchar, hctsiz));
+        }
         let counter = match result {
             Ok(_) => &mut self.snapshot.completed,
             Err(UsbError::Nak) => &mut self.snapshot.naks,
@@ -670,17 +773,14 @@ impl HostController for Dwc2 {
         if request.direction == Direction::Out {
             self.buffers[channel].0[..slot.length].copy_from_slice(request.buffer);
             unsafe {
-                crate::arch::cache::dcache_clean(
-                    self.buffers[channel].0.as_ptr() as usize,
-                    slot.length,
-                )
+                (self.platform.dcache_clean)(self.buffers[channel].0.as_ptr() as usize, slot.length)
             }
         } else if slot.length != 0 {
             // Evict dirty allocator/previous-transfer data before ownership is
             // handed to a DMA writer.  Invalidating only after completion can
             // otherwise write stale cache data over the received packet.
             unsafe {
-                crate::arch::cache::dcache_clean_invalidate(
+                (self.platform.dcache_clean_invalidate)(
                     self.buffers[channel].0.as_ptr() as usize,
                     slot.length,
                 )
@@ -1034,6 +1134,158 @@ impl HostController for Dwc2 {
     }
     fn snapshot(&self) -> HcdSnapshot {
         self.snapshot
+    }
+    fn name(&self) -> &'static str {
+        "DWC2"
+    }
+    fn describe(&self, out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        let read = |offset| unsafe { regs::read(self.base, offset) };
+        writeln!(
+            out,
+            "DWC2 GOTGCTL={:08x} GUSBCFG={:08x} GRSTCTL={:08x} GINTSTS={:08x} GAHBCFG={:08x} HCFG={:08x}",
+            read(regs::GOTGCTL),
+            read(regs::GUSBCFG),
+            read(regs::GRSTCTL),
+            read(regs::GINTSTS),
+            read(regs::GAHBCFG),
+            read(regs::HCFG)
+        )?;
+        let gotgctl = read(regs::GOTGCTL);
+        let mode = if read(regs::GINTSTS) & 1 != 0 {
+            "host"
+        } else {
+            "device"
+        };
+        writeln!(
+            out,
+            "  mode {}, ID pin {}, A-session {}, B-session {}",
+            mode,
+            if gotgctl & (1 << 16) != 0 {
+                "B (device)"
+            } else {
+                "A (host)"
+            },
+            if gotgctl & (1 << 18) != 0 {
+                "valid"
+            } else {
+                "invalid"
+            },
+            if gotgctl & (1 << 19) != 0 {
+                "valid"
+            } else {
+                "invalid"
+            }
+        )?;
+        let hprt = read(regs::HPRT);
+        let speed = match (hprt >> 17) & 3 {
+            0 => "high",
+            1 => "full",
+            2 => "low",
+            _ => "?",
+        };
+        writeln!(
+            out,
+            "  HPRT={:08x}: {}{}{}{}{}, speed {}, D+ {} D- {}",
+            hprt,
+            if hprt & 1 != 0 {
+                "connected"
+            } else {
+                "disconnected"
+            },
+            if hprt & (1 << 2) != 0 {
+                ", enabled"
+            } else {
+                ""
+            },
+            if hprt & (1 << 12) != 0 {
+                ", powered"
+            } else {
+                ", unpowered"
+            },
+            if hprt & (1 << 8) != 0 {
+                ", in reset"
+            } else {
+                ""
+            },
+            if hprt & (1 << 4) != 0 {
+                ", OVER-CURRENT"
+            } else {
+                ""
+            },
+            speed,
+            (hprt >> 10) & 1,
+            (hprt >> 11) & 1
+        )?;
+        // The frame number counts microframes at high speed and frames
+        // otherwise, so 10 ms should advance it by 80 or 10. Anything else
+        // means the PHY clock is not what HFIR was computed for.
+        let now_us = self.platform.now_us;
+        let first = read(regs::HFNUM) & 0x3fff;
+        let start = now_us();
+        while now_us().wrapping_sub(start) < 10_000 {
+            core::hint::spin_loop();
+        }
+        let advanced = (read(regs::HFNUM) & 0x3fff).wrapping_sub(first) & 0x3fff;
+        writeln!(
+            out,
+            "  HFIR={:08x}, frame number advanced {} in 10 ms (80 expected at high speed, 10 at full)",
+            read(regs::HFIR),
+            advanced
+        )?;
+        if let Some((channel, hcint, hcchar, hctsiz)) = self.last_error {
+            const NAMES: [(u32, &str); 11] = [
+                (0, "XferCompl"),
+                (1, "ChHltd"),
+                (2, "AHBErr"),
+                (3, "STALL"),
+                (4, "NAK"),
+                (5, "ACK"),
+                (6, "NYET"),
+                (7, "XactErr"),
+                (8, "BblErr"),
+                (9, "FrmOvrun"),
+                (10, "DataTglErr"),
+            ];
+            write!(
+                out,
+                "  last error HC{}: HCCHAR={:08x} HCTSIZ={:08x} HCINT={:08x} (dev {} ep {}{})",
+                channel,
+                hcchar,
+                hctsiz,
+                hcint,
+                (hcchar >> 22) & 0x7f,
+                (hcchar >> 11) & 0xf,
+                if hcchar & (1 << 15) != 0 {
+                    " IN"
+                } else {
+                    " OUT"
+                },
+            )?;
+            for (bit, name) in NAMES {
+                if hcint & (1 << bit) != 0 {
+                    write!(out, " {}", name)?;
+                }
+            }
+            writeln!(out)?;
+        }
+        for (channel, slot) in self.slots.iter().enumerate() {
+            if !slot.active {
+                continue;
+            }
+            writeln!(
+                out,
+                "  HC{} {:?} {:?}: HCCHAR={:08x} HCSPLT={:08x} HCINT={:08x} HCTSIZ={:08x} HCDMA={:08x}",
+                channel,
+                slot.transfer_type,
+                slot.direction,
+                read(regs::channel(channel, regs::HCCHAR)),
+                read(regs::channel(channel, regs::HCSPLT)),
+                read(regs::channel(channel, regs::HCINT)),
+                read(regs::channel(channel, regs::HCTSIZ)),
+                read(regs::channel(channel, regs::HCDMA))
+            )?;
+        }
+        Ok(())
     }
     fn requires_foreground_polling(&self) -> bool {
         // Without the ISR every completion has to be found by reading HCINT.

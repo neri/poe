@@ -78,6 +78,55 @@ Notes:
 - For a read-only USB mass-storage check, use `usbblk` and `usbread 0 0 8` at
   the POE prompt, then repeat `usbblk` after reconnecting the device.
 
+### Milk-V Duo 256M (CV181x) and Duo (CV180x)
+
+Boot from the vendor U-Boot with `booti` and the Linux DTB from the vendor
+`boot.sd` FIT image. The address `0x85000000` keeps the DTB clear of the
+initial heap after the kernel:
+
+```
+fatload mmc 0 ${uImage_addr} boot.sd
+imxtract ${uImage_addr} fdt-cv1812cp_milkv_duo256m_sd 0x85000000
+fatload mmc 0 0x80200000 kernel.img
+booti 0x80200000 - 0x85000000
+```
+
+U-Boot's own control DT (`${fdtcontroladdr}`) lacks the memory and USB
+nodes MiniOS needs.
+
+The original Milk-V Duo (CV180x, 64 MB) has the same USB block and is
+handled by the same code, but has not been tried. Its RAM ends below
+`0x84000000`, so the DTB goes lower; `iminfo ${uImage_addr}` shows the name
+of the FIT's `fdt-...` image:
+
+```
+fatload mmc 0 ${uImage_addr} boot.sd
+imxtract ${uImage_addr} fdt-cv1800b_milkv_duo_sd 0x83000000
+fatload mmc 0 0x80200000 kernel.img
+booti 0x80200000 - 0x83000000
+```
+
+The USB 2.0 port (DWC2 at `0x04340000`) is switched to host mode through the
+TOP `REG_USB_PHY_CTRL` ID override, its clocks are enabled, and the controller
+is polled. Hardware-confirmed with the IO-Board's built-in hub. The C906 does
+not snoop DMA, so the driver maintains the data cache with the T-Head
+`th.dcache.*` instructions; the SBI firmware must allow them in S-mode (the
+vendor OpenSBI does). A build with `minios/usb_debug` also logs the clock and
+PHY registers and the DWC2 configuration at boot. `maximum-speed =
+"full-speed"` in the DWC2 node (for example `fdt set /usb@04340000
+maximum-speed "full-speed"` in U-Boot) keeps the port at full speed.
+
+`usbstat` at the POE prompt prints the USB state on any board: the root
+port and enumeration stage, the devices, transfer counters and the last
+enumeration failure, then the controller registers (DWC2: GINTSTS, HPRT
+with line state, whether SOFs are running, active channels; xHCI: each
+connected port's PORTSC).
+
+`lsusb` lists the devices on every USB bus as a tree, named `bus-port.port`
+after the root port and each hub port on the way; `lsusb 1-5.2` (or `5.2`
+with one bus) decodes that device's descriptors. It works the same on the
+xHCI and DWC2 stacks.
+
 # VirtIO on QEMU virt
 
 The image enables the independent `virtio` feature. Use

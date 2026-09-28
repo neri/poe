@@ -50,6 +50,10 @@ pub fn main() {
                 "tui" => tui_demo::tui_demo(),
                 "mode" => mode(),
                 #[cfg(feature = "usb")]
+                "usbstat" => cmd_usbstat(),
+                #[cfg(feature = "usb")]
+                "lsusb" => cmd_lsusb(args),
+                #[cfg(feature = "usb")]
                 "usbblk" | "usbread" | "usbwrite" | "usbbench" => usbblk::command(cmd, args),
                 #[cfg(feature = "virtio")]
                 "virq" | "vrng" | "vblk" | "vread" | "vwrite" | "vflush" | "vreset" => {
@@ -58,6 +62,57 @@ pub fn main() {
                 _ => println!("{:?}: Bad command or file name.", cmd),
             }
         }
+    }
+}
+
+/// `core::fmt::Write` onto the console, counting what went through.
+#[cfg(feature = "usb")]
+struct Console {
+    written: usize,
+}
+
+#[cfg(feature = "usb")]
+impl core::fmt::Write for Console {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.written += s.len();
+        print!("{}", s);
+        Ok(())
+    }
+}
+
+/// Prints the state the USB service reports: root port, enumeration stage,
+/// devices, transfer counters and the controller registers.
+#[cfg(feature = "usb")]
+fn cmd_usbstat() {
+    let mut console = Console { written: 0 };
+    let _ = System::describe_services(&mut console);
+    if console.written == 0 {
+        println!("No USB service reports its state.");
+    }
+}
+
+/// `lsusb` lists the devices on every USB bus as a tree; `lsusb 1-2.3`
+/// (or `2.3` with a single bus) decodes that device's descriptors.
+#[cfg(feature = "usb")]
+fn cmd_lsusb<'a>(mut args: impl Iterator<Item = &'a str>) {
+    use minios::io::usb::inventory;
+
+    let buses = System::usb_buses();
+    let mut console = Console { written: 0 };
+    match args.next() {
+        None if buses.is_empty() => println!("No USB bus."),
+        None => {
+            let _ = inventory::write_tree(&mut console, &buses);
+        }
+        Some(name) => match inventory::find(&buses, name) {
+            Some((bus, device)) => {
+                let _ = inventory::write_details(&mut console, bus, device);
+            }
+            None => println!(
+                "lsusb: no device {} (usage: lsusb [bus-port.port...])",
+                name
+            ),
+        },
     }
 }
 

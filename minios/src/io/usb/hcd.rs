@@ -107,6 +107,16 @@ pub trait HostController {
     fn service_timeouts(&mut self, now_us: u64);
     fn snapshot(&self) -> HcdSnapshot;
 
+    /// Short name of the controller for listings, such as "DWC2".
+    fn name(&self) -> &'static str {
+        "USB"
+    }
+
+    /// Writes the controller's registers and channel state for diagnosis.
+    fn describe(&self, _out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        Ok(())
+    }
+
     /// Returns true while the controller cannot make progress on its own.
     ///
     /// A controller whose completions arrive as interrupts returns false, so

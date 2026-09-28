@@ -13,6 +13,7 @@ pub const GHWCFG3: usize = 0x04c;
 pub const GHWCFG4: usize = 0x050;
 pub const HPTXFSIZ: usize = 0x100;
 pub const HCFG: usize = 0x400;
+pub const HFIR: usize = 0x404;
 pub const HFNUM: usize = 0x408;
 pub const HAINT: usize = 0x414;
 pub const HAINTMSK: usize = 0x418;

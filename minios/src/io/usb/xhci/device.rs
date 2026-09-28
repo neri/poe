@@ -46,6 +46,7 @@ use crate::io::usb::class::hid_keyboard::{BOOT_REPORT_SIZE, BootKeyboard};
 use crate::io::usb::class::msc::bot::{Pipe, Transfer};
 use crate::io::usb::class::msc::registry::{self, Backend, DeviceInfo};
 use crate::io::usb::class::msc::{self, MAX_INTERFACES_PER_DEVICE, MscInterface, MscSession};
+use crate::io::usb::inventory::{UsbBus, UsbDeviceInfo, Uses};
 use crate::usb_println;
 
 /// Root ports this tracks.  The Raspberry Pi 4's VL805 has five: one USB 2.0
@@ -231,6 +232,17 @@ impl core::fmt::Display for Bound {
     }
 }
 
+/// The descriptors read from the device at one place, kept for `lsusb` until
+/// that port reports a disconnect. Devices left alone keep theirs too, after
+/// their slot is released.
+struct Record {
+    at: Bound,
+    speed: UsbSpeed,
+    device: Vec<u8>,
+    configuration: Vec<u8>,
+    configured: Option<u8>,
+}
+
 /// The hub this driver is willing to drive, and what it is doing.
 ///
 /// One at a time: the plan fixes the scope at a single tier, and a second hub
@@ -335,6 +347,7 @@ pub struct XhciUsb<'e, E: XhciEnv> {
     /// unplugged or the enumeration finally succeeds.
     attempts: [u8; MAX_ROOT_PORTS],
     snapshot: DeviceSnapshot,
+    records: Vec<Record>,
 }
 
 impl<'e, E: XhciEnv> XhciUsb<'e, E> {
@@ -364,6 +377,7 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
             hub: None,
             attempts: [0; MAX_ROOT_PORTS],
             snapshot: DeviceSnapshot::default(),
+            records: Vec::new(),
         }
     }
 
@@ -838,6 +852,10 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         }
     }
 
+    fn record_mut(&mut self, at: Bound) -> Option<&mut Record> {
+        self.records.iter_mut().find(|record| record.at == at)
+    }
+
     fn pending_interface(&self, index: u8) -> Result<KeyboardInterface, UsbError> {
         self.pending
             .get(index as usize)
@@ -879,6 +897,14 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                 )?;
                 let device = DeviceDescriptor::parse(&bytes)?;
                 self.pending_ids = (device.vendor_id, device.product_id);
+                self.records.retain(|record| record.at != at);
+                self.records.push(Record {
+                    at,
+                    speed,
+                    device: bytes.to_vec(),
+                    configuration: Vec::new(),
+                    configured: None,
+                });
                 usb_println!(
                     "xHCI {}: {:04x}:{:04x} USB {:04x} class {:02x}/{:02x}/{:02x} EP0 {}",
                     at,
@@ -911,6 +937,9 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     &mut head,
                 )?;
                 let configuration = ConfigurationDescriptor::parse(&head)?;
+                if let Some(record) = self.record_mut(at) {
+                    record.configuration = head.to_vec();
+                }
                 if self.pending_class == hub::CLASS_HUB {
                     // A hub's ports do not answer until its configuration is
                     // set, and its own descriptor is a class request rather
@@ -932,6 +961,9 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     descriptor_request(libusb::DESCRIPTOR_CONFIGURATION, total as u16),
                     &mut bytes[..total],
                 )?;
+                if let Some(record) = self.record_mut(at) {
+                    record.configuration = bytes[..read].to_vec();
+                }
                 let found = find_boot_keyboards(&bytes[..read])?;
                 let storage = self.find_storage(at, &bytes[..read]);
                 let count = found.iter().flatten().count();
@@ -962,6 +994,9 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
             }
             Step::SetConfiguration { value } => {
                 self.control_out(slot, SetupPacket::set_configuration(value))?;
+                if let Some(record) = self.record_mut(at) {
+                    record.configured = Some(value);
+                }
                 Ok(self.after_keyboard(None))
             }
             Step::ConfigureEndpoint { index } => {
@@ -1058,6 +1093,9 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
                     return Ok(Outcome::NotForUs);
                 }
                 self.control_out(slot, SetupPacket::set_configuration(value))?;
+                if let Some(record) = self.record_mut(at) {
+                    record.configured = Some(value);
+                }
                 Ok(Outcome::Continue(Step::HubDescriptor))
             }
             Step::HubDescriptor => {
@@ -1284,6 +1322,7 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
 
     /// Clears what is remembered about a port whose device has gone.
     fn forget_hub_port(&mut self, port: u8) {
+        self.records.retain(|record| record.at != Bound::Hub(port));
         if let Some(hub) = self.hub.as_mut() {
             hub.ignored &= !(1 << port);
             hub.waiting_for_room &= !(1 << port);
@@ -1831,7 +1870,10 @@ impl<'e, E: XhciEnv> XhciUsb<'e, E> {
         {
             self.detach_all_hub_devices();
             self.hub = None;
+            self.records
+                .retain(|record| !matches!(record.at, Bound::Hub(_)));
         }
+        self.records.retain(|record| record.at != Bound::Root(port));
         let freed = matches!(state, PortState::Bound { slot } if self.unbind(slot));
         if freed {
             usb_println!("xHCI port {}: keyboard detached", port);
@@ -1980,6 +2022,42 @@ fn find_boot_keyboards(
     Ok(found)
 }
 
+impl<E: XhciEnv> UsbBus for XhciUsb<'_, E> {
+    fn controller(&self) -> &'static str {
+        "xHCI"
+    }
+
+    fn devices(&self) -> Vec<UsbDeviceInfo> {
+        let hub_root = self.hub.as_ref().map(|hub| hub.root_port);
+        self.records
+            .iter()
+            .filter_map(|record| {
+                let path = match record.at {
+                    Bound::Root(port) => alloc::vec![port],
+                    Bound::Hub(port) => alloc::vec![hub_root?, port],
+                };
+                Some(UsbDeviceInfo {
+                    path,
+                    speed: record.speed,
+                    address: None,
+                    device: record.device.clone(),
+                    configuration: record.configuration.clone(),
+                    configured: record.configured,
+                    uses: Uses {
+                        hub: matches!(record.at, Bound::Root(port) if hub_root == Some(port)),
+                        keyboard: self
+                            .keyboards
+                            .iter()
+                            .flatten()
+                            .any(|keyboard| keyboard.at == record.at),
+                        storage: self.storage.iter().any(|storage| storage.at == record.at),
+                    },
+                })
+            })
+            .collect()
+    }
+}
+
 impl<E: XhciEnv> SystemService for XhciUsb<'_, E> {
     fn poll(&mut self) -> Result<(), ServiceError> {
         self.poll_once().map_err(|_| ServiceError::Failed)
@@ -1995,5 +2073,73 @@ impl<E: XhciEnv> SystemService for XhciUsb<'_, E> {
         // nothing plugged in — is woken by the controller, and only the
         // timed phases of enumeration still want foreground time.
         !self.controller.interrupts_enabled() || self.timing_sensitive()
+    }
+
+    fn usb_bus(&self) -> Option<&dyn UsbBus> {
+        Some(self)
+    }
+
+    fn describe(&self, out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        writeln!(
+            out,
+            "xHCI: {} root port(s), keyboard(s) {}, mass storage interfaces {}",
+            self.controller.port_count(),
+            self.keyboard_count(),
+            self.storage.len()
+        )?;
+        let ports = self.controller.port_count().min(MAX_ROOT_PORTS as u8);
+        for port in 1..=ports {
+            let status = self.controller.port_status(port);
+            let state = self.ports[port as usize - 1];
+            if !status.connected && state == PortState::Idle {
+                continue;
+            }
+            write!(
+                out,
+                "  port {:>2}: {}{}{}{}",
+                port,
+                if status.connected {
+                    "connected"
+                } else {
+                    "disconnected"
+                },
+                if status.enabled { ", enabled" } else { "" },
+                if status.powered {
+                    ", powered"
+                } else {
+                    ", unpowered"
+                },
+                if status.resetting { ", in reset" } else { "" },
+            )?;
+            if let Some(speed) = status.speed {
+                write!(out, ", {:?} speed", speed)?;
+            }
+            writeln!(out, ", PORTSC={:08x}, {:?}", status.raw, state)?;
+        }
+        let devices = self.snapshot;
+        writeln!(
+            out,
+            "  connects {} disconnects {} enumerated {} failures {} ignored {} abandoned {}",
+            devices.connects,
+            devices.disconnects,
+            devices.enumerated,
+            devices.enumeration_failures,
+            devices.ignored_devices,
+            devices.abandoned_ports
+        )?;
+        let controller = self.controller.snapshot();
+        writeln!(
+            out,
+            "  commands {} ({} errors, {} timeouts), transfers {} ({} errors, {} timeouts), events {} ({} dropped), host errors {}",
+            controller.commands,
+            controller.command_errors,
+            controller.command_timeouts,
+            controller.transfers,
+            controller.transfer_errors,
+            controller.transfer_timeouts,
+            controller.events,
+            controller.dropped_events,
+            controller.host_errors
+        )
     }
 }

@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use libusb::{
@@ -9,13 +10,14 @@ use libusb::{
 
 use super::class::hid::{IDLE_DURATION_4MS, set_idle, set_protocol_boot};
 use super::class::hid_keyboard::{BOOT_REPORT_SIZE, BootKeyboard};
-use super::class::hub::{HubPort, MAX_DOWNSTREAM_PORTS};
+use super::class::hub::{CLASS_HUB, HubPort, MAX_DOWNSTREAM_PORTS};
 use super::class::msc::{self, registry};
 use super::control::{ControlRequestContext, ControlTransfer};
 use super::hcd::{
     HostController, RootPortState, SplitTarget, TransferCompletion, TransferRequest, TransferToken,
     UsbRoute,
 };
+use super::inventory::{UsbBus, UsbDeviceInfo, Uses};
 use super::storage::{ControlOwner, Storage};
 use crate::env::{ServiceError, SystemService};
 
@@ -24,6 +26,10 @@ pub const MAX_CONFIGURATION_DESCRIPTOR: usize = 512;
 pub const COMPLETION_BUDGET: usize = 32;
 const HUB_MONITOR_INTERVAL_US: u64 = 1_000_000;
 const TT_RECOVERY_DELAY_US: u64 = 2_000;
+/// Wait after a root port reset before the first transaction. USB 2.0 asks
+/// for 10 ms (TRSTRCY); Linux allows 50 ms, and so does this. The Milk-V Duo
+/// IO-Board hub answered nothing sent sooner.
+const ROOT_RESET_RECOVERY_US: u64 = 50_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DeviceLocation {
@@ -40,6 +46,9 @@ pub struct DeviceRecord {
     pub configuration: Option<u8>,
     pub vendor_id: Option<u16>,
     pub product_id: Option<u16>,
+    /// The device descriptor, once read.
+    pub device_descriptor: Vec<u8>,
+    /// The configuration descriptor, once read.
     pub descriptor: Vec<u8>,
 }
 
@@ -283,6 +292,8 @@ pub struct UsbManager {
     /// is working for, if any.
     storage: Vec<Storage>,
     storage_control: Option<ControlOwner>,
+    /// When and where enumeration last gave up, for `describe`.
+    last_failure: Option<(u64, String)>,
 }
 
 impl UsbManager {
@@ -314,6 +325,7 @@ impl UsbManager {
             fallback_probe: None,
             storage: Vec::new(),
             storage_control: None,
+            last_failure: None,
         }
     }
     pub fn allocate_device(
@@ -335,6 +347,7 @@ impl UsbManager {
             configuration: None,
             vendor_id: None,
             product_id: None,
+            device_descriptor: Vec::new(),
             descriptor: Vec::new(),
         });
         self.snapshot.device_count = self.devices.len() as u8;
@@ -441,17 +454,25 @@ impl UsbManager {
                     until_us: now.saturating_add(100_000),
                 };
             }
-            (RootPortState::Connected(_), RootScan::Debouncing { until_us }) if now >= until_us => {
+            // After a failed enumeration the port can still be enabled; the
+            // retry starts over with a reset either way.
+            (
+                RootPortState::Connected(_) | RootPortState::Enabled(_),
+                RootScan::Debouncing { until_us },
+            ) if now >= until_us => {
                 let until_us = now.saturating_add(50_000);
                 if self.hcd.reset_root_port(until_us).is_ok() {
                     crate::usb_println!("USB: resetting root port");
                     self.root_scan = RootScan::Resetting { until_us };
                 } else {
                     self.snapshot.errors = self.snapshot.errors.saturating_add(1);
+                    self.note_failure(now, format_args!("root port reset refused"));
                     self.root_scan = RootScan::Idle;
                 }
             }
-            (RootPortState::Enabled(_), RootScan::Resetting { until_us }) if now >= until_us => {
+            (RootPortState::Enabled(_), RootScan::Resetting { until_us })
+                if now >= until_us.saturating_add(ROOT_RESET_RECOVERY_US) =>
+            {
                 self.root_scan = RootScan::Ready;
             }
             (RootPortState::Enabled(speed), RootScan::Ready) => {
@@ -474,6 +495,7 @@ impl UsbManager {
                     self.hcd.snapshot()
                 );
                 self.snapshot.errors = self.snapshot.errors.saturating_add(1);
+                self.note_failure(now, format_args!("root reset did not enable the port"));
                 self.root_scan = RootScan::Debouncing {
                     until_us: now.saturating_add(1_000_000),
                 };
@@ -812,13 +834,28 @@ impl UsbManager {
         )
     }
 
-    fn enumeration_failed(&mut self, now: u64) {
+    fn note_failure(&mut self, now: u64, what: core::fmt::Arguments) {
+        self.last_failure = Some((now, alloc::format!("{what}")));
+    }
+
+    fn enumeration_failed(&mut self, now: u64, error: Option<UsbError>) {
         crate::usb_println!(
             "USB: root enumeration failed at {:?}, HCD {:?}",
             self.root_scan,
             self.hcd.snapshot()
         );
         self.snapshot.errors = self.snapshot.errors.saturating_add(1);
+        let stage = self.root_scan;
+        match error {
+            Some(error) => self.note_failure(
+                now,
+                format_args!("root enumeration at {:?}: {:?}", stage, error),
+            ),
+            None => self.note_failure(
+                now,
+                format_args!("root enumeration at {:?}: unexpected reply", stage),
+            ),
+        }
         if let Some(address) = self.devices.iter().find_map(|device| {
             matches!(device.location, DeviceLocation::Root).then_some(device.address)
         }) {
@@ -830,20 +867,23 @@ impl UsbManager {
     }
 
     fn advance_enumeration(&mut self, result: Result<usize, UsbError>, now: u64) {
-        let Ok(actual) = result else {
-            self.enumeration_failed(now);
-            return;
+        let actual = match result {
+            Ok(actual) => actual,
+            Err(error) => {
+                self.enumeration_failed(now, Some(error));
+                return;
+            }
         };
         let next = match self.root_scan {
             RootScan::ReadingFirstDescriptor => {
                 if actual < 8 || !matches!(self.control.data[7], 8 | 16 | 32 | 64) {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 }
                 self.ep0_packet_size = self.control.data[7] as u16;
                 let Ok(address) = self.allocate_device(self.root_speed, DeviceLocation::Root)
                 else {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 };
                 let setup = SetupPacket::set_address(address.get());
@@ -859,7 +899,7 @@ impl UsbManager {
                     )
                     .is_err()
                 {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 }
                 RootScan::SettingAddress { address }
@@ -870,22 +910,22 @@ impl UsbManager {
             },
             RootScan::ReadingDevice { address } => {
                 let Ok(descriptor) = DeviceDescriptor::parse(&self.control.data[..actual]) else {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 };
                 if let Some(record) = self.devices.iter_mut().find(|d| d.address == address) {
                     record.vendor_id = Some(descriptor.vendor_id);
                     record.product_id = Some(descriptor.product_id);
-                    record.descriptor.clear();
+                    record.device_descriptor.clear();
                     record
-                        .descriptor
+                        .device_descriptor
                         .extend_from_slice(&self.control.data[..actual]);
                 }
                 if self
                     .start_descriptor(address, DESCRIPTOR_CONFIGURATION, 9, now)
                     .is_err()
                 {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 }
                 RootScan::ReadingConfigHeader { address }
@@ -893,7 +933,7 @@ impl UsbManager {
             RootScan::ReadingConfigHeader { address } => {
                 let Ok(config) = ConfigurationDescriptor::parse(&self.control.data[..actual])
                 else {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 };
                 let length = config.total_length.min(MAX_CONFIGURATION_DESCRIPTOR as u16);
@@ -901,7 +941,7 @@ impl UsbManager {
                     .start_descriptor(address, DESCRIPTOR_CONFIGURATION, length, now)
                     .is_err()
                 {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 }
                 RootScan::ReadingConfig { address }
@@ -909,7 +949,7 @@ impl UsbManager {
             RootScan::ReadingConfig { address } => {
                 let Ok(config) = ConfigurationDescriptor::parse(&self.control.data[..actual])
                 else {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 };
                 if let Some(record) = self.devices.iter_mut().find(|d| d.address == address) {
@@ -930,7 +970,7 @@ impl UsbManager {
                     )
                     .is_err()
                 {
-                    self.enumeration_failed(now);
+                    self.enumeration_failed(now, None);
                     return;
                 }
                 RootScan::SettingConfiguration {
@@ -1508,6 +1548,9 @@ impl UsbManager {
     fn child_failed(&mut self) {
         crate::usb_println!("USB: child enumeration failed at {:?}", self.child_scan);
         self.snapshot.errors = self.snapshot.errors.saturating_add(1);
+        let now = (self.now_us)();
+        let stage = self.child_scan;
+        self.note_failure(now, format_args!("hub child enumeration at {:?}", stage));
         let failed_port = match self.child_scan {
             ChildScan::ResetRecovery { hub, port, .. }
             | ChildScan::ReadingFirst { hub, port, .. }
@@ -1777,6 +1820,10 @@ impl UsbManager {
                 if let Some(record) = self.devices.iter_mut().find(|d| d.address == address) {
                     record.vendor_id = Some(device.vendor_id);
                     record.product_id = Some(device.product_id);
+                    record.device_descriptor.clear();
+                    record
+                        .device_descriptor
+                        .extend_from_slice(&self.control.data[..actual]);
                 }
                 crate::usb_println!(
                     "USB: device {} on hub {} port {}: {:04x}:{:04x}",
@@ -2114,6 +2161,61 @@ impl UsbManager {
     }
 }
 
+impl UsbManager {
+    /// The ports from the root down to `address`. The root port is 1: a
+    /// manager drives a controller with a single one.
+    fn port_path(&self, address: UsbAddress) -> Vec<u8> {
+        let mut path = Vec::new();
+        let mut current = address;
+        // A chain longer than USB allows (five hubs) means a loop.
+        for _ in 0..7 {
+            let Some(record) = self.devices.iter().find(|d| d.address == current) else {
+                break;
+            };
+            match record.location {
+                DeviceLocation::Root => {
+                    path.push(1);
+                    break;
+                }
+                DeviceLocation::Hub { hub, port } => {
+                    path.push(port);
+                    current = hub;
+                }
+            }
+        }
+        path.reverse();
+        path
+    }
+}
+
+impl UsbBus for UsbManager {
+    fn controller(&self) -> &'static str {
+        self.hcd.name()
+    }
+
+    fn devices(&self) -> Vec<UsbDeviceInfo> {
+        self.devices
+            .iter()
+            .map(|record| UsbDeviceInfo {
+                path: self.port_path(record.address),
+                speed: record.speed,
+                address: Some(record.address.get()),
+                device: record.device_descriptor.clone(),
+                configuration: record.descriptor.clone(),
+                configured: record.configuration,
+                uses: Uses {
+                    hub: record.device_descriptor.get(4) == Some(&CLASS_HUB),
+                    keyboard: self
+                        .hid
+                        .as_ref()
+                        .is_some_and(|session| session.address == record.address),
+                    storage: self.storage.iter().any(|s| s.address == record.address),
+                },
+            })
+            .collect()
+    }
+}
+
 impl SystemService for UsbManager {
     fn poll(&mut self) -> Result<(), ServiceError> {
         self.poll_once();
@@ -2128,6 +2230,82 @@ impl SystemService for UsbManager {
         // A mass storage stage re-arms each NAKed packet from here, and its
         // deadlines are shorter than a tick apart.
         self.hcd.requires_foreground_polling() || self.storage.iter().any(Storage::busy)
+    }
+
+    fn usb_bus(&self) -> Option<&dyn UsbBus> {
+        Some(self)
+    }
+
+    fn describe(&self, out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        let now = (self.now_us)();
+        writeln!(
+            out,
+            "USB root port: {:?}, enumeration: {:?}",
+            self.hcd.root_port_state(),
+            self.root_scan
+        )?;
+        if self.hub_scan != HubScan::Idle || self.child_scan != ChildScan::Idle {
+            writeln!(
+                out,
+                "  hub: {:?}, child: {:?}",
+                self.hub_scan, self.child_scan
+            )?;
+        }
+        writeln!(
+            out,
+            "  keyboard: {}, mass storage interfaces: {}",
+            if self.keyboard_ready() {
+                "ready"
+            } else {
+                "none"
+            },
+            self.storage.len()
+        )?;
+        writeln!(out, "  devices: {}", self.devices.len())?;
+        for device in &self.devices {
+            write!(
+                out,
+                "    address {:>2} {:?}",
+                device.address.get(),
+                device.speed
+            )?;
+            match device.location {
+                DeviceLocation::Root => write!(out, " root port")?,
+                DeviceLocation::Hub { hub, port } => {
+                    write!(out, " hub {} port {}", hub.get(), port)?
+                }
+            }
+            if let (Some(vendor), Some(product)) = (device.vendor_id, device.product_id) {
+                write!(out, " {:04x}:{:04x}", vendor, product)?;
+            }
+            match device.configuration {
+                Some(configuration) => writeln!(out, " configuration {}", configuration)?,
+                None => writeln!(out, " not configured")?,
+            }
+        }
+        let hcd = self.hcd.snapshot();
+        writeln!(
+            out,
+            "  transfers: submitted {} completed {} NAK {} STALL {} timeout {} transaction error {} other {} active {}",
+            hcd.submitted,
+            hcd.completed,
+            hcd.naks,
+            hcd.stalls,
+            hcd.timeouts,
+            hcd.transaction_errors,
+            hcd.other_errors,
+            hcd.active
+        )?;
+        writeln!(
+            out,
+            "  errors {}, disconnects {}",
+            self.snapshot.errors, self.snapshot.disconnects
+        )?;
+        if let Some((at, what)) = &self.last_failure {
+            let ago_ms = now.saturating_sub(*at) / 1_000;
+            writeln!(out, "  last failure ({} ms ago): {}", ago_ms, what)?;
+        }
+        self.hcd.describe(out)
     }
 }
 
@@ -2164,6 +2342,51 @@ mod tests {
     }
     fn now() -> u64 {
         0
+    }
+    #[test]
+    fn devices_report_port_paths_and_uses() {
+        let mut m = UsbManager::new(
+            Box::new(Fake {
+                state: RootPortState::Disconnected,
+                snapshot: HcdSnapshot::default(),
+            }),
+            now,
+        );
+        let hub = m
+            .allocate_device(UsbSpeed::High, DeviceLocation::Root)
+            .unwrap();
+        let child = m
+            .allocate_device(UsbSpeed::Low, DeviceLocation::Hub { hub, port: 3 })
+            .unwrap();
+        m.devices[0].device_descriptor = alloc::vec![18, 1, 0, 2, 9, 0, 1, 64];
+        let devices = UsbBus::devices(&m);
+        assert_eq!(UsbBus::controller(&m), "USB");
+        assert_eq!(devices[0].path, alloc::vec![1]);
+        assert!(devices[0].uses.hub);
+        assert_eq!(devices[1].path, alloc::vec![1, 3]);
+        assert_eq!(devices[1].address, Some(child.get()));
+        assert!(!devices[1].uses.hub);
+    }
+    #[test]
+    fn describe_reports_devices_and_last_failure() {
+        let mut m = UsbManager::new(
+            Box::new(Fake {
+                state: RootPortState::Connected(UsbSpeed::Full),
+                snapshot: HcdSnapshot::default(),
+            }),
+            now,
+        );
+        m.allocate_device(UsbSpeed::Low, DeviceLocation::Root)
+            .unwrap();
+        m.enumeration_failed(0, Some(UsbError::Timeout));
+        let mut text = String::new();
+        m.describe(&mut text).unwrap();
+        assert!(text.contains("USB root port: Connected(Full)"), "{text}");
+        assert!(text.contains("devices: 0"), "{text}");
+        assert!(
+            text.contains("last failure (0 ms ago): root enumeration at Idle: Timeout"),
+            "{text}"
+        );
     }
     #[test]
     fn address_reuse_gets_new_generation() {

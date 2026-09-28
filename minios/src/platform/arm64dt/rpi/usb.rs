@@ -4,12 +4,13 @@ use alloc::boxed::Box;
 
 use fdt::PropName;
 
-use super::dwc2::{DmaMap, Dwc2, install_interrupt, interrupt_handler};
+use super::armctrl::Armctrl;
 use super::{MachineType, current_machine_type, mbox};
+use crate::arch::cache;
 use crate::arch::gic::Irq;
 use crate::env::SystemService;
 use crate::io::usb::UsbManager;
-use crate::io::usb::hcd::HostController;
+use crate::io::usb::dwc2::{DmaMap, Dwc2, Dwc2Platform, install_interrupt, interrupt_handler};
 use crate::io::usb::input::UsbTextInputMux;
 use crate::platform::arm64dt::{counter_us, dt, irq};
 use crate::{System, usb_println};
@@ -65,52 +66,28 @@ pub unsafe fn init(tree: &fdt::DeviceTree) -> Result<(), &'static str> {
         return Err("DWC2 MMIO region is too small");
     }
     mbox::power_usb_hcd().map_err(|_| "firmware rejected USB power request")?;
-    let controller = unsafe { Dwc2::new(probe.mmio_base, probe.dma, counter_us) }
-        .map_err(|_| "DWC2 initialization failed")?;
-    let cap = controller.capabilities();
-    let phy = match cap.hs_phy_type {
-        1 => "UTMI+",
-        2 => "ULPI",
-        3 => "UTMI+/ULPI",
-        _ => "FS-only",
+    let platform = Dwc2Platform {
+        now_us: counter_us,
+        dcache_clean: cache::dcache_clean,
+        dcache_invalidate: cache::dcache_invalidate,
+        dcache_clean_invalidate: cache::dcache_clean_invalidate,
+        // Bit 4 is the BCM2835 wait-for-AXI-writes integration setting.
+        ahb_config: 1 << 4,
+        utmi_width: None,
+        full_speed_only: false,
     };
-    usb_println!(
-        "USB DWC2: {:08x}, {} channels, FIFO {} words, PHY {}/{}",
-        cap.snpsid,
-        cap.host_channels,
-        cap.fifo_depth_words,
-        phy,
-        cap.utmi_width
-    );
-    usb_println!(
-        "USB GHWCFG: {:08x} {:08x} {:08x} {:08x} (descriptor DMA {})",
-        cap.hwcfg[0],
-        cap.hwcfg[1],
-        cap.hwcfg[2],
-        cap.hwcfg[3],
-        if cap.descriptor_dma {
-            "available, unused"
-        } else {
-            "absent"
-        }
-    );
-    let regs = controller.register_snapshot();
-    usb_println!(
-        "USB regs: GUSBCFG={:08x} HCFG={:08x} HPRT={:08x} PCGCTL={:08x} GINTSTS={:08x}",
-        regs.gusbcfg,
-        regs.hcfg,
-        regs.hprt,
-        regs.pcgctl,
-        regs.gintsts
-    );
-    usb_println!("USB root port: {:?}", controller.root_port_state());
+    let controller = unsafe { Dwc2::new(probe.mmio_base, probe.dma, platform) }
+        .map_err(|_| "DWC2 initialization failed")?;
+    controller.log_state();
     // Route completions through the GPU-interrupt cascade so the system can
     // sleep between transfers. The ISR only latches and acknowledges; the
     // manager still reaps from System::poll_services(). If the interrupt ever
     // turns out to be unserviceable the handler takes it back off the cascade
     // and the driver degrades to polling HCINT on its own; see stage 3 of
     // docs/USB_HOST_RPI3_PLAN.md for what that path cost to get right.
-    install_interrupt(probe.mmio_base, probe.irq);
+    install_interrupt(probe.mmio_base, probe.irq.0, |irq| unsafe {
+        Armctrl::disable(Irq(irq))
+    });
     unsafe { irq::register_usb_handler(probe.irq, interrupt_handler) };
     usb_println!("USB completion mode: interrupt (IRQ {})", probe.irq.0);
     crate::io::usb::class::msc::registry::with_global(|r| r.set_clock(counter_us));

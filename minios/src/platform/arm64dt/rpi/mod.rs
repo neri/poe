@@ -15,8 +15,6 @@ use pm::Pm;
 use super::dt;
 
 pub mod armctrl;
-#[cfg(feature = "usb")]
-pub mod dwc2;
 pub mod fb;
 pub mod gpio;
 pub mod local_intc;

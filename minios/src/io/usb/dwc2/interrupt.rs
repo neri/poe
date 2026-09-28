@@ -8,13 +8,13 @@
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
-use super::super::armctrl::Armctrl;
 use super::regs;
-use crate::arch::gic::Irq;
 use crate::arch::hal::{Hal, HalCpu, HalTrait};
 
 static BASE: AtomicUsize = AtomicUsize::new(0);
 static IRQ: AtomicU32 = AtomicU32::new(0);
+/// `fn(u32)` that takes `IRQ` off the interrupt controller.
+static DISABLE_IRQ: AtomicUsize = AtomicUsize::new(0);
 /// Written by the handler only.
 pub static EVENT_GENERATION: AtomicU32 = AtomicU32::new(0);
 pub static PORT_EVENTS: AtomicU32 = AtomicU32::new(0);
@@ -33,8 +33,12 @@ const STORM_LIMIT: u32 = 1024;
 
 /// Points the ISR at the controller. Until this is called the handler does
 /// nothing and completions are reaped by polling `HCINT` in the foreground.
-pub fn install(base: usize, irq: Irq) {
-    IRQ.store(irq.0, Ordering::Relaxed);
+///
+/// `disable_irq` is called with `irq` if the interrupt turns out to be
+/// unserviceable.
+pub fn install(base: usize, irq: u32, disable_irq: fn(u32)) {
+    IRQ.store(irq, Ordering::Relaxed);
+    DISABLE_IRQ.store(disable_irq as usize, Ordering::Relaxed);
     BASE.store(base, Ordering::Release)
 }
 
@@ -91,10 +95,13 @@ pub fn handle() {
 
         if entries.wrapping_sub(OBSERVED.load(Ordering::Relaxed)) > STORM_LIMIT {
             // The foreground has not run for a very long run of interrupts, so
-            // this source cannot be serviced here. Take it off the cascade
-            // rather than livelock; the driver falls back to polling HCINT.
+            // this source cannot be serviced here. Take it off the interrupt
+            // controller rather than livelock; the driver falls back to
+            // polling HCINT.
             STORMED.store(true, Ordering::Relaxed);
-            Armctrl::disable(Irq(IRQ.load(Ordering::Relaxed)));
+            let disable_irq: fn(u32) =
+                core::mem::transmute::<usize, fn(u32)>(DISABLE_IRQ.load(Ordering::Relaxed));
+            disable_irq(IRQ.load(Ordering::Relaxed));
             return;
         }
 

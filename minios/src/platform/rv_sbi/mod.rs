@@ -8,6 +8,8 @@ use sbi::Eid;
 
 use super::*;
 
+#[cfg(all(target_arch = "riscv64", feature = "usb"))]
+mod cv181x;
 #[cfg(target_arch = "riscv64")]
 mod jh7110;
 #[cfg(feature = "virtio")]
@@ -110,6 +112,14 @@ impl Platform for CurrentPlatform {
             #[cfg(target_arch = "riscv64")]
             if let Some(dt) = System::device_tree() {
                 jh7110::init(dt);
+            }
+
+            #[cfg(all(target_arch = "riscv64", feature = "usb"))]
+            if let Some(dt) = System::device_tree()
+                && cv181x::is_cv18xx(dt)
+                && let Err(reason) = cv181x::init_usb(dt)
+            {
+                println!("CV181x USB disabled: {}", reason);
             }
 
             Hal::cpu().enable_interrupt();
