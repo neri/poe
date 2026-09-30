@@ -17,13 +17,12 @@
   * rv64gc virt machine
   * StarFive VisionFive 2
   * Milk-V Duo & Duo 256M
-* x86-64
-  * UEFI
-* x86-32
+* x86
   * IBM PC Compatible
   * NEC PC-98 Series Computer
   * Fujitsu FM TOWNS
-* arm64 (one kernel image for all of them)
+  * UEFI (x86-64)
+* arm64
   * Raspberry Pi 3 & 4
   * virt machine
   * RK3399 Chromebook (ASUS Chromebook Flip C101PA)
@@ -34,22 +33,9 @@
 
 ✅ implemented / ❌ not yet / — not applicable
 
-### x86
-
-| Feature           |  PC/AT   | PC-98  | FM TOWNS | UEFI (x64) |
-| ----------------- | :------: | :----: | :------: | :--------: |
-| Boot              |    ✅     |   ✅    |    ✅     |     ✅      |
-| Text-mode console |  ✅ CGA   |   ✅    |    ✅     |   ✅ UEFI   |
-| Serial console    | ✅ 16550* |   ❌    |    ❌     |     ❌      |
-| Graphical console |  ✅ VESA  | ✅ PEGC |  ✅ SVGA  |   ✅ GOP    |
-| Keyboard          |  ✅ PS/2  | ✅ BIOS |    ✅     |   ✅ UEFI   |
-| Timer             |  ✅ PIT   | ✅ PIT  |  ✅ PIT   |     ✅      |
-| Panic handler     |    ✅     |   ✅    |    ✅     |     ❌      |
-| Block device      |  ✅ BIOS  | ✅ BIOS |  ✅ BIOS  |   ✅ UEFI   |
-
 ### RISC-V
 
-| Feature           |   RV64 virt    |   RV32 virt    | VisionFive 2 | Milk-V Duo | Milk-V Duo 256M |
+| Feature           |   RV32 virt    |   RV64 virt    | VisionFive 2 | Milk-V Duo | Milk-V Duo 256M |
 | ----------------- | :------------: | :------------: | :----------: | :--------: | :-------------: |
 | Boot              |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
 | Serial console    |     ✅ SBI      |     ✅ SBI      |    ✅ SBI     |   ✅ SBI    |      ✅ SBI      |
@@ -58,6 +44,19 @@
 | Timer             |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
 | Panic handler     |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
 | Block device      | ✅ USB / VirtIO | ✅ USB / VirtIO |    ✅ USB     |   ✅ USB    |      ✅ USB      |
+
+### x86
+
+| Feature           |  PC/AT   | PC-98  | FM TOWNS | UEFI (x86-64) |
+| ----------------- | :------: | :----: | :------: | :-----------: |
+| Boot              |    ✅     |   ✅    |    ✅     |       ✅       |
+| Text-mode console |  ✅ CGA   |   ✅    |    ✅     |    ✅ UEFI     |
+| Serial console    | ✅ 16550* |   ❌    |    ❌     |       ❌       |
+| Graphical console |  ✅ VESA  | ✅ PEGC |  ✅ SVGA  |     ✅ GOP     |
+| Keyboard          |  ✅ PS/2  | ✅ BIOS |    ✅     |    ✅ UEFI     |
+| Timer             |  ✅ PIT   | ✅ PIT  |  ✅ PIT   |       ✅       |
+| Panic handler     |    ✅     |   ✅    |    ✅     |       ❌       |
+| Block device      |  ✅ BIOS  | ✅ BIOS |  ✅ BIOS  |    ✅ UEFI     |
 
 ### Arm64
 
