@@ -23,8 +23,8 @@
   * Fujitsu FM TOWNS
   * UEFI (x86-64)
 * arm64
-  * Raspberry Pi 3 & 4
   * virt machine
+  * Raspberry Pi 3 & 4
   * RK3399 Chromebook (ASUS Chromebook Flip C101PA)
 
 * **NOTE**: It may not work or may need to be adjusted as it has not been fully verified on actual hardware.
@@ -35,23 +35,23 @@
 
 ### RISC-V
 
-| Feature           |   RV32 virt    |   RV64 virt    | VisionFive 2 | Milk-V Duo | Milk-V Duo 256M |
-| ----------------- | :------------: | :------------: | :----------: | :--------: | :-------------: |
-| Boot              |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
-| Serial console    |     ✅ SBI      |     ✅ SBI      |    ✅ SBI     |   ✅ SBI    |      ✅ SBI      |
-| Graphical console |  ✅ VirtIO GPU  |  ✅ VirtIO GPU  |    ✅ HDMI    |     ❌      |        ❌        |
-| Keyboard          |     ✅ USB      |     ✅ USB      |    ✅ USB     |   ✅ USB    |      ✅ USB      |
-| Timer             |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
-| Panic handler     |       ✅        |       ✅        |      ✅       |     ✅      |        ✅        |
-| Block device      | ✅ USB / VirtIO | ✅ USB / VirtIO |    ✅ USB     |   ✅ USB    |      ✅ USB      |
+| Feature           |      virt      | VisionFive 2 | Milk-V Duo | Milk-V Duo 256M |
+| ----------------- | :------------: | :----------: | :--------: | :-------------: |
+| Boot              |       ✅        |      ✅       |     ✅      |        ✅        |
+| Serial console    |     ✅ SBI      |    ✅ SBI     |   ✅ SBI    |      ✅ SBI      |
+| Graphical console |  ✅ VirtIO GPU  |    ✅ HDMI    |     ❌      |        ❌        |
+| Keyboard          |     ✅ USB      |    ✅ USB     |   ✅ USB    |      ✅ USB      |
+| Timer             |       ✅        |      ✅       |     ✅      |        ✅        |
+| Panic handler     |       ✅        |      ✅       |     ✅      |        ✅        |
+| Block device      | ✅ USB / VirtIO |    ✅ USB     |   ✅ USB    |      ✅ USB      |
 
 ### x86
 
 | Feature           |  PC/AT   | PC-98  | FM TOWNS | UEFI (x86-64) |
 | ----------------- | :------: | :----: | :------: | :-----------: |
 | Boot              |    ✅     |   ✅    |    ✅     |       ✅       |
-| Text-mode console |  ✅ CGA   |   ✅    |    ✅     |    ✅ UEFI     |
 | Serial console    | ✅ 16550* |   ❌    |    ❌     |       ❌       |
+| Text-mode console |  ✅ CGA   |   ✅    |    ✅     |    ✅ UEFI     |
 | Graphical console |  ✅ VESA  | ✅ PEGC |  ✅ SVGA  |     ✅ GOP     |
 | Keyboard          |  ✅ PS/2  | ✅ BIOS |    ✅     |    ✅ UEFI     |
 | Timer             |  ✅ PIT   | ✅ PIT  |  ✅ PIT   |       ✅       |
