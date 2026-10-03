@@ -43,7 +43,7 @@
 | Keyboard          |     ✅ USB      |    ✅ USB     |   ✅ USB    |      ✅ USB      |
 | Timer             |       ✅        |      ✅       |     ✅      |        ✅        |
 | Panic handler     |       ✅        |      ✅       |     ✅      |        ✅        |
-| Block device      | ✅ USB / VirtIO |    ✅ USB     |   ✅ USB    |      ✅ USB      |
+| Block device      | ✅ USB / VirtIO | ✅ USB / SD  | ✅ USB / SD |   ✅ USB / SD   |
 
 ### x86
 
@@ -68,11 +68,12 @@
 | Keyboard          |     ✅ USB      |   ✅ USB   | ✅ ChromeOS EC  |
 | Timer             |       ✅        |     ✅     |       ✅        |
 | Panic handler     |       ✅        |     ✅     |       ✅        |
-| Block device      | ✅ USB / VirtIO |   ✅ USB   |       ❌        |
+| Block device      | ✅ USB / VirtIO | ✅ USB / SD |       ❌        |
 
 * RV32 virt runs on minisbi, the bundled SBI implementation.
 * The PC/AT 16550 serial console is implemented but disabled in the default build.
-* USB mass storage is read-only; VirtIO block devices support reads and writes.
+* USB mass storage is read-only; VirtIO block devices and SD cards support reads and writes.
+* SD block I/O has been verified on Raspberry Pi 3/4, VisionFive 2, and Milk-V Duo 64M/256M. Raspberry Pi 3/4 also pass QEMU SDSC/SDHC tests.
 * Raspberry Pi 5 is not supported.
 
 ### Not yet

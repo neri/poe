@@ -142,6 +142,12 @@ impl Platform for CurrentPlatform {
             if let Some(dt) = System::device_tree() {
                 #[cfg(feature = "virtio")]
                 crate::io::virtio::init(dt);
+                #[cfg(feature = "sd")]
+                if rpi::is_detected() {
+                    if let Err(reason) = rpi::sd::init() {
+                        println!("SD disabled: {:?}", reason);
+                    }
+                }
                 #[cfg(feature = "usb")]
                 if rpi::current_machine_type() == rpi::MachineType::RaspberryPi3 {
                     if let Err(reason) = rpi::usb::init(dt) {

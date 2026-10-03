@@ -14,6 +14,7 @@ sbi = []
 arm64dt = ["device_tree"]
 usb = ["dep:libusb"]
 virtio = ["device_tree"]
+sd = ["dep:sd"]
 # Diagnostic output from the USB stack.  Off by default: the console is
 # normally a TUI and the stack keeps enumerating in the background, so a line
 # printed from a hotplug or a retry lands in the middle of the screen.
@@ -39,6 +40,7 @@ simple_font = { path = "../lib/simple_font/" }
 smbios = { path = "../lib/smbios/", features = ["guid"] }
 tui = { path = "../lib/tui/" }
 libusb = { path = "../lib/usb/", optional = true }
+sd = { path = "../lib/sd/", optional = true }
 
 uefi = { version="0.40", features = ['global_allocator', 'alloc'], optional = true }
 # uefi-raw = { version="0.14" }

@@ -15,6 +15,7 @@ uefi = []
 # Diagnostic commands for USB block devices
 usb = ["minios/usb"]
 virtio = ["minios/virtio"]
+sd = ["minios/sd"]
 
 [dependencies]
 minios = { path = "../../minios/" }

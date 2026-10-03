@@ -28,6 +28,7 @@ test:
 	(cd lib/mar; cargo test)
 	(cd lib/minilib; cargo test)
 	(cd lib/smbios; cargo test)
+	(cd lib/sd; cargo test)
 	(cd lib/usb; cargo test)
 	(cd minios; cargo test --features usb,device_tree --lib)
 	(cd lib/uuid; cargo test)

@@ -1,4 +1,5 @@
-.PHONY: love all default clean install full run run-el2 run-xhci run-msc run-rpi3 run-rpi4 test test-usb apps kernel update kpart usb run-virtio-rng run-virtio-blk run-virtio-gpu test-virtio
+.PHONY: love all default clean install full run run-el2 run-xhci run-msc run-rpi3 run-rpi4 test test-usb test-sd apps kernel update kpart usb run-virtio-rng run-virtio-blk run-virtio-gpu test-virtio
+.PHONY: run-rpi3-sd run-rpi4-sd
 
 BIN			= ./bin
 TEMP		= ../../temp
@@ -24,6 +25,7 @@ IMG_SOURCES	= $(POE_BIN)
 
 # GIC version of the QEMU virt machine (2 or 3)
 GIC			?= 2
+SD_DISK		?= $(TEMP)/sd-card.img
 
 # Device tree blobs of Raspberry Pi (from the Raspberry Pi firmware)
 DTB_PATH	= ./dtb
@@ -119,26 +121,43 @@ test-usb:
 	$(MAKE) FEATURES=minios/usb_debug $(POE_BIN)
 	python3 tools/usb-test.py --kernel $(POE_BIN) --dtb-dir $(DTB_PATH) $(USB_TESTS)
 
+# QEMU SD protocol tests use temporary SDSC/SDHC images and inspect the raw
+# image after the guest's destructive write/readback test.
+SD_TESTS ?=
+test-sd:
+	$(MAKE) FEATURES=minios/sd,minios/usb_debug $(POE_BIN)
+	python3 tools/sd-test.py --kernel $(POE_BIN) --dtb-dir $(DTB_PATH) $(SD_TESTS)
+
 # EL2 entry (like depthcharge / U-Boot on real hardware)
 run-el2:
 	qemu-system-aarch64 -M virt,gic-version=$(GIC),virtualization=on -cpu cortex-a53 -m 512M \
 		-nographic \
 		-kernel $(POE_BIN)
 
-run-rpi3:
+run-rpi3: $(POE_BIN)
 	qemu-system-aarch64 -M raspi3b -dtb $(DTB_PATH)/bcm2710-rpi-3-b.dtb \
 		-kernel $(POE_BIN) \
+		$(RPI_SD_ARGS) \
 		-global bcm2835-fb.xres=1280 -global bcm2835-fb.yres=800 \
 		-device usb-hub,id=hub1,bus=usb-bus.0,port=1 \
 		-device usb-kbd,id=kbd1,bus=usb-bus.0,port=1.1 \
 		-serial mon:stdio
 
 # Needs QEMU 9.0 or later
-run-rpi4:
+run-rpi4: $(POE_BIN)
 	qemu-system-aarch64 -M raspi4b -dtb $(DTB_PATH)/bcm2711-rpi-4-b.dtb \
 		-kernel $(POE_BIN) \
+		$(RPI_SD_ARGS) \
 		-global bcm2835-fb.xres=1280 -global bcm2835-fb.yres=800 \
 		-serial mon:stdio
+
+# SD-enabled variants for manual testing: make run-rpi3-sd SD_DISK=<raw image>
+run-rpi3-sd: RPI_SD_ARGS = -drive if=sd,format=raw,file=$(SD_DISK)
+run-rpi3-sd: run-rpi3
+
+# QEMU's Pi 4 default SD bus is the legacy host; attach to EMMC2 explicitly.
+run-rpi4-sd: RPI_SD_ARGS = -drive if=none,id=sdcard,format=raw,file=$(SD_DISK) -device sd-card,drive=sdcard,bus=/generic-sdhci/sd-bus
+run-rpi4-sd: run-rpi4
 
 test: poe
 

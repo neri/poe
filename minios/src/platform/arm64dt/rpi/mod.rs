@@ -22,6 +22,8 @@ pub mod mbox;
 #[cfg(feature = "usb")]
 pub mod pcie;
 pub mod pm;
+#[cfg(feature = "sd")]
+pub mod sd;
 pub mod uart1;
 #[cfg(feature = "usb")]
 pub mod usb;

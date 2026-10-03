@@ -9,10 +9,14 @@ use crate::{System, println};
 
 mod hdmi;
 mod pcie;
+#[cfg(feature = "sd")]
+mod sd;
 
 /// Returns whether the device tree describes a VisionFive 2 board.
 pub(super) fn is_visionfive2(tree: &DeviceTree) -> bool {
-    tree.root().is_compatible_with("starfive,visionfive-v2")
+    let root = tree.root();
+    root.is_compatible_with("starfive,visionfive-v2")
+        || (root.is_compatible_with("starfive,jh7110") && root.model() == "StarFive VisionFive V2")
 }
 
 /// Brings up the PCIe root ports and verifies the VL805 during early
@@ -27,6 +31,11 @@ pub(super) fn init_early(tree: &DeviceTree) {
 pub(super) fn init(tree: &DeviceTree) {
     if !is_visionfive2(tree) {
         return;
+    }
+
+    #[cfg(feature = "sd")]
+    if let Err(reason) = sd::init(tree) {
+        println!("VisionFive 2 SD disabled: {}", reason);
     }
 
     #[cfg(feature = "usb")]

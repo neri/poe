@@ -226,6 +226,7 @@ dependencies = [
  "paste",
  "riscv",
  "sbi",
+ "sd",
  "seq-macro",
  "simple_font",
  "smbios",
@@ -374,6 +375,10 @@ version = "0.1.0"
 dependencies = [
  "minilib",
 ]
+
+[[package]]
+name = "sd"
+version = "0.1.0"
 
 [[package]]
 name = "seq-macro"

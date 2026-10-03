@@ -17,6 +17,8 @@ pub use minios::prelude;
 use minios::prelude::*;
 use tui::prelude::*;
 
+#[cfg(feature = "sd")]
+mod sdblk;
 #[cfg(feature = "usb")]
 mod usbblk;
 #[cfg(feature = "virtio")]
@@ -48,7 +50,7 @@ pub fn main() {
                 "reboot" => System::reset_system(),
                 "clear" => System::stdout().clear_screen(),
                 "tui" => tui_demo::tui_demo(),
-                "mode" => mode(),
+                "mode" => mode(args),
                 #[cfg(feature = "usb")]
                 "usbstat" => cmd_usbstat(),
                 #[cfg(feature = "usb")]
@@ -59,6 +61,8 @@ pub fn main() {
                 "virq" | "vrng" | "vblk" | "vread" | "vwrite" | "vflush" | "vreset" => {
                     virtio::command(cmd, args)
                 }
+                #[cfg(feature = "sd")]
+                "sdblk" | "sdread" | "sdtest" | "sdreset" => sdblk::command(cmd, args),
                 _ => println!("{:?}: Bad command or file name.", cmd),
             }
         }
@@ -258,7 +262,10 @@ pub fn cmd_about() {
         print!("MEMORY {} MB ({} KB)", (memsize1 + 0x3ff) >> 10, memsize1,);
     }
     println!(", PLATFORM {}", info.platform_type);
+    mode_info();
+}
 
+fn mode_info() {
     let stdout = System::stdout();
     let current_console_mode = stdout.current_mode();
     if let Some(current_graphics_mode) = System::conctl().current_graphics_mode() {
@@ -295,7 +302,39 @@ impl MainMenuItem {
     }
 }
 
-pub fn mode() {
+pub fn mode<'a>(mut args: impl Iterator<Item = &'a str>) {
+    match args.next() {
+        None => {}
+        Some(arg) => {
+            if arg.starts_with("i") {
+                mode_info();
+                return;
+            } else if arg.starts_with("t") || arg.starts_with("T") {
+                System::conctl().set_text_mode();
+                mode_info();
+                return;
+            } else if arg.starts_with("g") || arg.starts_with("G") {
+                if let Some(mode) = System::conctl().preferred_graphics_mode() {
+                    let _ = System::conctl().set_graphics_mode(mode);
+                } else {
+                    let _ = System::conctl().set_graphics_mode_from_list(&[
+                        // PreferredGraphicsMode::new(1920, 1080, PixelFormat::BGRX8888),
+                        // PreferredGraphicsMode::new(1280, 720, PixelFormat::BGRX8888),
+                        // PreferredGraphicsMode::new(800, 600, PixelFormat::BGRX8888),
+                        // PreferredGraphicsMode::new(800, 600, PixelFormat::Indexed8),
+                        PreferredGraphicsMode::new(640, 480, PixelFormat::Indexed8),
+                        PreferredGraphicsMode::new(320, 200, PixelFormat::Indexed8),
+                    ]);
+                }
+                mode_info();
+                return;
+            } else {
+                println!("Unknown mode argument: {}", arg);
+                return;
+            }
+        }
+    }
+
     let mut exit_flag = false;
     loop {
         let stdout = System::stdout();
@@ -420,4 +459,7 @@ pub fn mode() {
             break;
         }
     }
+
+    mode_info();
+    return;
 }

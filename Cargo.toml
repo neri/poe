@@ -17,6 +17,7 @@ members = [
     "lib/sbi",
     "lib/simple_font",
     "lib/smbios",
+    "lib/sd",
     "lib/tui",
     "lib/usb",
     "lib/x86",
